@@ -1,0 +1,23 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# Compressed files (keep original plugin folders)
+*.zip
+
+# Large reference files (keep locally, not in repo)
+pricing-tactics/references/*.pdf

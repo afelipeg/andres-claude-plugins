@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Validate pricing calculation inputs. If the command contains pricing calculations, verify:\n1. All numeric values are positive (prices, costs, volumes)\n2. Percentages are between -100 and 1000 (reasonable range)\n3. Margin percentages are less than 100%\n4. No division by zero scenarios\n\nIf inputs look valid, respond with: VALID\nIf inputs have issues, respond with: INVALID: [brief explanation]\n\nCommand to validate: $ARGUMENTS"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[Pricing Plugin] Calculation completed at $(date)' >> ${CLAUDE_PLUGIN_ROOT}/logs/calculations.log 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
+  }
+}

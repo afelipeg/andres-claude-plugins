@@ -1,0 +1,10 @@
+{
+  "name": "pricing",
+  "version": "1.0.0",
+  "description": "Strategic pricing toolkit based on 'The Strategy and Tactics of Pricing' by Thomas T. Nagle and Georg Müller. Includes frameworks, calculators, and an interactive pricing consultant.",
+  "author": {
+    "name": "Andres Gutierrez"
+  },
+  "keywords": ["pricing", "strategy", "economics", "value-based-pricing", "elasticity", "margins"],
+  "license": "MIT"
+}
