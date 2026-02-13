@@ -6,7 +6,7 @@ A collection of custom plugins for [Claude Code](https://claude.com/claude-code)
 
 ### 1. Pricing Tactics
 
-A comprehensive strategic pricing toolkit based on **"The Strategy and Tactics of Pricing"** by Thomas T. Nagle and Georg Muller.
+A comprehensive strategic pricing toolkit for profitable growth
 
 **Location:** `pricing-tactics/`
 
@@ -46,9 +46,9 @@ A comprehensive strategic pricing toolkit based on **"The Strategy and Tactics o
 
 ---
 
-### 2. AI Native Agency (NEXUS)
+### 2. AI-Sytems Digital Agency
 
-An AI-native advertising agency operations system that replaces a 103-day linear waterfall with **6 concurrent engines running in 8-10 days**. Built around the Google Meridian MMM framework for on-going budget optimization.
+Traditional advertising campaigns run a 10-phase waterfall that takes +100 working days waterfall system, measures results in phase 9 of 10, and never asks where the money leaked. this plugin replaces that with 6 concurrent engines that launch in 8 days, measure from second zero, and decompose every dollar through a 6-stage waste waterfall — from gross spend to productive investment. Built as a Claude Code plugin: 24 skills, 12 Python scripts, 12 slash commands, zero external dependencies. The question is no longer "Did we spend the budget?" but "Did we waste the budget?"
 
 **Location:** `ai-native-agency/nexus-agency-plugin/`
 
