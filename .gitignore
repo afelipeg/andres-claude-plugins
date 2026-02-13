@@ -21,3 +21,6 @@ __pycache__/
 
 # Large reference files (keep locally, not in repo)
 pricing-tactics/references/*.pdf
+
+# Build instructions (private, not part of plugins)
+ai-native-agency-instructions/

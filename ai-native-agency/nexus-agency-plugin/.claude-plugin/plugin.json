@@ -1,0 +1,29 @@
+{
+  "name": "nexus-agency-plugin",
+  "version": "1.0.0",
+  "description": "AI-native advertising agency operations system. 6 concurrent engines, 24 skills, 13 scripts. Replaces 103-day waterfall with 8-10 day parallel execution. MMM via Google Meridian framework.",
+  "author": "NEXUS Agency",
+  "engines": [
+    "orchestrator",
+    "intelligence",
+    "architect",
+    "activation",
+    "value",
+    "governance",
+    "cross-cutting"
+  ],
+  "data_input_modes": {
+    "manual": {
+      "description": "Human uploads/pastes data via JSON or CSV",
+      "required": true
+    },
+    "mcp_platforms": {
+      "description": "Optional MCP server connections to digital platforms (Google Ads, Meta, DV360, TikTok, Amazon, X, LinkedIn)",
+      "required": false
+    },
+    "mcp_gcp": {
+      "description": "Optional MCP server connection to Google Cloud Platform (BigQuery, Cloud Storage)",
+      "required": false
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "hooks": [
+    {
+      "event": "pre_command",
+      "command": "/campaign",
+      "description": "Validate campaign brief data before orchestration",
+      "action": "validate_input"
+    },
+    {
+      "event": "post_command",
+      "command": "/qa",
+      "description": "Run cross-engine quality validation after QA command",
+      "action": "quality_guardian_check"
+    },
+    {
+      "event": "post_command",
+      "command": "/governance",
+      "description": "Update learning accumulator with governance findings",
+      "action": "learning_update"
+    }
+  ]
+}
