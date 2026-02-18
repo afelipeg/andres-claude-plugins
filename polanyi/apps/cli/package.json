@@ -1,0 +1,45 @@
+{
+  "name": "openagency",
+  "version": "0.1.0",
+  "description": "Open-source advertising agency toolkit for solo marketers. Find where your ad budget leaks money.",
+  "type": "module",
+  "bin": {
+    "openagency": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^8.2.1",
+    "@openagency/core": "workspace:*",
+    "@openagency/engines": "workspace:*",
+    "@openagency/types": "workspace:*",
+    "chalk": "^5.4.0",
+    "commander": "^13.0.0",
+    "ora": "^8.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "advertising",
+    "media",
+    "agency",
+    "marketing",
+    "waste",
+    "optimization"
+  ],
+  "license": "MIT"
+}

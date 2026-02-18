@@ -1,0 +1,54 @@
+{
+  "name": "@openagency/core",
+  "version": "0.1.0",
+  "description": "Core orchestration, LLM abstraction, and utilities for OpenAgency",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./utils/math": {
+      "types": "./dist/utils/math.d.ts",
+      "import": "./dist/utils/math.js"
+    },
+    "./utils/format": {
+      "types": "./dist/utils/format.d.ts",
+      "import": "./dist/utils/format.js"
+    },
+    "./data/parser": {
+      "types": "./dist/data/parser.d.ts",
+      "import": "./dist/data/parser.js"
+    },
+    "./data/sample-data": {
+      "types": "./dist/data/sample-data.d.ts",
+      "import": "./dist/data/sample-data.js"
+    },
+    "./llm/provider": {
+      "types": "./dist/llm/provider.d.ts",
+      "import": "./dist/llm/provider.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@openagency/types": "workspace:*",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT"
+}

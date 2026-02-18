@@ -1,0 +1,24 @@
+{
+  "name": "openagency-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Open-source advertising agency toolkit for solo marketers",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "clean": "turbo run clean"
+  },
+  "devDependencies": {
+    "turbo": "^2.4.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0",
+    "prettier": "^3.4.0"
+  },
+  "packageManager": "pnpm@10.30.0",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
