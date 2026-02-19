@@ -24,7 +24,7 @@ const DEMO_OPT = {
       revenue: 112_500,
       cpa_target: 50,
       roas_target: 3.0,
-      historical_ctr: 5.2,
+      historical_ctr: 0.052,
     },
     {
       name: 'Social Awareness',
@@ -39,7 +39,7 @@ const DEMO_OPT = {
       revenue: 30_000,
       cpa_target: 120,
       roas_target: 1.5,
-      historical_ctr: 2.1,
+      historical_ctr: 0.021,
     },
     {
       name: 'Display Retargeting',
@@ -54,7 +54,7 @@ const DEMO_OPT = {
       revenue: 0,
       cpa_target: 80,
       roas_target: 2.0,
-      historical_ctr: 1.0,
+      historical_ctr: 0.01,
     },
   ],
 };
@@ -117,8 +117,8 @@ export function CampaignOpsPage() {
           </div>
           <SmartUpload
             transformFn={toOptimizationInput}
-            onAnalyze={(d) => optEngine.run(d)}
-            onRawJson={(d) => optEngine.run(d)}
+            onAnalyze={(d) => { optEngine.run(d); setActiveTab('optimization'); }}
+            onRawJson={(d) => { optEngine.run(d); setActiveTab('optimization'); }}
           />
         </div>
       </Card>

@@ -92,8 +92,8 @@ export function ExecutiveBridgePage() {
           </div>
           <SmartUpload
             transformFn={toRevenueBridgeInput}
-            onAnalyze={(d) => revenueEngine.run(d)}
-            onRawJson={(d) => revenueEngine.run(d)}
+            onAnalyze={(d) => { revenueEngine.run(d); setActiveTab('revenue'); }}
+            onRawJson={(d) => { revenueEngine.run(d); setActiveTab('revenue'); }}
           />
         </div>
       </Card>

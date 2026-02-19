@@ -276,7 +276,7 @@ export function toOptimizationInput(
     revenue: opts.columnMap.revenue ? cleanNumber(row[opts.columnMap.revenue], isMicros) : 0,
     cpa_target: 100,
     roas_target: 3.0,
-    historical_ctr: opts.columnMap.ctr ? cleanNumber(row[opts.columnMap.ctr]) : 2.0,
+    historical_ctr: opts.columnMap.ctr ? cleanNumber(row[opts.columnMap.ctr]) / 100 : 0.02,
   }));
 
   return { campaigns };

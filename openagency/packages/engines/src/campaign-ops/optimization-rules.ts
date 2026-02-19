@@ -106,7 +106,7 @@ export function analyze(data: OptimizationInput): OptimizationOutput {
       }
     }
 
-    // Creative Fatigue
+    // Creative Fatigue (both ctr and historicalCtr as fractions, e.g. 0.05 = 5%)
     if (historicalCtr > 0 && impressions > 0) {
       const ctrDecline = (historicalCtr - ctr) / historicalCtr;
       if (ctrDecline > THRESHOLDS.ctr_fatigue_pct) {
