@@ -12,6 +12,7 @@
 <p align="center">
   <a href="#quick-start">Quick Start</a> &bull;
   <a href="#engines">Engines</a> &bull;
+  <a href="#web-dashboard">Dashboard</a> &bull;
   <a href="#commands">Commands</a> &bull;
   <a href="#llm-integration">LLM Integration</a> &bull;
   <a href="#architecture">Architecture</a> &bull;
@@ -168,7 +169,7 @@ openagency run executive-bridge shapley-attribute --file touchpoints.json
 | `openagency scan` | Waste detection — the hook command |
 | `openagency run <engine> <skill>` | Run any engine skill directly |
 | `openagency report <engine>` | AI-powered executive narrative |
-| `openagency dashboard` | Web UI (coming v0.2.0) |
+| `openagency dashboard` | Web dashboard info & launch instructions |
 
 ---
 
@@ -287,7 +288,8 @@ openagency/
 │   ├── core/         @openagency/core
 │   └── engines/      @openagency/engines
 ├── apps/
-│   └── cli/          openagency (npm bin)
+│   ├── cli/          openagency (npm bin)
+│   └── web/          @openagency/web (Vite + React + Tailwind + Recharts)
 ├── references/       Industry benchmarks and frameworks
 └── scripts/python/   Original Python reference implementations
 ```
@@ -316,10 +318,33 @@ node apps/cli/dist/index.js scan --demo
 
 ---
 
+## Web Dashboard
+
+OpenAgency includes an interactive web dashboard built with Vite, React, Tailwind CSS, and Recharts.
+
+```bash
+# Development
+cd apps/web && pnpm dev
+
+# Production build
+cd apps/web && pnpm build && pnpm preview
+```
+
+**Features:**
+- Waste waterfall visualization with interactive charts
+- Channel optimization with current vs. optimized allocation comparison
+- Campaign DAG timeline with sprint tracking and optimization alerts
+- Revenue bridge with L1/L2/L3 financial metrics and efficiency scoring
+- Shapley attribution analysis with last-click comparison
+- Demo data buttons for all 4 engines
+- Drag-and-drop file upload for JSON/CSV data
+
+---
+
 ## Roadmap
 
-- [x] **v0.1.0** — 4 engines, CLI, multi-LLM, 33 skills
-- [ ] **v0.2.0** — Web dashboard (Vite + React + Recharts), persistent storage
+- [x] **v0.1.0** — 4 engines, 33 skills, CLI, web dashboard, multi-LLM
+- [ ] **v0.2.0** — Persistent storage, saved reports, export to PDF
 - [ ] **v0.3.0** — Platform connectors (Google Ads, Meta, TikTok), real-time sync
 - [ ] **v0.4.0** — Docker image, hosted cloud version
 

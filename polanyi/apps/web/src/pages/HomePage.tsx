@@ -1,0 +1,116 @@
+import { Link } from 'react-router-dom';
+import { Card } from '../components/Card';
+import { listEngines } from '../api/agency';
+
+const ENGINE_ICONS: Record<string, string> = {
+  'leak-detector': 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z',
+  'media-architect': 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
+  'campaign-ops': 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01',
+  'executive-bridge': 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6',
+};
+
+const ENGINE_ROUTES: Record<string, string> = {
+  'leak-detector': '/leak-detector',
+  'media-architect': '/media-architect',
+  'campaign-ops': '/campaign-ops',
+  'executive-bridge': '/executive-bridge',
+};
+
+const ENGINE_COLORS: Record<string, string> = {
+  'leak-detector': 'from-red-500 to-orange-500',
+  'media-architect': 'from-blue-500 to-cyan-500',
+  'campaign-ops': 'from-green-500 to-emerald-500',
+  'executive-bridge': 'from-purple-500 to-pink-500',
+};
+
+export function HomePage() {
+  const engines = listEngines();
+
+  return (
+    <div className="space-y-8">
+      {/* Hero */}
+      <div className="rounded-2xl bg-gradient-to-br from-gray-900 to-gray-800 p-8 text-white">
+        <h2 className="text-3xl font-bold">OpenAgency Dashboard</h2>
+        <p className="mt-2 max-w-xl text-gray-300">
+          Your open-source advertising agency toolkit. Find where your ad budget leaks money,
+          optimize channel allocation, manage campaigns, and translate metrics for the C-Suite.
+        </p>
+        <div className="mt-6 flex gap-3">
+          <Link
+            to="/leak-detector"
+            className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+          >
+            Run Waste Analysis
+          </Link>
+          <Link
+            to="/media-architect"
+            className="rounded-lg bg-white/10 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/20"
+          >
+            Optimize Channels
+          </Link>
+        </div>
+      </div>
+
+      {/* Engine Cards */}
+      <div>
+        <h3 className="mb-4 text-lg font-semibold text-gray-900">Engines</h3>
+        <div className="grid gap-4 md:grid-cols-2">
+          {engines.map((engine) => (
+            <Link key={engine.id} to={ENGINE_ROUTES[engine.id] ?? '/'} className="group">
+              <Card className="transition-shadow group-hover:shadow-md">
+                <div className="flex items-start gap-4">
+                  <div
+                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${ENGINE_COLORS[engine.id] ?? 'from-gray-500 to-gray-600'}`}
+                  >
+                    <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d={ENGINE_ICONS[engine.id] ?? ''} />
+                    </svg>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h4 className="font-semibold text-gray-900 group-hover:text-brand-600">
+                      {engine.name}
+                    </h4>
+                    <p className="mt-1 text-sm text-gray-500">{engine.description}</p>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {engine.skills.map((skill) => (
+                        <span
+                          key={skill}
+                          className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* Quick Start */}
+      <Card title="Quick Start">
+        <div className="space-y-3 text-sm text-gray-600">
+          <p>
+            <span className="font-medium text-gray-900">1.</span> Choose an engine from the sidebar
+            or click an engine card above.
+          </p>
+          <p>
+            <span className="font-medium text-gray-900">2.</span> Click a &ldquo;Demo&rdquo; button
+            to run with sample data, or upload your own JSON/CSV file.
+          </p>
+          <p>
+            <span className="font-medium text-gray-900">3.</span> Explore the results with
+            interactive charts, tables, and C-Suite summaries.
+          </p>
+        </div>
+      </Card>
+
+      {/* Footer */}
+      <p className="text-center text-xs text-gray-400">
+        OpenAgency v0.1.0 &mdash; 4 engines, 33 skills &mdash; MIT License
+      </p>
+    </div>
+  );
+}
