@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Card, MetricCard } from '../components/Card';
-import { FileUpload } from '../components/FileUpload';
+import { SmartUpload } from '../components/SmartUpload';
 import { Spinner } from '../components/Spinner';
 import { WaterfallChart } from '../components/charts/WaterfallChart';
 import { DonutChart } from '../components/charts/DonutChart';
@@ -11,6 +11,8 @@ import {
   SAMPLE_WASTE_MEDIUM,
   SAMPLE_WASTE_LARGE,
 } from '@openagency/core/data/sample-data';
+import { toWasteInput } from '@openagency/core/data/platform-detect';
+import { ExportButton } from '../components/ExportButton';
 
 const DEMOS = [
   { label: '$50K Retail', data: SAMPLE_WASTE_SMALL },
@@ -66,7 +68,11 @@ export function LeakDetectorPage() {
               </button>
             ))}
           </div>
-          <FileUpload onData={(d) => run(d)} />
+          <SmartUpload
+            transformFn={toWasteInput}
+            onAnalyze={(d) => run(d)}
+            onRawJson={(d) => run(d)}
+          />
         </div>
       </Card>
 
@@ -221,12 +227,15 @@ export function LeakDetectorPage() {
             </div>
           )}
 
-          {/* Timing */}
-          {result?.duration_ms != null && (
-            <p className="text-xs text-gray-400">
-              Analysis completed in {result.duration_ms}ms
-            </p>
-          )}
+          {/* Export + Timing */}
+          <div className="flex items-center justify-between">
+            <ExportButton engineId="leak-detector" skillId="waste-waterfall" result={result} />
+            {result?.duration_ms != null && (
+              <p className="text-xs text-gray-400">
+                Analysis completed in {result.duration_ms}ms
+              </p>
+            )}
+          </div>
         </>
       )}
     </div>

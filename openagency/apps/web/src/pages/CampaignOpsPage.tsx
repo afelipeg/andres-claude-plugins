@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import { Card, MetricCard } from '../components/Card';
+import { SmartUpload } from '../components/SmartUpload';
 import { Spinner } from '../components/Spinner';
 import { useEngine } from '../hooks/useEngine';
 import type { CampaignState, OptimizationOutput } from '@openagency/types';
+import { toOptimizationInput } from '@openagency/core/data/platform-detect';
+import { ExportButton } from '../components/ExportButton';
 
 const DEMO_CAMPAIGN = { campaign_name: 'Q1 Brand Launch', client: 'Demo Client' };
 
@@ -95,21 +98,28 @@ export function CampaignOpsPage() {
 
       {/* Input */}
       <Card title="Quick Actions">
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => campaignEngine.run(DEMO_CAMPAIGN)}
-            disabled={loading}
-            className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100 disabled:opacity-50"
-          >
-            Demo: Create Campaign DAG
-          </button>
-          <button
-            onClick={() => optEngine.run(DEMO_OPT)}
-            disabled={loading}
-            className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100 disabled:opacity-50"
-          >
-            Demo: Optimization Alerts
-          </button>
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => campaignEngine.run(DEMO_CAMPAIGN)}
+              disabled={loading}
+              className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100 disabled:opacity-50"
+            >
+              Demo: Create Campaign DAG
+            </button>
+            <button
+              onClick={() => optEngine.run(DEMO_OPT)}
+              disabled={loading}
+              className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100 disabled:opacity-50"
+            >
+              Demo: Optimization Alerts
+            </button>
+          </div>
+          <SmartUpload
+            transformFn={toOptimizationInput}
+            onAnalyze={(d) => optEngine.run(d)}
+            onRawJson={(d) => optEngine.run(d)}
+          />
         </div>
       </Card>
 
@@ -141,6 +151,7 @@ export function CampaignOpsPage() {
       {/* Campaign DAG */}
       {activeTab === 'campaign' && campaign && !loading && (
         <>
+          <ExportButton engineId="campaign-ops" skillId="campaign-create" result={campaignEngine.result ?? null} />
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             <MetricCard label="Campaign" value={campaign.campaign.name} color="blue" />
             <MetricCard
@@ -194,6 +205,7 @@ export function CampaignOpsPage() {
       {/* Optimization Alerts */}
       {activeTab === 'optimization' && optData && !loading && (
         <>
+          <ExportButton engineId="campaign-ops" skillId="optimization-analyze" result={optEngine.result ?? null} />
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
             <MetricCard
               label="Total Alerts"

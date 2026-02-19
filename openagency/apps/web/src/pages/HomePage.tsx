@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Card } from '../components/Card';
+import { ReportHistory } from '../components/ReportHistory';
 import { listEngines } from '../api/agency';
 
 const ENGINE_ICONS: Record<string, string> = {
@@ -89,6 +90,9 @@ export function HomePage() {
         </div>
       </div>
 
+      {/* Saved Reports */}
+      <ReportHistory />
+
       {/* Quick Start */}
       <Card title="Quick Start">
         <div className="space-y-3 text-sm text-gray-600">
@@ -97,19 +101,19 @@ export function HomePage() {
             or click an engine card above.
           </p>
           <p>
-            <span className="font-medium text-gray-900">2.</span> Click a &ldquo;Demo&rdquo; button
-            to run with sample data, or upload your own JSON/CSV file.
+            <span className="font-medium text-gray-900">2.</span> Upload a CSV (auto-detects Google Ads,
+            Meta Ads, TikTok Ads) or paste data directly.
           </p>
           <p>
-            <span className="font-medium text-gray-900">3.</span> Explore the results with
-            interactive charts, tables, and C-Suite summaries.
+            <span className="font-medium text-gray-900">3.</span> Explore results with interactive
+            charts, then export as PDF or find them in your saved reports.
           </p>
         </div>
       </Card>
 
       {/* Footer */}
       <p className="text-center text-xs text-gray-400">
-        OpenAgency v0.1.0 &mdash; 4 engines, 33 skills &mdash; MIT License
+        OpenAgency v0.2.0 &mdash; 4 engines, 33 skills &mdash; MIT License
       </p>
     </div>
   );

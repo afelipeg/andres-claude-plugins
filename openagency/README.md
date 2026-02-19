@@ -309,7 +309,7 @@ pnpm install
 # Build
 pnpm run build
 
-# Test (68 tests across 10 test files)
+# Test (79 tests across 11 test files)
 pnpm run test
 
 # Run locally
@@ -331,21 +331,24 @@ cd apps/web && pnpm build && pnpm preview
 ```
 
 **Features:**
+- Smart CSV auto-detect: drop a Google Ads, Meta Ads, or TikTok Ads export and analyze instantly
+- One-click PDF report export for every engine
+- Saved reports with IndexedDB persistence (auto-saves, reload/export/delete)
 - Waste waterfall visualization with interactive charts
 - Channel optimization with current vs. optimized allocation comparison
 - Campaign DAG timeline with sprint tracking and optimization alerts
 - Revenue bridge with L1/L2/L3 financial metrics and efficiency scoring
 - Shapley attribution analysis with last-click comparison
 - Demo data buttons for all 4 engines
-- Drag-and-drop file upload for JSON/CSV data
+- Paste CSV data directly or drag-and-drop files
 
 ---
 
 ## Roadmap
 
 - [x] **v0.1.0** — 4 engines, 33 skills, CLI, web dashboard, multi-LLM
-- [ ] **v0.2.0** — Persistent storage, saved reports, export to PDF
-- [ ] **v0.3.0** — Platform connectors (Google Ads, Meta, TikTok), real-time sync
+- [x] **v0.2.0** — Smart CSV auto-detect (Google/Meta/TikTok), PDF export, IndexedDB persistence
+- [ ] **v0.3.0** — Platform API connectors (Google Ads, Meta, TikTok), real-time sync
 - [ ] **v0.4.0** — Docker image, hosted cloud version
 
 ---

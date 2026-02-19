@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { Card, MetricCard } from '../components/Card';
+import { SmartUpload } from '../components/SmartUpload';
 import { Spinner } from '../components/Spinner';
 import { DonutChart } from '../components/charts/DonutChart';
 import { useEngine } from '../hooks/useEngine';
 import type { RevenueBridgeOutput, ShapleyOutput } from '@openagency/types';
+import { toRevenueBridgeInput } from '@openagency/core/data/platform-detect';
+import { ExportButton } from '../components/ExportButton';
 
 const COLORS = ['#0077e6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6'];
 
@@ -70,21 +73,28 @@ export function ExecutiveBridgePage() {
 
       {/* Input */}
       <Card title="Quick Actions">
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => revenueEngine.run(DEMO_REVENUE)}
-            disabled={loading}
-            className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100 disabled:opacity-50"
-          >
-            Demo: Revenue Bridge
-          </button>
-          <button
-            onClick={() => shapleyEngine.run(DEMO_SHAPLEY)}
-            disabled={loading}
-            className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100 disabled:opacity-50"
-          >
-            Demo: Shapley Attribution
-          </button>
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => revenueEngine.run(DEMO_REVENUE)}
+              disabled={loading}
+              className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100 disabled:opacity-50"
+            >
+              Demo: Revenue Bridge
+            </button>
+            <button
+              onClick={() => shapleyEngine.run(DEMO_SHAPLEY)}
+              disabled={loading}
+              className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100 disabled:opacity-50"
+            >
+              Demo: Shapley Attribution
+            </button>
+          </div>
+          <SmartUpload
+            transformFn={toRevenueBridgeInput}
+            onAnalyze={(d) => revenueEngine.run(d)}
+            onRawJson={(d) => revenueEngine.run(d)}
+          />
         </div>
       </Card>
 
@@ -116,6 +126,7 @@ export function ExecutiveBridgePage() {
       {/* Revenue Bridge */}
       {activeTab === 'revenue' && revenue && !loading && (
         <>
+          <ExportButton engineId="executive-bridge" skillId="revenue-translate" result={revenueEngine.result ?? null} />
           {/* L1 Financial KPIs */}
           <div>
             <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
@@ -221,6 +232,7 @@ export function ExecutiveBridgePage() {
       {/* Shapley Attribution */}
       {activeTab === 'shapley' && shapley && !loading && (
         <>
+          <ExportButton engineId="executive-bridge" skillId="shapley-attribute" result={shapleyEngine.result ?? null} />
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
             <MetricCard
               label="Total Conversions"

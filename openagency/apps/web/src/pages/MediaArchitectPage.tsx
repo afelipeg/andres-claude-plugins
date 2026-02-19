@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Card, MetricCard } from '../components/Card';
-import { FileUpload } from '../components/FileUpload';
+import { SmartUpload } from '../components/SmartUpload';
 import { Spinner } from '../components/Spinner';
 import { ChannelBarChart } from '../components/charts/ChannelBarChart';
 import { DonutChart } from '../components/charts/DonutChart';
 import { useEngine } from '../hooks/useEngine';
 import type { ChannelOptimizerOutput } from '@openagency/types';
+import { toChannelInput } from '@openagency/core/data/platform-detect';
+import { ExportButton } from '../components/ExportButton';
 
 const COLORS = ['#0077e6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -68,8 +70,13 @@ export function MediaArchitectPage() {
           >
             Demo: $500K 5-Channel Mix
           </button>
-          <FileUpload
-            onData={(d) => {
+          <SmartUpload
+            transformFn={toChannelInput}
+            onAnalyze={(d) => {
+              setInputData(d as typeof DEMO_INPUT);
+              run(d);
+            }}
+            onRawJson={(d) => {
               setInputData(d as typeof DEMO_INPUT);
               run(d);
             }}
@@ -161,9 +168,12 @@ export function MediaArchitectPage() {
             </div>
           </Card>
 
-          {result?.duration_ms != null && (
-            <p className="text-xs text-gray-400">Optimization completed in {result.duration_ms}ms</p>
-          )}
+          <div className="flex items-center justify-between">
+            <ExportButton engineId="media-architect" skillId="channel-optimize" result={result} />
+            {result?.duration_ms != null && (
+              <p className="text-xs text-gray-400">Optimization completed in {result.duration_ms}ms</p>
+            )}
+          </div>
         </>
       )}
     </div>

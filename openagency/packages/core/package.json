@@ -26,6 +26,10 @@
       "types": "./dist/data/sample-data.d.ts",
       "import": "./dist/data/sample-data.js"
     },
+    "./data/platform-detect": {
+      "types": "./dist/data/platform-detect.d.ts",
+      "import": "./dist/data/platform-detect.js"
+    },
     "./llm/provider": {
       "types": "./dist/llm/provider.d.ts",
       "import": "./dist/llm/provider.js"
