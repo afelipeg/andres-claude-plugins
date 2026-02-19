@@ -233,6 +233,111 @@ function generateMediaArchitectReport(doc: jsPDF, result: EngineResult<any>) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+function generateMMMReport(doc: jsPDF, result: EngineResult<any>, skill: string) {
+  const d = result.data;
+
+  if (skill === 'mmm-model') {
+    addHeader(doc, 'MMM Model Report', 'Marketing Mix Model Analysis');
+    let y = 44;
+
+    // KPIs
+    addKpi(doc, 14, y, 'Total KPI', fmt(d.total_kpi), DARK);
+    addKpi(doc, 60, y, 'Predicted KPI', fmt(d.predicted_kpi), BRAND);
+    addKpi(doc, 110, y, 'R-squared', d.r_squared_estimate.toFixed(3), d.r_squared_estimate >= 0.85 ? GREEN : RED);
+    addKpi(doc, 156, y, 'Overall ROI', `${d.overall_roi.toFixed(2)}x`, GREEN);
+    y += 18;
+
+    // KPI decomposition
+    y = addSectionTitle(doc, y, 'KPI Decomposition');
+    addKpi(doc, 14, y, 'Base (Non-Media)', fmt(d.base_contribution), GRAY);
+    addKpi(doc, 80, y, 'Media Contribution', fmt(d.media_contribution), BRAND);
+    addKpi(doc, 150, y, 'Media %', pct(d.media_contribution_pct), BRAND);
+    y += 18;
+
+    // Channel models table
+    y = addSectionTitle(doc, y, 'Channel Model Results');
+    const headers = ['Channel', 'Spend', 'Contribution', 'Share %', 'ROI', 'mROI', 'Sat.'];
+    const rows = d.channel_models.map(
+      (cm: { channel: string; spend: number; results: { estimated_contribution: number; contribution_share_pct: number; roi: number; marginal_roi: number; saturation_pct: number } }) => [
+        cm.channel,
+        fmt(cm.spend),
+        fmt(cm.results.estimated_contribution),
+        pct(cm.results.contribution_share_pct),
+        `${cm.results.roi.toFixed(2)}x`,
+        cm.results.marginal_roi.toFixed(4),
+        `${cm.results.saturation_pct.toFixed(0)}%`,
+      ],
+    );
+    y = addTable(doc, y, headers, rows, [30, 26, 28, 22, 22, 26, 28]);
+
+    // ROI intervals
+    if (d.roi_intervals && y < 220) {
+      y = addSectionTitle(doc, y + 4, 'ROI with Credible Intervals');
+      const riHeaders = ['Channel', 'ROI', 'Lower CI', 'Upper CI', 'mROI'];
+      const riRows = d.roi_intervals.map(
+        (ri: { channel: string; roi: number; lower_ci: number; upper_ci: number; mroi: number }) => [
+          ri.channel,
+          `${ri.roi.toFixed(2)}x`,
+          `${ri.lower_ci.toFixed(2)}x`,
+          `${ri.upper_ci.toFixed(2)}x`,
+          ri.mroi.toFixed(4),
+        ],
+      );
+      y = addTable(doc, y, riHeaders, riRows, [36, 36, 36, 36, 38]);
+    }
+
+    addFooter(doc, result.duration_ms);
+  } else if (skill === 'mmm-optimize') {
+    addHeader(doc, 'Budget Optimization Report', 'MMM Scenario Planning');
+    let y = 44;
+
+    addKpi(doc, 14, y, 'Total Budget', fmt(d.total_budget), DARK);
+    if (d.comparison_vs_current) {
+      addKpi(doc, 80, y, 'KPI Lift', pct(d.comparison_vs_current.kpi_lift_pct), GREEN);
+      addKpi(doc, 140, y, 'ROI Improvement', `+${d.comparison_vs_current.roi_improvement.toFixed(2)}`, GREEN);
+    }
+    y += 18;
+
+    // Reallocation table
+    if (d.comparison_vs_current?.reallocation) {
+      y = addSectionTitle(doc, y, 'Budget Reallocation');
+      const headers = ['Channel', 'Current', 'Optimized', 'Delta', 'Direction'];
+      const rows = d.comparison_vs_current.reallocation.map(
+        (r: { channel: string; current_spend: number; optimized_spend: number; delta: number; direction: string }) => [
+          r.channel,
+          fmt(r.current_spend),
+          fmt(r.optimized_spend),
+          fmt(Math.abs(r.delta)),
+          r.direction,
+        ],
+      );
+      y = addTable(doc, y, headers, rows, [32, 34, 34, 34, 48]);
+    }
+
+    // Recommendations
+    if (d.recommendations && d.recommendations.length > 0 && y < 230) {
+      y = addSectionTitle(doc, y + 4, 'Recommendations');
+      doc.setFontSize(7);
+      doc.setTextColor(...DARK);
+      for (const rec of d.recommendations) {
+        if (y > 265) break;
+        doc.setFont('helvetica', 'bold');
+        doc.text(`[${rec.priority.toUpperCase()}]`, 14, y);
+        doc.setFont('helvetica', 'normal');
+        const lines = doc.splitTextToSize(`${rec.action} — ${rec.impact}`, 155);
+        doc.text(lines, 32, y);
+        y += lines.length * 3.5 + 3;
+      }
+    }
+
+    addFooter(doc, result.duration_ms);
+  } else {
+    // Fallback for other MMM skills
+    generateMediaArchitectReport(doc, result);
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function generateCampaignOpsReport(doc: jsPDF, result: EngineResult<any>, skill: string) {
   addHeader(doc, 'Campaign Ops Report', skill === 'campaign-create' ? 'Campaign DAG' : 'Optimization Alerts');
   let y = 44;
@@ -369,7 +474,11 @@ export function downloadReport(
       generateLeakDetectorReport(doc, result);
       break;
     case 'media-architect':
-      generateMediaArchitectReport(doc, result);
+      if (skillId === 'mmm-model' || skillId === 'mmm-optimize') {
+        generateMMMReport(doc, result, skillId);
+      } else {
+        generateMediaArchitectReport(doc, result);
+      }
       break;
     case 'campaign-ops':
       generateCampaignOpsReport(doc, result, skillId);

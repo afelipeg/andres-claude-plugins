@@ -13,7 +13,7 @@ import { BudgetOptChart } from '../components/charts/BudgetOptChart';
 import { ExportButton } from '../components/ExportButton';
 import { useEngine } from '../hooks/useEngine';
 import type { ChannelOptimizerOutput, MMMModelOutput, MMMOptimizeOutput } from '@openagency/types';
-import { toChannelInput } from '@openagency/core/data/platform-detect';
+import { toChannelInput, toMMMInput } from '@openagency/core/data/platform-detect';
 
 const COLORS = ['#0077e6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -133,7 +133,15 @@ export function MediaArchitectPage() {
             </button>
           </div>
           <SmartUpload
-            transformFn={toChannelInput}
+            transformFn={(rows, opts) => {
+              // Run both channel optimize AND MMM from the same CSV
+              const channelInput = toChannelInput(rows, opts);
+              const mmmInput = toMMMInput(rows, opts);
+              // Return channel input for the primary onAnalyze callback
+              // but also trigger MMM in the background
+              setTimeout(() => mmmEngine.run(mmmInput), 50);
+              return channelInput;
+            }}
             onAnalyze={(d) => {
               setInputData(d as typeof DEMO_CHANNEL);
               channelEngine.run(d);

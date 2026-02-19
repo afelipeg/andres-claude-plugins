@@ -283,6 +283,66 @@ export function toOptimizationInput(
 }
 
 /**
+ * Transform parsed CSV rows into MMM model input for Media Architect.
+ * Aggregates by campaign name, computes ROI priors from revenue/spend.
+ */
+export function toMMMInput(
+  rows: Record<string, unknown>[],
+  opts: TransformOptions,
+): {
+  total_budget: number;
+  total_kpi: number;
+  time_periods: number;
+  channels: Array<{
+    name: string;
+    spend: number;
+    roi_prior?: number;
+  }>;
+} {
+  const isMicros = opts.platform === 'google_ads' && (opts.columnMap.spend === 'cost_micros' || opts.columnMap.spend === 'metrics.cost_micros');
+
+  // Aggregate by campaign name
+  const channelMap = new Map<string, { spend: number; revenue: number; conversions: number }>();
+
+  for (const row of rows) {
+    const name = opts.columnMap.campaign
+      ? String(row[opts.columnMap.campaign] ?? 'Unknown')
+      : 'Unknown';
+    const spend = opts.columnMap.spend ? cleanNumber(row[opts.columnMap.spend], isMicros) : 0;
+    const revenue = opts.columnMap.revenue ? cleanNumber(row[opts.columnMap.revenue], isMicros) : 0;
+    const conversions = opts.columnMap.conversions ? cleanNumber(row[opts.columnMap.conversions]) : 0;
+
+    const existing = channelMap.get(name) ?? { spend: 0, revenue: 0, conversions: 0 };
+    existing.spend += spend;
+    existing.revenue += revenue;
+    existing.conversions += conversions;
+    channelMap.set(name, existing);
+  }
+
+  let totalBudget = 0;
+  let totalKpi = 0;
+  const channels: Array<{ name: string; spend: number; roi_prior?: number }> = [];
+
+  for (const [name, agg] of channelMap.entries()) {
+    totalBudget += agg.spend;
+    totalKpi += agg.revenue > 0 ? agg.revenue : agg.conversions * 100; // estimate $100 AOV if no revenue
+    const roiPrior = agg.spend > 0 && agg.revenue > 0 ? agg.revenue / agg.spend : undefined;
+    channels.push({
+      name,
+      spend: Math.round(agg.spend * 100) / 100,
+      ...(roiPrior != null ? { roi_prior: Math.round(roiPrior * 100) / 100 } : {}),
+    });
+  }
+
+  return {
+    total_budget: Math.round(totalBudget * 100) / 100,
+    total_kpi: Math.round(totalKpi * 100) / 100,
+    time_periods: 52, // default to 1 year; CSV doesn't tell us time range
+    channels,
+  };
+}
+
+/**
  * Transform parsed CSV rows into revenue bridge input for Executive Bridge.
  */
 export function toRevenueBridgeInput(
