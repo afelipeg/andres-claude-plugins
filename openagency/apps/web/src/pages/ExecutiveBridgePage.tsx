@@ -76,14 +76,14 @@ export function ExecutiveBridgePage() {
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={() => revenueEngine.run(DEMO_REVENUE)}
+              onClick={() => { revenueEngine.run(DEMO_REVENUE); setActiveTab('revenue'); }}
               disabled={loading}
               className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100 disabled:opacity-50"
             >
               Demo: Revenue Bridge
             </button>
             <button
-              onClick={() => shapleyEngine.run(DEMO_SHAPLEY)}
+              onClick={() => { shapleyEngine.run(DEMO_SHAPLEY); setActiveTab('shapley'); }}
               disabled={loading}
               className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100 disabled:opacity-50"
             >
