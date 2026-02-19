@@ -136,6 +136,17 @@ describe('mmm-scenario-planner', () => {
               results: { estimated_contribution: 1400000, contribution_share_pct: 50, roi: 2.8, marginal_roi: 1.2, saturation_pct: 46.7 },
             },
           ],
+          response_curves: [
+            { channel: 'search', current_spend: 500000, current_response: 1400000, points: [{ spend: 0, response: 0 }, { spend: 500000, response: 1400000 }] },
+          ],
+          model_fit: { periods: ['W1', 'W2'], actual: [100000, 110000], predicted: [99000, 108000] },
+          roi_intervals: [
+            { channel: 'search', roi: 2.8, lower_ci: 2.24, upper_ci: 3.36, mroi: 1.2, mroi_lower_ci: 0.9, mroi_upper_ci: 1.5 },
+          ],
+          contribution_waterfall: [
+            { channel: 'Base (Non-Media)', contribution: 2000000, contribution_pct: 41.7 },
+            { channel: 'search', contribution: 1400000, contribution_pct: 50 },
+          ],
           next_step: 'post_model',
         },
       });

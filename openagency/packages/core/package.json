@@ -35,10 +35,12 @@
       "import": "./dist/llm/provider.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit"
   },

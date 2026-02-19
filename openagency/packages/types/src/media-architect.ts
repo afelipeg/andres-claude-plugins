@@ -124,6 +124,42 @@ export interface MMMChannelModel {
   };
 }
 
+// ─── Chart-Ready Data Types ─────────────────────────────────────────
+
+export interface ResponseCurvePoint {
+  spend: number;
+  response: number;
+}
+
+export interface ResponseCurveData {
+  channel: string;
+  current_spend: number;
+  current_response: number;
+  points: ResponseCurvePoint[];
+}
+
+export interface ModelFitData {
+  periods: string[];
+  actual: number[];
+  predicted: number[];
+}
+
+export interface RoiInterval {
+  channel: string;
+  roi: number;
+  lower_ci: number;
+  upper_ci: number;
+  mroi: number;
+  mroi_lower_ci: number;
+  mroi_upper_ci: number;
+}
+
+export interface ContributionEntry {
+  channel: string;
+  contribution: number;
+  contribution_pct: number;
+}
+
 export interface MMMModelOutput {
   phase: 'model';
   model_type: string;
@@ -137,6 +173,11 @@ export interface MMMModelOutput {
   overall_roi: number;
   r_squared_estimate: number;
   channel_models: MMMChannelModel[];
+  // Chart-ready data (v0.2.0)
+  response_curves: ResponseCurveData[];
+  model_fit: ModelFitData;
+  roi_intervals: RoiInterval[];
+  contribution_waterfall: ContributionEntry[];
   next_step: 'post_model';
 }
 
