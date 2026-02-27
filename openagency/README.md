@@ -32,7 +32,7 @@
 
 ## The Problem
 
-Big advertising holding companies (WPP, Publicis, Omnicom, IPG, Dentsu, Havas) charge millions for media planning, measurement, and optimization capabilities that remain locked behind paywalls and proprietary processes.
+The Big 6 monopoly of old-fashion advertising holding companies charge millions for media planning, measurement, and optimization capabilities that remain locked behind paywalls and proprietary processes.
 
 **Solo marketers and small businesses are priced out.**
 
