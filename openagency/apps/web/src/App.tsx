@@ -5,6 +5,8 @@ import { LeakDetectorPage } from './pages/LeakDetectorPage';
 import { MediaArchitectPage } from './pages/MediaArchitectPage';
 import { CampaignOpsPage } from './pages/CampaignOpsPage';
 import { ExecutiveBridgePage } from './pages/ExecutiveBridgePage';
+import { IntegrationsPage } from './pages/IntegrationsPage';
+import { AuthCallbackPage } from './pages/AuthCallbackPage';
 
 export function App() {
   return (
@@ -15,7 +17,9 @@ export function App() {
         <Route path="media-architect" element={<MediaArchitectPage />} />
         <Route path="campaign-ops" element={<CampaignOpsPage />} />
         <Route path="executive-bridge" element={<ExecutiveBridgePage />} />
+        <Route path="integrations" element={<IntegrationsPage />} />
       </Route>
+      <Route path="auth/callback" element={<AuthCallbackPage />} />
     </Routes>
   );
 }

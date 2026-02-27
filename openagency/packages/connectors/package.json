@@ -1,0 +1,72 @@
+{
+  "name": "@openagency/connectors",
+  "version": "0.3.0",
+  "description": "Platform API connectors for OpenAgency — OAuth2 auth, data sync, credential storage",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./meta": {
+      "types": "./dist/platforms/meta/meta-connector.d.ts",
+      "import": "./dist/platforms/meta/meta-connector.js"
+    },
+    "./google-ads": {
+      "types": "./dist/platforms/google-ads/google-ads-connector.d.ts",
+      "import": "./dist/platforms/google-ads/google-ads-connector.js"
+    },
+    "./dv360": {
+      "types": "./dist/platforms/dv360/dv360-connector.d.ts",
+      "import": "./dist/platforms/dv360/dv360-connector.js"
+    },
+    "./tiktok-ads": {
+      "types": "./dist/platforms/tiktok-ads/tiktok-ads-connector.d.ts",
+      "import": "./dist/platforms/tiktok-ads/tiktok-ads-connector.js"
+    },
+    "./tiktok-shop": {
+      "types": "./dist/platforms/tiktok-shop/tiktok-shop-connector.d.ts",
+      "import": "./dist/platforms/tiktok-shop/tiktok-shop-connector.js"
+    },
+    "./amazon-ads": {
+      "types": "./dist/platforms/amazon-ads/amazon-ads-connector.d.ts",
+      "import": "./dist/platforms/amazon-ads/amazon-ads-connector.js"
+    },
+    "./auth": {
+      "types": "./dist/auth/index.d.ts",
+      "import": "./dist/auth/index.js"
+    },
+    "./transforms": {
+      "types": "./dist/transforms/api-to-engine.d.ts",
+      "import": "./dist/transforms/api-to-engine.js"
+    },
+    "./credential-store": {
+      "types": "./dist/credential-store/index.d.ts",
+      "import": "./dist/credential-store/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@openagency/types": "workspace:*",
+    "@openagency/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT"
+}

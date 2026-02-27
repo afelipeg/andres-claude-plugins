@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { parseInput } from '@openagency/core/data/parser';
 import {
   detectPlatform,
@@ -6,6 +7,7 @@ import {
   type PlatformMapping,
   type TransformOptions,
 } from '@openagency/core/data/platform-detect';
+import { useConnectorStore } from '../stores/connector-store';
 
 // ─── Platform badge config ─────────────────────────────────────────
 
@@ -69,6 +71,8 @@ export function SmartUpload({
   const [pasteText, setPasteText] = useState('');
   const [detection, setDetection] = useState<DetectionState | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const connectedPlatforms = useConnectorStore((s) => s.getConnectedPlatforms());
+  const navigate = useNavigate();
 
   const processText = useCallback(
     (text: string, name?: string) => {
@@ -294,12 +298,29 @@ export function SmartUpload({
           }}
         />
       </div>
-      <button
-        onClick={() => setPasteMode(true)}
-        className="text-xs font-medium text-brand-600 hover:text-brand-700"
-      >
-        Or paste CSV data directly
-      </button>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => setPasteMode(true)}
+          className="text-xs font-medium text-brand-600 hover:text-brand-700"
+        >
+          Or paste CSV data directly
+        </button>
+        {connectedPlatforms.length > 0 ? (
+          <span className="text-xs text-gray-400">
+            or use data from{' '}
+            <button onClick={() => navigate('/integrations')} className="font-medium text-brand-600 hover:text-brand-700">
+              {connectedPlatforms.length} connected platform{connectedPlatforms.length > 1 ? 's' : ''}
+            </button>
+          </span>
+        ) : (
+          <span className="text-xs text-gray-400">
+            or{' '}
+            <button onClick={() => navigate('/integrations')} className="font-medium text-brand-600 hover:text-brand-700">
+              connect a platform
+            </button>
+          </span>
+        )}
+      </div>
     </div>
   );
 }

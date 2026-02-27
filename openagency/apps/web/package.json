@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@openagency/connectors": "workspace:*",
     "@openagency/core": "workspace:*",
     "@openagency/engines": "workspace:*",
     "@openagency/types": "workspace:*",

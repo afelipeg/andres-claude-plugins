@@ -3,7 +3,7 @@
 // No external dependencies.
 
 const DB_NAME = 'openagency';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'reports';
 
 export interface SavedReport {
@@ -21,10 +21,20 @@ function openDB(): Promise<IDBDatabase> {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
+      // v1: reports store
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
         store.createIndex('engine', 'engineId', { unique: false });
         store.createIndex('timestamp', 'timestamp', { unique: false });
+      }
+      // v2: credentials + syncs stores (for platform connectors)
+      if (!db.objectStoreNames.contains('credentials')) {
+        db.createObjectStore('credentials', { keyPath: 'platform' });
+      }
+      if (!db.objectStoreNames.contains('syncs')) {
+        const syncs = db.createObjectStore('syncs', { keyPath: 'id', autoIncrement: true });
+        syncs.createIndex('platform', 'platform', { unique: false });
+        syncs.createIndex('synced_at', 'synced_at', { unique: false });
       }
     };
     req.onsuccess = () => resolve(req.result);

@@ -6,3 +6,4 @@ export * from './campaign-ops.js';
 export * from './executive-bridge.js';
 export * from './llm.js';
 export * from './config.js';
+export * from './connector.js';

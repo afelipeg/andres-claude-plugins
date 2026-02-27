@@ -6,8 +6,11 @@ import { runCommand } from './commands/run.js';
 import { reportCommand } from './commands/report.js';
 import { initCommand } from './commands/init.js';
 import { dashboardCommand } from './commands/dashboard.js';
+import { connectCommand } from './commands/connect.js';
+import { syncCommand } from './commands/sync.js';
+import { disconnectCommand } from './commands/disconnect.js';
 
-const VERSION = '0.1.0';
+const VERSION = '0.3.0';
 
 const BANNER = `
 ${chalk.bold.cyan('   ╔═══════════════════════════════════════════════════╗')}
@@ -39,6 +42,14 @@ async function interactiveMenu(): Promise<void> {
       {
         value: 'report',
         name: `${chalk.bold('Executive report')} — AI-powered narrative analysis`,
+      },
+      {
+        value: 'connect',
+        name: `${chalk.bold('Connect platform')} — link Google, Meta, TikTok, Amazon via OAuth`,
+      },
+      {
+        value: 'sync',
+        name: `${chalk.bold('Sync data')} — pull campaign data from connected platforms`,
       },
       {
         value: 'init',
@@ -94,6 +105,16 @@ async function interactiveMenu(): Promise<void> {
       createProgram().parse();
       break;
 
+    case 'connect':
+      process.argv = ['node', 'openagency', 'connect'];
+      createProgram().parse();
+      break;
+
+    case 'sync':
+      process.argv = ['node', 'openagency', 'sync'];
+      createProgram().parse();
+      break;
+
     case 'init':
       process.argv = ['node', 'openagency', 'init'];
       createProgram().parse();
@@ -115,6 +136,9 @@ export function createProgram(): Command {
   program.addCommand(runCommand());
   program.addCommand(reportCommand());
   program.addCommand(dashboardCommand());
+  program.addCommand(connectCommand());
+  program.addCommand(syncCommand());
+  program.addCommand(disconnectCommand());
 
   // Zero-arg: launch interactive menu
   program.action(async () => {
