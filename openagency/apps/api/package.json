@@ -1,0 +1,53 @@
+{
+  "name": "@openagency/api",
+  "version": "1.0.0",
+  "description": "OpenAgency API server - REST, MCP, and A2A endpoints",
+  "type": "module",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./app": {
+      "types": "./dist/app.d.ts",
+      "import": "./dist/app.js"
+    }
+  },
+  "bin": {
+    "openagency-mcp": "./dist/mcp/stdio.js"
+  },
+  "scripts": {
+    "build": "tsc && cp src/db/schema.sql dist/db/schema.sql && mkdir -p dist/db/migrations && cp src/db/migrations/*.sql dist/db/migrations/",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@openagency/types": "workspace:*",
+    "@openagency/core": "workspace:*",
+    "@openagency/engines": "workspace:*",
+    "@openagency/schemas": "workspace:*",
+    "@openagency/auth": "workspace:*",
+    "@openagency/events": "workspace:*",
+    "@openagency/connectors": "workspace:*",
+    "@openagency/agent": "workspace:*",
+    "@openagency/memory": "workspace:*",
+    "hono": "^4.0.0",
+    "@hono/node-server": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "pino": "^9.0.0",
+    "zod-to-json-schema": "^3.24.0",
+    "postgres": "^3.4.0",
+    "ulid": "^2.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "license": "MIT"
+}

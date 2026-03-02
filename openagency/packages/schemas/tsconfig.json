@@ -6,10 +6,7 @@
     "composite": true
   },
   "references": [
-    { "path": "../../packages/types" },
-    { "path": "../../packages/core" },
-    { "path": "../../packages/engines" },
-    { "path": "../api" }
+    { "path": "../types" }
   ],
   "include": ["src"]
 }

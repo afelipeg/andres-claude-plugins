@@ -1,6 +1,6 @@
 {
   "name": "openagency",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Open-source advertising agency toolkit for solo marketers. Find where your ad budget leaks money.",
   "type": "module",
   "bin": {
@@ -21,7 +21,9 @@
     "@openagency/connectors": "workspace:*",
     "@openagency/core": "workspace:*",
     "@openagency/engines": "workspace:*",
+    "@openagency/api": "workspace:*",
     "@openagency/types": "workspace:*",
+    "@hono/node-server": "^1.0.0",
     "chalk": "^5.4.0",
     "commander": "^13.0.0",
     "ora": "^8.0.0"

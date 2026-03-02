@@ -9,8 +9,9 @@ import { dashboardCommand } from './commands/dashboard.js';
 import { connectCommand } from './commands/connect.js';
 import { syncCommand } from './commands/sync.js';
 import { disconnectCommand } from './commands/disconnect.js';
+import { serveCommand } from './commands/serve.js';
 
-const VERSION = '0.3.0';
+const VERSION = '1.0.0';
 
 const BANNER = `
 ${chalk.bold.cyan('   ╔═══════════════════════════════════════════════════╗')}
@@ -139,6 +140,7 @@ export function createProgram(): Command {
   program.addCommand(connectCommand());
   program.addCommand(syncCommand());
   program.addCommand(disconnectCommand());
+  program.addCommand(serveCommand());
 
   // Zero-arg: launch interactive menu
   program.action(async () => {

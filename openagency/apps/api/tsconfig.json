@@ -9,7 +9,12 @@
     { "path": "../../packages/types" },
     { "path": "../../packages/core" },
     { "path": "../../packages/engines" },
-    { "path": "../api" }
+    { "path": "../../packages/schemas" },
+    { "path": "../../packages/auth" },
+    { "path": "../../packages/events" },
+    { "path": "../../packages/connectors" },
+    { "path": "../../packages/memory" },
+    { "path": "../../packages/agent" }
   ],
   "include": ["src"]
 }

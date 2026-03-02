@@ -1,0 +1,15 @@
+version: "3.8"
+
+# Dev overrides — mounts source for hot reload
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: builder
+    command: ["pnpm", "run", "dev", "--filter=@openagency/api"]
+    volumes:
+      - ../packages:/app/packages
+      - ../apps/api:/app/apps/api
+    environment:
+      NODE_ENV: development

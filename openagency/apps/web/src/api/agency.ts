@@ -6,6 +6,15 @@ import {
 } from '@openagency/engines';
 import type { Engine, EngineResult } from '@openagency/types';
 
+// ─── API Mode ──────────────────────────────────────────────────────
+// When VITE_API_URL is set, route all engine calls through the API server.
+// Otherwise, fall back to direct in-browser engine execution.
+
+const API_URL = import.meta.env.VITE_API_URL as string | undefined;
+const API_KEY = import.meta.env.VITE_API_KEY as string | undefined;
+
+// ─── Direct Engine Mode (default) ──────────────────────────────────
+
 const engines: Record<string, Engine> = {};
 
 function getEngine(id: string): Engine {
@@ -30,7 +39,7 @@ function getEngine(id: string): Engine {
   return engines[id];
 }
 
-export async function runEngine<T = unknown>(
+async function runEngineLocal<T>(
   engineId: string,
   skillId: string,
   input: unknown,
@@ -47,6 +56,46 @@ export async function runEngine<T = unknown>(
   };
 }
 
+// ─── API Client Mode ───────────────────────────────────────────────
+
+async function runEngineRemote<T>(
+  engineId: string,
+  skillId: string,
+  input: unknown,
+): Promise<EngineResult<T>> {
+  const url = `${API_URL}/v1/engines/${engineId}/skills/${skillId}`;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (API_KEY) headers['X-API-Key'] = API_KEY;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(input),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(
+      (err as { message?: string }).message ?? `API error ${res.status}`,
+    );
+  }
+
+  return (await res.json()) as EngineResult<T>;
+}
+
+// ─── Public API (auto-selects mode) ────────────────────────────────
+
+export async function runEngine<T = unknown>(
+  engineId: string,
+  skillId: string,
+  input: unknown,
+): Promise<EngineResult<T>> {
+  if (API_URL) return runEngineRemote<T>(engineId, skillId, input);
+  return runEngineLocal<T>(engineId, skillId, input);
+}
+
 export function listEngines() {
   const all: Engine[] = [
     getEngine('leak-detector'),
@@ -60,4 +109,9 @@ export function listEngines() {
     description: e.description,
     skills: e.skills,
   }));
+}
+
+/** Whether the web app is using API mode */
+export function isApiMode(): boolean {
+  return !!API_URL;
 }
