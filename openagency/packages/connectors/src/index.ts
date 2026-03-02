@@ -52,6 +52,9 @@ export { ConnectorWriteRegistry } from './write-registry.js';
 // Sync
 export { SyncScheduler } from './sync/scheduler.js';
 
+// Credential store
+export { NodeCredentialStore } from './credential-store/node-store.js';
+
 // Re-export key types for convenience
 export type {
   ConnectorPlatform,

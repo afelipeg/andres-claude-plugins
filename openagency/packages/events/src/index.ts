@@ -1,6 +1,24 @@
 export { InMemoryEventBus } from './in-memory-bus.js';
 export { RedisEventBus } from './redis-bus.js';
 export {
+  // Mesh pipeline
+  type MeshPipelineStartedPayload,
+  type MeshPipelineCompletedPayload,
+  type MeshPipelineFailedPayload,
+  meshPipelineStarted,
+  meshPipelineCompleted,
+  meshPipelineFailed,
+  // Mesh stage
+  type MeshStageStartedPayload,
+  type MeshStageCompletedPayload,
+  type MeshStageFailedPayload,
+  type MeshStageSkippedPayload,
+  meshStageStarted,
+  meshStageCompleted,
+  meshStageFailed,
+  meshStageSkipped,
+} from './mesh-events.js';
+export {
   type SkillStartedPayload,
   type SkillCompletedPayload,
   type SkillFailedPayload,

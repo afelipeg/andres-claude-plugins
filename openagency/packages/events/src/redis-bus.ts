@@ -69,6 +69,18 @@ export class RedisEventBus implements EventBus {
     };
   }
 
+  onAny<T>(handler: EventHandler<T>): () => void {
+    let set = this.handlers.get('*');
+    if (!set) {
+      set = new Set();
+      this.handlers.set('*', set);
+    }
+    set.add(handler as EventHandler<unknown>);
+    return () => {
+      set!.delete(handler as EventHandler<unknown>);
+    };
+  }
+
   private startPolling(): void {
     if (this.polling) return;
     this.polling = true;
@@ -103,6 +115,13 @@ export class RedisEventBus implements EventBus {
             const handlers = this.handlers.get(event.type);
             if (handlers) {
               for (const handler of handlers) {
+                void handler(event);
+              }
+            }
+            // Dispatch to wildcard (onAny) handlers
+            const anyHandlers = this.handlers.get('*');
+            if (anyHandlers) {
+              for (const handler of anyHandlers) {
                 void handler(event);
               }
             }

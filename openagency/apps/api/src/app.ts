@@ -8,15 +8,18 @@ import { MediaArchitectEngine } from '@openagency/engines';
 import { CampaignOpsEngine } from '@openagency/engines';
 import { ExecutiveBridgeEngine } from '@openagency/engines';
 import { createEventBus } from '@openagency/events';
-import { ConnectorWriteRegistry } from '@openagency/connectors';
-import { OodaRuntime } from '@openagency/agent';
+import { OodaRuntime, MeshCoordinator, DEFAULT_PIPELINE } from '@openagency/agent';
 import { listAgentEngineIds } from '@openagency/agent';
+import { setupConnectors } from './connectors/setup.js';
 import { healthRoutes } from './routes/health.js';
 import { engineRoutes } from './routes/engines.js';
 import { schemaRoutes } from './routes/schemas.js';
 import { authRoutes } from './routes/auth.js';
 import { agentRoutes, type AgentRegistry } from './routes/agents.js';
 import { goalRoutes } from './routes/goals.js';
+import { meshRoutes } from './routes/mesh.js';
+import { connectorRoutes } from './routes/connectors.js';
+import { eventStreamRoutes } from './routes/event-stream.js';
 import { mcpRoute } from './mcp/transport.js';
 import { a2aDiscoveryRoute } from './a2a/discovery.js';
 import { errorHandler } from './middleware/error-handler.js';
@@ -38,8 +41,9 @@ export function createApp() {
   // ─── Event bus ──────────────────────────────────────────────────
   const eventBus = createEventBus();
 
-  // ─── Connector write registry ─────────────────────────────────
-  const writeRegistry = new ConnectorWriteRegistry();
+  // ─── Connector infrastructure ──────────────────────────────────
+  const connectorInfra = setupConnectors(eventBus);
+  const writeRegistry = connectorInfra.writeRegistry;
 
   // ─── Autonomous agents (OODA runtimes) ────────────────────────
   const llmConfig = detectLLMConfig() ?? { provider: 'anthropic' as const, model: 'claude-sonnet-4-20250514' };
@@ -69,6 +73,11 @@ export function createApp() {
     agentStateRepo: null,
   };
 
+  // ─── Mesh Coordinator (multi-agent orchestration) ───────────────
+  const mesh = new MeshCoordinator(agentMap, eventBus);
+  mesh.registerPipeline(DEFAULT_PIPELINE);
+  mesh.start();
+
   // ─── Global middleware ──────────────────────────────────────────
   app.use('*', requestLogger());
   app.use(
@@ -95,8 +104,17 @@ export function createApp() {
   app.route('/', agentRoutes(registry));
   app.route('/', goalRoutes({ goalRepo: null, decomposer: null, tracker: null }));
 
+  // ─── Mesh routes ────────────────────────────────────────────────
+  app.route('/', meshRoutes(mesh));
+
+  // ─── Connector routes ──────────────────────────────────────────
+  app.route('/', connectorRoutes(connectorInfra, eventBus));
+
+  // ─── SSE event stream ──────────────────────────────────────────
+  app.route('/', eventStreamRoutes(eventBus));
+
   // ─── MCP endpoint ───────────────────────────────────────────────
-  app.route('/', mcpRoute(agency, agentMap));
+  app.route('/', mcpRoute(agency, agentMap, mesh, connectorInfra));
 
   // ─── Error handler ──────────────────────────────────────────────
   app.onError(errorHandler);

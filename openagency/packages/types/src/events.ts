@@ -38,7 +38,15 @@ export type EngineEventType =
   | 'domain.goal.failed'
   // Sync
   | 'sync.completed'
-  | 'sync.failed';
+  | 'sync.failed'
+  // Mesh orchestration
+  | 'mesh.pipeline.started'
+  | 'mesh.pipeline.completed'
+  | 'mesh.pipeline.failed'
+  | 'mesh.stage.started'
+  | 'mesh.stage.completed'
+  | 'mesh.stage.failed'
+  | 'mesh.stage.skipped';
 
 export interface EngineEvent<T = unknown> {
   id: string; // ULID
@@ -58,4 +66,6 @@ export interface EventBus {
     type: EngineEventType,
     handler: EventHandler<T>,
   ): () => void; // returns unsubscribe function
+  /** Subscribe to all events regardless of type */
+  onAny<T>(handler: EventHandler<T>): () => void;
 }

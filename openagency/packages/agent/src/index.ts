@@ -17,3 +17,17 @@ export { OutcomeTracker } from './outcome-tracker.js';
 export { AGENT_CONFIGS, getAgentConfig, listAgentEngineIds, type EngineAgentConfig } from './agents/engine-configs.js';
 export { GoalDecomposer } from './goals/goal-decomposer.js';
 export { GoalTracker } from './goals/goal-tracker.js';
+
+// Mesh orchestration
+export { MeshCoordinator } from './mesh/mesh-coordinator.js';
+export { DEFAULT_PIPELINE } from './mesh/default-pipeline.js';
+export { createUsageMeter, recordStageUsage, recordOutcome } from './mesh/usage-meter.js';
+export type {
+  MeshPipeline,
+  MeshStage,
+  MeshStageResult,
+  MeshContext,
+  MeshRun,
+  MeshRunStatus,
+  UsageMeter,
+} from './mesh/types.js';

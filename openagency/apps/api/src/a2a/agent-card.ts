@@ -26,6 +26,17 @@ export interface AgentCard {
       safety_pipeline: boolean;
       dry_run_default: boolean;
     };
+    orchestration: {
+      pipelines: Array<{
+        id: string;
+        name: string;
+        stages: string[];
+        trigger: string;
+        typical_duration_s: number;
+        max_duration_s: number;
+      }>;
+      mcp_tools: string[];
+    };
   };
   protocols: {
     rest: { base_url: string; openapi: string };
@@ -50,9 +61,9 @@ export function generateAgentCard(baseUrl: string): AgentCard {
 
   return {
     name: 'OpenAgency',
-    version: '2.0.0',
+    version: '3.0.0',
     description:
-      'Open-source ad-tech intelligence platform with 4 autonomous engines, 29 skills, OODA loop runtime, goal-driven execution, and safety pipeline for waste detection, budget optimization, campaign operations, and executive metrics translation.',
+      'Open-source ad-tech intelligence infrastructure with 4 autonomous agents, 29 skills, multi-agent orchestration mesh, OODA loop runtime, goal-driven execution, and safety pipeline. Any AI agent can trigger a full optimization pipeline via a single MCP tool call.',
     provider: {
       organization: 'OpenAgency',
       url: baseUrl,
@@ -69,6 +80,19 @@ export function generateAgentCard(baseUrl: string): AgentCard {
         goal_driven: true,
         safety_pipeline: true,
         dry_run_default: true,
+      },
+      orchestration: {
+        pipelines: [
+          {
+            id: 'full-optimization',
+            name: 'Full Optimization Pipeline',
+            stages: ['leak-detector', 'media-architect', 'campaign-ops', 'executive-bridge'],
+            trigger: 'manual or sync.completed',
+            typical_duration_s: 360,
+            max_duration_s: 1080,
+          },
+        ],
+        mcp_tools: ['mesh_list_pipelines', 'mesh_execute_pipeline', 'mesh_get_run'],
       },
     },
     protocols: {
