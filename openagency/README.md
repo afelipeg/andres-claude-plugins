@@ -1,30 +1,32 @@
 <p align="center">
   <h1 align="center">OpenAgency</h1>
   <p align="center">
-    <strong>Open-source advertising agency toolkit for solo marketers.</strong>
+    <strong>Open-source autonomous advertising intelligence.</strong>
     <br />
-    Find where your ad budget leaks money. Optimize channels. Generate executive reports.
+    4 AI agents that observe your ad spend, detect waste, reallocate budgets, and report to executives — autonomously.
     <br />
-    Connect live to Google Ads, Meta, DV360, TikTok, and Amazon — all from one command.
+    Connected to Google Ads, Meta, DV360, TikTok, and Amazon. Governed by safety gates. Driven by goals.
   </p>
 </p>
 
 <p align="center">
+  <a href="#the-problem">Problem</a> &bull;
+  <a href="#how-it-works">How It Works</a> &bull;
   <a href="#quick-start">Quick Start</a> &bull;
-  <a href="#platform-connectors">Connectors</a> &bull;
+  <a href="#autonomous-agents">Agents</a> &bull;
   <a href="#engines">Engines</a> &bull;
-  <a href="#web-dashboard">Dashboard</a> &bull;
-  <a href="#commands">Commands</a> &bull;
-  <a href="#llm-integration">LLM Integration</a> &bull;
+  <a href="#platform-connectors">Connectors</a> &bull;
+  <a href="#api">API</a> &bull;
   <a href="#architecture">Architecture</a> &bull;
-  <a href="#contributing">Contributing</a>
+  <a href="#roadmap">Roadmap</a>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/npm/v/openagency?style=flat-square" alt="npm" />
   <img src="https://img.shields.io/github/license/openagency/openagency?style=flat-square" alt="MIT License" />
+  <img src="https://img.shields.io/badge/agents-4-purple?style=flat-square" alt="4 Agents" />
   <img src="https://img.shields.io/badge/engines-4-blue?style=flat-square" alt="4 Engines" />
-  <img src="https://img.shields.io/badge/skills-33-green?style=flat-square" alt="33 Skills" />
+  <img src="https://img.shields.io/badge/skills-29-green?style=flat-square" alt="29 Skills" />
   <img src="https://img.shields.io/badge/platforms-6-orange?style=flat-square" alt="6 Platforms" />
 </p>
 
@@ -32,529 +34,485 @@
 
 ## The Problem
 
-The Big 6 monopoly of old-fashion advertising holding companies charge millions for media planning, measurement, and optimization capabilities that remain locked behind paywalls and proprietary processes.
+The Big 6 advertising holding companies charge millions for media planning, measurement, and optimization — capabilities locked behind proprietary processes and legacy contracts. They move slowly. They optimize for their margins, not yours.
 
-**Solo marketers and small businesses are priced out.**
+Meanwhile, AI agents are about to eat professional services. The question isn't *if* autonomous agents will manage ad spend — it's *who builds the open alternative* before the holding companies lock it down again.
+
+**OpenAgency is that alternative.**
 
 ## The Solution
 
-OpenAgency gives any solo marketer agency-grade tools: waste detection, budget optimization, campaign management, and executive reporting. Connect your ad platforms, pull live data, and get answers instantly. No contracts. MIT licensed.
+OpenAgency is a fully autonomous advertising intelligence system. Four specialized AI agents — each implementing an OODA loop (Observe, Orient, Decide, Act) — continuously monitor your campaigns, detect waste, reallocate budgets, and generate executive reports. No humans in the loop. Safety-gated. Goal-driven. Open source.
 
-```bash
-npx openagency
+```
+Leak Detector    observes → finds $250K in waste → emits waste_detected
+     ↓
+Media Architect  observes waste → reallocates budget → emits budget_reallocated
+     ↓
+Campaign Ops     observes reallocation → pauses losers, boosts winners → emits campaign_adjusted
+     ↓
+Executive Bridge observes all signals → generates C-Suite report → emits executive_report
 ```
 
-That's it. Connect your platforms. See where your money leaks.
+Every action passes through a 5-gate safety pipeline. Every decision is logged with reasoning. Every outcome is measured.
+
+---
+
+## How It Works
+
+### 1. Connect your platforms
+
+```bash
+openagency connect meta_ads
+openagency connect google_ads
+openagency sync
+```
+
+### 2. Set a goal
+
+```bash
+curl -X POST http://localhost:3100/v1/goals \
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "name": "Maximize ROAS to 4.5x in Q2",
+    "type": "maximize",
+    "target_metric": "roas",
+    "target_value": 4.5,
+    "constraints": {
+      "max_budget": 500000,
+      "allowed_platforms": ["meta_ads", "google_ads"]
+    }
+  }'
+```
+
+### 3. Start the agents
+
+```bash
+curl -X POST http://localhost:3100/v1/agents/leak-detector/start
+curl -X POST http://localhost:3100/v1/agents/media-architect/start
+curl -X POST http://localhost:3100/v1/agents/campaign-ops/start
+curl -X POST http://localhost:3100/v1/agents/executive-bridge/start
+```
+
+### 4. They work autonomously
+
+Each agent runs continuous OODA cycles:
+- **Observe** — pull latest sync data, listen for events from other agents
+- **Orient** — run computation skills, call LLM for anomaly analysis
+- **Decide** — plan actions with confidence scores and risk assessment
+- **Act** — execute through safety pipeline (dry-run by default)
+
+Check what they're doing:
+
+```bash
+# See all agent statuses
+curl http://localhost:3100/v1/agents
+
+# See decisions with reasoning
+curl http://localhost:3100/v1/agents/media-architect/decisions
+
+# Approve a high-risk decision
+curl -X POST http://localhost:3100/v1/agents/media-architect/decisions/$DECISION_ID/approve
+
+# Track goal progress
+curl http://localhost:3100/v1/goals/$GOAL_ID/progress
+```
 
 ---
 
 ## Quick Start
 
-### Interactive (recommended)
+### Docker (recommended for full stack)
 
 ```bash
-npx openagency
+git clone https://github.com/openagency/openagency.git
+cd openagency
+docker compose up
 ```
 
-Launches an interactive menu. Pick "See a demo" to get started instantly, or "Connect platform" to link your ad accounts.
+Starts the API server on `:3100` with PostgreSQL (pgvector) and Redis.
 
-### One-liner
+### CLI (quick exploration)
 
 ```bash
 npx openagency scan --demo
 ```
 
-Output:
-
-```
-  WASTE WATERFALL
-  =================================================================
-
-  Gross Spend                                $500,000
-
-  +-- Non-Working Overhead             - $70,000    14.0%
-  |   #######
-  +-- Supply Chain Waste               - $45,000     9.0%
-  |   #####
-  +-- Quality Waste                    - $55,000    11.0%
-  |   ######
-  +-- Audience Waste                   - $40,000     8.0%
-  |   ####
-  +-- Optimization Waste               - $25,000     5.0%
-  |   ###
-  +-- Measurement Waste                - $15,000     3.0%
-  |   ##
-  =================================================================
-  Productive Spend                           $250,000    50.0%
-
-  Total Waste: $250,000 (50.0%)
-```
-
-### Quick estimate from budget
+### API Server (development)
 
 ```bash
-npx openagency scan --budget 250000 --industry retail
+pnpm install && pnpm build
+cd apps/api && pnpm dev
 ```
 
-### Analyze your real data
+### Environment
 
 ```bash
-npx openagency scan --file your-data.json
+# Required for LLM reasoning (agent Orient + Decide phases)
+ANTHROPIC_API_KEY=sk-ant-...    # or OPENAI_API_KEY
+
+# Platform OAuth2 credentials
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+META_APP_ID=
+META_APP_SECRET=
+# ... (see Platform Connectors section)
+
+# Database
+DATABASE_URL=postgres://localhost:5432/openagency
+
+# Optional
+REDIS_URL=redis://localhost:6379
+PORT=3100
 ```
-
-### AI-powered executive report
-
-```bash
-npx openagency report leak-detector --demo
-```
-
-Requires `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` in env. Falls back to structured data without.
 
 ---
 
-## Platform Connectors
+## Autonomous Agents
 
-OpenAgency connects directly to **6 advertising platforms** via OAuth2. No more exporting CSVs manually — pull live campaign data at any granularity level.
+Each agent wraps a computation engine in an OODA loop with persistent memory, event-driven observation, and goal tracking.
 
-### Supported Platforms
+### Agent Architecture
 
-| Platform | API | Data Levels | Key Metrics |
-|----------|-----|-------------|-------------|
-| **Google Ads** | Ads API v17 (GAQL) | Campaign, Ad Group, Ad | spend, impressions, clicks, conversions, revenue, CPA, search impression share, video views, view-through conversions |
-| **Meta Ads** | Marketing API v21.0 | Campaign, Ad Set, Ad | spend, impressions, clicks, conversions, revenue, reach, frequency, video quartiles (p25/p50/p75/p100), link clicks, unique clicks |
-| **DV360** | Reporting API v3 | Insertion Order, Line Item, Creative | spend, impressions, clicks, conversions, revenue, viewable impressions, TrueView views/rate, reach, frequency |
-| **TikTok Ads** | Marketing API v1.3 | Campaign, Ad Group, Ad | spend, impressions, clicks, conversions, revenue, reach, frequency, video plays, video quartiles, conversion rate |
-| **TikTok Shop** | Shop API v2 | Daily Aggregate, Product-level | orders, revenue, GMV, units sold, refund amount, product details |
-| **Amazon Ads** | Advertising API v3 | Campaign, Ad Group | spend, impressions, clicks, conversions, revenue, ACoS, DPV, viewable impressions, new-to-brand conversions (across SP, SB, SD) |
+| Agent | Engine | Observes | Decides | Acts |
+|-------|--------|----------|---------|------|
+| **Leak Detector** | leak-detector | Sync data, schedule ticks | Waste categories, severity | Emits `waste_detected` signals |
+| **Media Architect** | media-architect | Sync data, waste signals, anomalies | Budget reallocation plans | Writes budget changes via platform APIs |
+| **Campaign Ops** | campaign-ops | Sync data, waste signals, reallocation events | Pause/enable/bid actions | Writes campaign state via platform APIs |
+| **Executive Bridge** | executive-bridge | All agent signals | Report structure, attribution | Emits `executive_report` |
 
-### Connect a Platform
+### Safety Pipeline
 
-```bash
-# Interactive — opens browser for OAuth2
-openagency connect
+Every platform write passes through 5 sequential gates:
 
-# Direct
-openagency connect meta_ads
-openagency connect google_ads
-openagency connect dv360
-openagency connect tiktok_ads
-openagency connect tiktok_shop
-openagency connect amazon_ads
-```
+| Gate | Purpose | Default |
+|------|---------|---------|
+| **Dry Run** | Log action without executing | `dry_run: true` |
+| **Budget Cap** | Reject if change exceeds threshold | `max_budget_change_pct: 20` |
+| **Daily Write Limit** | Max writes per platform per day | 50 |
+| **Approval Gate** | Require human approval above USD threshold | `approval_threshold_usd: 5000` |
+| **Rollback Tracker** | Record previous values for undo | Always records |
 
-### Sync Data
+### Agent Configuration
 
 ```bash
-# Sync all connected platforms (last 30 days)
-openagency sync
-
-# Sync specific platform with custom range
-openagency sync --platform google_ads --days 90
-
-# Sync and run an engine on the results
-openagency sync --platform meta_ads --engine leak-detector
+curl -X PATCH http://localhost:3100/v1/agents/media-architect/config \
+  -d '{
+    "cycle_interval_ms": 3600000,
+    "max_budget_change_pct": 15,
+    "approval_threshold_usd": 10000,
+    "dry_run": false,
+    "writable_platforms": ["meta_ads", "google_ads"]
+  }'
 ```
 
-### Disconnect
+### Decision Transparency
+
+Every decision includes:
+- **Reasoning** — LLM-generated explanation of why
+- **Confidence** — 0-1 score
+- **Risk level** — low / medium / high / critical
+- **Planned actions** — exactly what will change
+- **Estimated impact** — projected improvement
+- **Rollback plan** — how to undo
 
 ```bash
-openagency disconnect meta_ads
+curl http://localhost:3100/v1/agents/media-architect/decisions | jq '.[0]'
 ```
-
-### Environment Variables
-
-```bash
-# Google (Ads + DV360)
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-GOOGLE_ADS_DEVELOPER_TOKEN=    # Google Ads only
-
-# Meta
-META_APP_ID=
-META_APP_SECRET=
-
-# TikTok Ads
-TIKTOK_ADS_APP_ID=
-TIKTOK_ADS_SECRET=
-
-# TikTok Shop
-TIKTOK_SHOP_APP_KEY=
-TIKTOK_SHOP_APP_SECRET=
-
-# Amazon Ads
-AMAZON_ADS_CLIENT_ID=
-AMAZON_ADS_CLIENT_SECRET=
-```
-
-### Security
-
-Credentials are encrypted at rest using AES-256-GCM with PBKDF2 key derivation (100k iterations). You set a passphrase on first connect.
-
-| Environment | Storage | Encryption |
-|-------------|---------|------------|
-| CLI (Node.js) | `~/.openagency/credentials.enc` (mode 0600) | Node crypto AES-256-GCM |
-| Web Dashboard | IndexedDB `credentials` store | Web Crypto API AES-256-GCM |
-
-Same passphrase decrypts on either environment.
 
 ---
 
 ## Engines
 
-OpenAgency ships with **4 computation engines** covering the full advertising lifecycle:
+4 computation engines — pure functions, no side effects, deterministic. The agents use these as skills during their Orient phase.
 
-### 1. Leak Detector
-> "Where is my money leaking?"
+### Leak Detector — "Where is my money leaking?"
 
-Analyzes your ad spend through a 6-stage waste waterfall (Non-Working -> Supply Chain -> Quality -> Audience -> Optimization -> Measurement -> Productive). Compares against industry benchmarks. Shows exactly where dollars disappear.
+6-stage waste waterfall analysis with industry benchmarks.
 
 **Skills:** `waste-waterfall`, `waste-estimate`, `waste-compare`, `supply-chain-audit`, `media-quality-score`
 
-```bash
-openagency run leak-detector waste-waterfall --file spend.json
-```
+### Media Architect — "Where should my budget go?"
 
-### 2. Media Architect
-> "Where should my budget go?"
-
-Optimizes budget allocation across channels using Hill saturation curves and greedy marginal allocation. Includes MMM scenario planning with 6 interactive charts, benchmark tracking, and media plan generation.
+Hill saturation curves, greedy marginal allocation, MMM scenario planning.
 
 **Skills:** `channel-optimize`, `scenario-analysis`, `mmm-pre-model`, `mmm-model`, `mmm-post-model`, `mmm-optimize`, `health-check`, `anomaly-detect`, `generate-plan`
 
-```bash
-openagency run media-architect channel-optimize --file channels.json
-```
+### Campaign Ops — "Is the campaign on track?"
 
-### 3. Campaign Ops
-> "Is the campaign on track?"
-
-24-task DAG state machine for campaign lifecycle management. 6 rule-based optimization checks (CPA overshoot, ROAS alerts, pacing, creative fatigue, zero conversions). Cross-channel reallocation.
+24-task DAG state machine, 6 rule-based optimization checks, cross-channel reallocation.
 
 **Skills:** `create-campaign`, `update-task`, `next-actions`, `campaign-summary`, `optimization-analyze`, `optimization-reallocate`
 
-```bash
-openagency run campaign-ops optimization-analyze --file campaign.json
-```
+### Executive Bridge — "What's the real ROI?"
 
-### 4. Executive Bridge
-> "What's the real ROI?"
-
-Shapley value attribution (game theory), L3->L2->L1 metric translation for C-Suite reporting, platform vs. actual revenue reconciliation, and statistical power analysis for incrementality testing.
+Shapley attribution, L3-L2-L1 metric translation, revenue reconciliation, incrementality testing.
 
 **Skills:** `shapley-attribute`, `shapley-compare`, `revenue-translate`, `revenue-compare-channels`, `reconcile`, `data-integrity`, `geo-lift`, `conversion-lift`, `holdout`
 
-```bash
-openagency run executive-bridge shapley-attribute --file touchpoints.json
-```
+---
+
+## Platform Connectors
+
+Live read and write connections to 6 advertising platforms via OAuth2.
+
+### Read (Sync)
+
+| Platform | API | Data Levels |
+|----------|-----|-------------|
+| **Google Ads** | Ads API v17 | Campaign, Ad Group, Ad |
+| **Meta Ads** | Marketing API v21.0 | Campaign, Ad Set, Ad |
+| **DV360** | Reporting API v3 | Insertion Order, Line Item, Creative |
+| **TikTok Ads** | Marketing API v1.3 | Campaign, Ad Group, Ad |
+| **TikTok Shop** | Shop API v2 | Daily Aggregate, Product |
+| **Amazon Ads** | Advertising API v3 | Campaign, Ad Group |
+
+### Write (Agent Actions)
+
+| Platform | Budget Update | Pause/Enable | Bid Adjust |
+|----------|--------------|--------------|------------|
+| **Meta** | Graph API | Graph API | Graph API |
+| **Google Ads** | Mutate API | Mutate API | Mutate API |
+| **DV360** | PATCH lineItems | PATCH lineItems | PATCH lineItems |
+| **TikTok Ads** | Marketing API | Marketing API | Marketing API |
+| **TikTok Shop** | Marketing API | Marketing API | N/A |
+| **Amazon Ads** | SP Campaigns API | SP Campaigns API | SP Campaigns API |
+
+All writes pass through the safety pipeline. Credentials encrypted at rest (AES-256-GCM).
 
 ---
 
-## Commands
+## API
 
-| Command | Description |
-|---------|-------------|
-| `openagency` | Interactive menu (zero-arg experience) |
-| `openagency init` | Setup wizard — configure LLM, run first scan |
-| `openagency scan` | Waste detection — the hook command |
-| `openagency run <engine> <skill>` | Run any engine skill directly |
-| `openagency report <engine>` | AI-powered executive narrative |
-| `openagency dashboard` | Web dashboard info & launch instructions |
-| `openagency connect [platform]` | OAuth2 connect to an ad platform |
-| `openagency sync [--platform] [--days] [--engine]` | Pull live campaign data from connected platforms |
-| `openagency disconnect <platform>` | Remove a platform connection |
+### Protocols
 
----
+| Protocol | Endpoint | Description |
+|----------|----------|-------------|
+| **REST** | `http://localhost:3100/v1/*` | Full CRUD for engines, agents, goals, decisions |
+| **MCP** | `POST /v1/mcp` | Model Context Protocol — any AI agent can invoke skills |
+| **A2A** | `GET /.well-known/agent.json` | Agent-to-Agent discovery card |
 
-## LLM Integration
+### Key REST Endpoints
 
-LLM is **optional and additive**. All 4 engines are pure computation — they run identically with or without an API key. LLM adds narrative interpretation on top.
-
-### Supported Providers
-
-| Provider | Env Variable | Default Model |
-|----------|-------------|---------------|
-| Anthropic | `ANTHROPIC_API_KEY` | claude-sonnet-4-20250514 |
-| OpenAI | `OPENAI_API_KEY` | gpt-4o |
-| Ollama | (none — local) | llama3 |
-
-### Setup
-
-```bash
-# Option 1: Environment variable (recommended)
-export ANTHROPIC_API_KEY=sk-ant-...
-
-# Option 2: Interactive setup
-openagency init
-
-# Option 3: Per-command
-openagency report leak-detector --demo --provider anthropic --model claude-sonnet-4-20250514
+**Agents**
+```
+GET    /v1/agents                           # List all agents
+GET    /v1/agents/:id                       # Agent detail
+POST   /v1/agents/:id/start                 # Start OODA loop
+POST   /v1/agents/:id/stop                  # Stop agent
+POST   /v1/agents/:id/pause                 # Pause (observe only)
+POST   /v1/agents/:id/resume                # Resume
+POST   /v1/agents/:id/cycle                 # Manual OODA cycle
+PATCH  /v1/agents/:id/config                # Update configuration
+GET    /v1/agents/:id/decisions              # List decisions
+POST   /v1/agents/:id/decisions/:did/approve # Approve decision
+POST   /v1/agents/:id/decisions/:did/reject  # Reject decision
 ```
 
-### Without LLM
-
-```bash
-openagency scan --demo              # Works perfectly — pure computation
-openagency report leak-detector --demo --no-llm  # Structured data, no narrative
+**Goals**
+```
+POST   /v1/goals                            # Create goal
+GET    /v1/goals                            # List goals
+GET    /v1/goals/:id                        # Goal detail
+PATCH  /v1/goals/:id                        # Update goal
+DELETE /v1/goals/:id                        # Cancel goal
+POST   /v1/goals/:id/decompose             # LLM decomposition
+GET    /v1/goals/:id/progress               # Progress report
 ```
 
----
-
-## Input Formats
-
-### CSV Auto-Detect (v0.2.0+)
-
-Drop a CSV export from any supported platform and OpenAgency auto-detects the source and maps columns:
-
-- **Google Ads** — Campaign, Ad group, Impressions, Clicks, Cost, Conversions, Conv. value
-- **Meta Ads** — Campaign name, Impressions, Link clicks, Amount spent, Results, Purchase ROAS
-- **TikTok Ads** — Campaign name, Impression, Click, Cost, Conversion, Total purchase value
-
-```bash
-# CLI
-openagency scan --file google_ads_export.csv
-
-# Web Dashboard — drag and drop into the upload zone
+**Engines**
+```
+POST   /v1/engines/:engine/skills/:skill    # Run skill directly
+GET    /v1/engines                           # List engines
+GET    /v1/schemas/:engine/:skill            # JSON Schema for skill
 ```
 
-### Live API Data (v0.3.0+)
+### Authentication
 
-Connect platforms via OAuth2 and pull data directly — no CSV export needed:
+| Method | Use Case |
+|--------|----------|
+| API Key (`X-API-Key` header) | Machine-to-machine |
+| JWT Bearer token | User sessions |
+| OAuth2 Client Credentials | M2M with scoped permissions |
 
-```bash
-openagency connect google_ads
-openagency sync --platform google_ads --days 30 --engine leak-detector
-```
+### MCP Tools
 
-### JSON (Manual)
-
-#### Waste Waterfall (Leak Detector)
+Any MCP-compatible AI agent can invoke OpenAgency skills:
 
 ```json
 {
-  "gross_spend": 500000,
-  "industry": "retail",
-  "non_working": { "agency_fees": 40000, "tech_fees": 20000 },
-  "supply_chain": { "dsp_fees": 25000, "ssp_fees": 15000 },
-  "quality": { "fraud": 20000, "non_viewable": 15000 },
-  "audience": { "off_target": 25000, "frequency_waste": 10000 },
-  "optimization": { "poor_pacing": 10000, "stale_creative": 7500 },
-  "measurement": { "misattributed": 7500 }
+  "method": "tools/call",
+  "params": {
+    "name": "leak-detector__waste-waterfall",
+    "arguments": { "gross_spend": 500000, "industry": "retail" }
+  }
 }
 ```
 
-#### Channel Optimization (Media Architect)
-
-```json
-{
-  "total_budget": 500000,
-  "channels": [
-    { "name": "search", "spend": 200000 },
-    { "name": "social_meta", "spend": 150000 },
-    { "name": "programmatic_display", "spend": 100000 }
-  ]
-}
-```
-
-#### Campaign Data (Campaign Ops)
-
-```json
-{
-  "campaigns": [
-    {
-      "name": "Summer Sale",
-      "channel": "search",
-      "spend": 50000,
-      "budget": 60000,
-      "impressions": 1000000,
-      "clicks": 25000,
-      "conversions": 500,
-      "revenue": 75000,
-      "days_elapsed": 15,
-      "days_total": 30,
-      "ctr": 2.5,
-      "cpa_target": 100
-    }
-  ]
-}
-```
+Plus agent management tools: `agent_list`, `agent_start`, `agent_stop`, `agent_cycle`, `agent_approve_decision`.
 
 ---
 
 ## Architecture
 
 ```
-@openagency/types        Zero deps — shared TypeScript interfaces
-        |
-        v
-@openagency/core         Orchestration + LLM + CSV parser + platform-detect
-        |
-    +---+---+
-    |       |
-    v       v
-@openagency/engines    @openagency/connectors
-4 computation engines   6 platform API connectors
-(no I/O, no side        OAuth2 + rate limiting +
- effects)               encrypted credentials
-    |       |
-    +---+---+
-        |
-        v
-  openagency CLI         Commander.js + interactive prompts + renderers
-  @openagency/web        Vite + React + Tailwind + Recharts dashboard
+                        ┌─────────────────────────────────┐
+                        │         API Gateway (Hono)       │
+                        │   REST + MCP + A2A + Auth + RBAC │
+                        └──────────┬──────────────────────┘
+                                   │
+              ┌────────────────────┼────────────────────┐
+              │                    │                     │
+    ┌─────────▼──────────┐ ┌──────▼──────────┐ ┌───────▼────────┐
+    │   Agent Runtime    │ │  Event Bus      │ │  Goal System   │
+    │   (OODA Loops)     │ │  (Redis/Memory) │ │  (LLM Decomp)  │
+    │                    │ │                 │ │                │
+    │  leak-detector     │ │  22 event types │ │  Goal Tracker  │
+    │  media-architect   │ │  pub/sub        │ │  Progress      │
+    │  campaign-ops      │ │  cross-engine   │ │  Auto-adjust   │
+    │  executive-bridge  │ │                 │ │                │
+    └─────────┬──────────┘ └─────────────────┘ └────────────────┘
+              │
+    ┌─────────▼──────────┐
+    │  Safety Pipeline   │
+    │  5 gates per write │
+    └─────────┬──────────┘
+              │
+    ┌─────────▼──────────────────────────────────────────────┐
+    │                  Connector Layer                        │
+    │  Google Ads │ Meta │ DV360 │ TikTok │ Amazon           │
+    │  Read (sync) + Write (budget/pause/bid)                │
+    │  OAuth2 + Rate Limiting + Encrypted Credentials        │
+    └────────────────────────────────────────────────────────┘
+              │
+    ┌─────────▼──────────┐
+    │    Persistence     │
+    │  PostgreSQL +      │
+    │  pgvector          │
+    │                    │
+    │  Agent state       │
+    │  Decisions + log   │
+    │  Goals + outcomes  │
+    │  Vector memory     │
+    └────────────────────┘
 ```
-
-**Key design principles:**
-- Engines are pure computation. They run identically in Node.js, browsers, and tests.
-- Connectors handle I/O, auth, and API specifics. Data is normalized into a universal `NormalizedCampaignRow` schema before reaching engines.
-- LLM is optional and additive — it adds narrative interpretation on top of structured results.
 
 ### Monorepo
 
 ```
 openagency/
-+-- packages/
-|   +-- types/          @openagency/types — shared interfaces
-|   +-- core/           @openagency/core — orchestration, LLM, CSV parser
-|   +-- engines/        @openagency/engines — 4 computation engines
-|   +-- connectors/     @openagency/connectors — 6 platform API connectors
-+-- apps/
-|   +-- cli/            openagency (npm bin)
-|   +-- web/            @openagency/web (Vite + React + Tailwind + Recharts)
-+-- references/         Industry benchmarks and frameworks
-+-- scripts/python/     Original Python reference implementations
+├── packages/
+│   ├── types/          Shared TypeScript types (agent, decision, goal, connector-write, events)
+│   ├── core/           Orchestration, LLM abstraction, CSV parser
+│   ├── schemas/        Zod schemas, JSON Schema + OpenAPI generation
+│   ├── auth/           JWT, API keys, OAuth2 M2M, RBAC middleware
+│   ├── events/         Event bus (InMemory + Redis), 22 agent event types
+│   ├── engines/        4 pure computation engines (29 skills)
+│   ├── connectors/     6 platform connectors (read + write), safety pipeline
+│   ├── memory/         PostgreSQL repositories (state, decisions, goals, vector memory)
+│   └── agent/          OODA runtime, observer pipeline, LLM reasoning, goal system
+├── apps/
+│   ├── api/            Hono API server (REST + MCP + A2A), Docker-ready
+│   ├── cli/            CLI tool (npx openagency)
+│   └── web/            Vite + React dashboard
+└── docker/             Docker Compose (API + PostgreSQL/pgvector + Redis)
 ```
 
-### Normalized Data Schema
+### Key Design Principles
 
-All platform data flows through a universal `NormalizedCampaignRow` before reaching engines:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `campaign_name` / `campaign_id` | string | Always present |
-| `ad_set_name` / `ad_set_id` | string? | Ad group (Google), Ad set (Meta), Line item (DV360), Ad group (TikTok) |
-| `ad_name` / `ad_id` | string? | Individual ad/creative |
-| `platform` | string | `google_ads`, `meta_ads`, `dv360`, `tiktok_ads`, `tiktok_shop`, `amazon_ads` |
-| `date` | string | YYYY-MM-DD |
-| `spend`, `impressions`, `clicks` | number | Core metrics |
-| `conversions`, `revenue` | number | Performance metrics |
-| `ctr`, `cpc`, `cpa`, `roas` | number | Computed ratios (CTR as fraction: 0.05 = 5%) |
-| `reach`, `frequency` | number? | Meta, TikTok, DV360 |
-| `video_views`, `video_p25`-`p100` | number? | Video metrics (Meta, TikTok, DV360, Google) |
-| `acos`, `dpv`, `new_to_brand_conversions` | number? | Amazon-specific |
-| `gmv`, `units_sold`, `refund_amount` | number? | TikTok Shop-specific |
-
----
-
-## Web Dashboard
-
-OpenAgency includes an interactive web dashboard built with Vite, React, Tailwind CSS, and Recharts.
-
-```bash
-# Development
-cd apps/web && pnpm dev
-
-# Production build
-cd apps/web && pnpm build && pnpm preview
-```
-
-**Features:**
-- **Platform Integrations page** — connect/disconnect 6 ad platforms, view sync status, set sync intervals
-- **Live data sync** — pull campaign data directly from connected platforms with auto-refresh
-- **Smart CSV auto-detect** — drop a Google Ads, Meta Ads, or TikTok Ads export and analyze instantly
-- **One-click PDF report export** for every engine
-- **Saved reports** with IndexedDB persistence (auto-saves, reload/export/delete)
-- Waste waterfall visualization with interactive charts
-- Channel optimization with current vs. optimized allocation comparison
-- MMM scenario planning with 6 interactive charts (saturation curves, marginal returns, budget allocation, ROI comparison, spend vs. response, channel efficiency)
-- Campaign DAG timeline with sprint tracking and optimization alerts
-- Revenue bridge with L1/L2/L3 financial metrics and efficiency scoring
-- Shapley attribution analysis with last-click comparison
-- Demo data buttons for all 4 engines
-- Sync status indicator in header (colored dots per platform)
-- Paste CSV data directly or drag-and-drop files
+- **Engines are pure computation.** No I/O, no side effects, deterministic. They run identically in Node.js, browsers, and tests.
+- **Agents are autonomous.** Each implements a full OODA loop with persistent memory and goal tracking.
+- **Safety is non-negotiable.** Every platform write passes through 5 gates. Dry-run by default.
+- **Events drive coordination.** Agents communicate through typed events, not direct calls.
+- **LLM is the reasoning layer.** Engines compute. LLM interprets, plans, and decides.
+- **Protocols are open.** MCP for tool invocation. A2A for agent discovery. REST for everything else.
 
 ---
 
 ## Development
 
 ```bash
-# Clone
 git clone https://github.com/openagency/openagency.git
 cd openagency
 
-# Install
 pnpm install
+pnpm build        # Build all 12 packages
+pnpm test         # Run all tests
 
-# Build all packages
-pnpm run build
-
-# Test (79 tests across 11 test files)
-pnpm run test
-
-# Run locally
-node apps/cli/dist/index.js scan --demo
+# API server
+cd apps/api && pnpm dev    # http://localhost:3100
 
 # Web dashboard
-cd apps/web && pnpm dev
+cd apps/web && pnpm dev    # http://localhost:5173
+
+# CLI
+node apps/cli/dist/index.js scan --demo
 ```
 
 ---
 
 ## Changelog
 
+### v2.0.0 — Autonomous Engine
+- **OODA Runtime** — 4 autonomous agents with Observe-Orient-Decide-Act loops
+- **Goal-Driven Execution** — submit goals, LLM decomposes into sub-tasks, agents execute autonomously
+- **Safety Pipeline** — 5-gate system (dry-run, budget cap, daily limit, approval, rollback) for all platform writes
+- **Platform Write API** — budget updates, campaign pause/enable, bid adjustments across all 6 platforms
+- **Persistent State** — PostgreSQL repositories for agent state, decisions, action logs, outcomes, goals
+- **Vector Memory** — pgvector for agent memory with full-text search fallback
+- **22 Agent Events** — typed events for agent lifecycle, OODA cycles, decisions, actions, domain signals
+- **Agent REST API** — 14 endpoints for agent management, decision approval, outcome tracking
+- **Goal REST API** — 7 endpoints for goal CRUD, LLM decomposition, progress tracking
+- **MCP Agent Tools** — agent_list, agent_start, agent_stop, agent_cycle, agent_approve_decision
+- **Cross-Engine Event Flow** — Leak Detector -> Media Architect -> Campaign Ops -> Executive Bridge
+- **New packages:** `@openagency/memory`, `@openagency/agent`
+
+### v1.0.0 — Agent Protocol Layer
+- **Hono API server** with REST endpoints for all 29 skills
+- **MCP endpoint** (`POST /v1/mcp`) — any AI agent can invoke skills via Model Context Protocol
+- **A2A agent card** (`GET /.well-known/agent.json`) — agent-to-agent discovery
+- **Auth system** — JWT + API keys (`oa_live_`/`oa_test_`) + OAuth2 M2M + RBAC
+- **Event bus** — InMemoryEventBus + Redis adapter, skill lifecycle events
+- **Schema registry** — Zod schemas with JSON Schema + OpenAPI generation
+- **Docker** — multi-stage Dockerfile, docker-compose (API + Postgres + Redis)
+- **New packages:** `@openagency/schemas`, `@openagency/auth`, `@openagency/events`
+
 ### v0.3.0 — Platform API Connectors
 - Live OAuth2 connectors for Google Ads, Meta Ads, DV360, TikTok Ads, TikTok Shop, Amazon Ads
-- Multi-level data fetching: campaign -> ad set/ad group -> ad/creative
-- Extended platform-specific metrics (reach, frequency, video quartiles, ACoS, DPV, GMV, etc.)
-- Multi-ad-product support for Amazon (Sponsored Products, Sponsored Brands, Sponsored Display)
-- Encrypted credential storage (AES-256-GCM) for CLI and browser
-- Token-bucket rate limiting per platform with exponential backoff + jitter
-- Scheduled sync with configurable intervals (15m / 1h / 6h / 24h / manual)
-- New CLI commands: `connect`, `sync`, `disconnect`
-- Web dashboard: Integrations page, OAuth popup flow, sync status indicator
-- Normalized data schema (`NormalizedCampaignRow`) with 30+ fields across all platforms
-- New `@openagency/connectors` package with sub-path exports per platform
+- Multi-level data fetching, encrypted credential storage (AES-256-GCM)
+- Rate limiting with exponential backoff, scheduled sync
+- New package: `@openagency/connectors`
 
 ### v0.2.0 — Smart CSV & Visualization
-- Smart CSV auto-detect for Google Ads, Meta Ads, and TikTok Ads exports
-- One-click PDF report export for every engine
-- IndexedDB persistence for saved reports
-- MMM visualization suite with 6 interactive charts
-- Demo button tab switching fixes
+- Smart CSV auto-detect for Google Ads, Meta Ads, TikTok Ads exports
+- PDF export, IndexedDB persistence, MMM visualization suite
 
 ### v0.1.0 — Foundation
-- 4 computation engines (Leak Detector, Media Architect, Campaign Ops, Executive Bridge)
-- 33 skills across all engines
-- CLI with interactive menu and one-liner commands
-- Web dashboard with Vite + React + Tailwind + Recharts
-- Multi-LLM support (Anthropic, OpenAI, Ollama)
-- 79 tests across 11 test files
+- 4 computation engines, 29 skills, CLI, web dashboard, multi-LLM support
 
 ---
 
 ## Roadmap
 
-- [x] **v0.1.0** — 4 engines, 33 skills, CLI, web dashboard, multi-LLM
-- [x] **v0.2.0** — Smart CSV auto-detect (Google/Meta/TikTok), PDF export, IndexedDB persistence
-- [x] **v0.3.0** — Platform API connectors (6 platforms), multi-level data, encrypted credentials, scheduled sync
-- [ ] **v0.4.0** — Docker image, hosted cloud version
+- [x] **v0.1.0** — 4 engines, 29 skills, CLI, web dashboard
+- [x] **v0.2.0** — Smart CSV, PDF export, MMM charts
+- [x] **v0.3.0** — 6 platform connectors, OAuth2, encrypted credentials
+- [x] **v1.0.0** — API server, MCP, A2A, auth, events, Docker
+- [x] **v2.0.0** — Autonomous agents, OODA loops, goals, safety pipeline, platform writes
+- [ ] **v3.0.0** — Multi-agent orchestration, agent mesh, cross-client federation
+- [ ] **v4.0.0** — Self-evolving system, meta-agent, marketplace, agent-native billing
 
 ---
 
 ## Contributing
 
-We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
 ```bash
-# Run tests
-pnpm run test
-
-# Type check
-pnpm run typecheck
-
-# Build all
-pnpm run build
+pnpm test         # All tests must pass
+pnpm run typecheck  # Zero type errors
+pnpm build        # All 12 packages build
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ---
 
@@ -565,7 +523,7 @@ MIT. Use it, fork it, ship it.
 ---
 
 <p align="center">
-  <strong>Built to democratize advertising.</strong>
+  <strong>Built to atomize the advertising agency monopoly.</strong>
   <br />
-  Stop paying holding company markups. Start using OpenAgency.
+  The Big 6 charge millions for what 4 autonomous agents can do for free.
 </p>
