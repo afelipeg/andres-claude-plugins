@@ -4,7 +4,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
-import { OpenAgency, SAMPLE_WASTE_MEDIUM, parseInput } from '@openagency/core';
+import { OpenAgency, SAMPLE_WASTE_MEDIUM, parseInput, parseFile } from '@openagency/core';
 import { LeakDetectorEngine } from '@openagency/engines';
 import type { WasteWaterfallInput, WasteWaterfallOutput } from '@openagency/types';
 import { renderWaterfall } from '../renderers/waterfall.js';
@@ -13,7 +13,7 @@ import { readFileSync, existsSync } from 'node:fs';
 export function scanCommand(): Command {
   const cmd = new Command('scan')
     .description('Scan your ad spend for waste and money leaks')
-    .option('-f, --file <path>', 'Path to JSON file with ad spend data')
+    .option('-f, --file <path>', 'Path to data file (JSON, CSV, Excel, PDF)')
     .option('-d, --demo', 'Use built-in demo data ($500K retail budget)')
     .option('-b, --budget <amount>', 'Quick scan: just provide your total budget', parseFloat)
     .option('-i, --industry <type>', 'Industry for benchmarks (automotive|fmcg|financial|retail|telecom)', 'retail')
@@ -32,8 +32,8 @@ export function scanCommand(): Command {
           console.error(chalk.red(`  File not found: ${opts.file}`));
           process.exit(1);
         }
-        const raw = readFileSync(opts.file, 'utf-8');
-        const parsed = parseInput(raw);
+        const buf = readFileSync(opts.file);
+        const parsed = await parseFile(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength), opts.file);
         input = parsed.data[0] as unknown as WasteWaterfallInput;
       } else if (opts.budget) {
         // Quick scan: estimate from budget + industry
@@ -67,7 +67,7 @@ export function scanCommand(): Command {
   ${chalk.bold('Quick start:')}
     ${chalk.cyan('openagency scan --demo')}              Use demo data ($500K retail)
     ${chalk.cyan('openagency scan --budget 100000')}      Estimate waste for $100K budget
-    ${chalk.cyan('openagency scan --file data.json')}     Analyze your actual spend data
+    ${chalk.cyan('openagency scan --file data.json')}     Analyze your actual spend data (also .csv, .xlsx, .pdf)
 
   ${chalk.bold('JSON input format:')}
     {

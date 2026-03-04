@@ -4,7 +4,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
-import { OpenAgency, parseInput } from '@openagency/core';
+import { OpenAgency, parseFile } from '@openagency/core';
 import {
   LeakDetectorEngine,
   MediaArchitectEngine,
@@ -18,7 +18,7 @@ export function runCommand(): Command {
     .description('Run a specific engine skill')
     .argument('<engine>', 'Engine ID (leak-detector, media-architect, campaign-ops, executive-bridge)')
     .argument('<skill>', 'Skill ID (e.g. waste-waterfall, channel-optimize, shapley-attribute)')
-    .option('-f, --file <path>', 'Path to JSON input file')
+    .option('-f, --file <path>', 'Path to input file (JSON, CSV, Excel, PDF)')
     .action(async (engineId: string, skillId: string, opts) => {
       const agency = new OpenAgency();
       agency.engines.register(new LeakDetectorEngine());
@@ -37,8 +37,8 @@ export function runCommand(): Command {
         process.exit(1);
       }
 
-      const raw = readFileSync(opts.file, 'utf-8');
-      const parsed = parseInput(raw);
+      const buf = readFileSync(opts.file);
+      const parsed = await parseFile(buf.buffer.slice(buf.byteOffset, buf.byteLength), opts.file);
       const input = parsed.data.length === 1 ? parsed.data[0] : parsed.data;
 
       const spinner = ora(`Running ${engineId}/${skillId}...`).start();

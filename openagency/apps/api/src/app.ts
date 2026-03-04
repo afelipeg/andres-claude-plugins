@@ -19,6 +19,7 @@ import { agentRoutes, type AgentRegistry } from './routes/agents.js';
 import { goalRoutes } from './routes/goals.js';
 import { meshRoutes } from './routes/mesh.js';
 import { connectorRoutes } from './routes/connectors.js';
+import { uploadRoutes } from './routes/upload.js';
 import { eventStreamRoutes } from './routes/event-stream.js';
 import { mcpRoute } from './mcp/transport.js';
 import { a2aDiscoveryRoute } from './a2a/discovery.js';
@@ -109,6 +110,9 @@ export function createApp() {
 
   // ─── Connector routes ──────────────────────────────────────────
   app.route('/', connectorRoutes(connectorInfra, eventBus));
+
+  // ─── File upload route ──────────────────────────────────────────
+  app.route('/', uploadRoutes());
 
   // ─── SSE event stream ──────────────────────────────────────────
   app.route('/', eventStreamRoutes(eventBus));

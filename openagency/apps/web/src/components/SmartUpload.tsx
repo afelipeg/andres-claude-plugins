@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { parseInput } from '@openagency/core/data/parser';
+import { parseFile } from '@openagency/core/data/file-parser';
 import {
   detectPlatform,
   type AdPlatform,
@@ -8,6 +9,8 @@ import {
   type TransformOptions,
 } from '@openagency/core/data/platform-detect';
 import { useConnectorStore } from '../stores/connector-store';
+
+const BINARY_EXTENSIONS = new Set(['.xlsx', '.xls', '.pdf']);
 
 // ─── Platform badge config ─────────────────────────────────────────
 
@@ -97,13 +100,41 @@ export function SmartUpload({
     [onRawJson],
   );
 
+  const processBinary = useCallback(
+    async (buffer: ArrayBuffer, name: string) => {
+      const result = await parseFile(buffer, name);
+      setFileName(name);
+
+      if (result.format === 'json' && onRawJson) {
+        onRawJson(result.data.length === 1 ? result.data[0] : result.data);
+        return;
+      }
+
+      const mapping = detectPlatform(result.columns);
+      setDetection({
+        mapping,
+        rows: result.data,
+        columns: result.columns,
+        rowCount: result.data.length,
+      });
+    },
+    [onRawJson],
+  );
+
   const handleFile = useCallback(
     (file: File) => {
-      const reader = new FileReader();
-      reader.onload = () => processText(reader.result as string, file.name);
-      reader.readAsText(file);
+      const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+      if (BINARY_EXTENSIONS.has(ext)) {
+        const reader = new FileReader();
+        reader.onload = () => processBinary(reader.result as ArrayBuffer, file.name);
+        reader.readAsArrayBuffer(file);
+      } else {
+        const reader = new FileReader();
+        reader.onload = () => processText(reader.result as string, file.name);
+        reader.readAsText(file);
+      }
     },
-    [processText],
+    [processText, processBinary],
   );
 
   const handleAnalyze = useCallback(() => {
@@ -282,16 +313,16 @@ export function SmartUpload({
           />
         </svg>
         <p className="text-sm font-medium text-gray-700">
-          Drop a CSV file or click to upload
+          Drop a file or click to upload
         </p>
         <p className="mt-1 text-xs text-gray-500">
-          Auto-detects Google Ads, Meta Ads, TikTok Ads
+          Supports CSV, Excel (.xlsx), PDF &middot; Auto-detects Google Ads, Meta Ads, TikTok Ads
         </p>
         <input
           ref={inputRef}
           type="file"
           className="hidden"
-          accept=".csv,.tsv,.txt"
+          accept=".csv,.tsv,.txt,.xlsx,.xls,.pdf"
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) handleFile(file);

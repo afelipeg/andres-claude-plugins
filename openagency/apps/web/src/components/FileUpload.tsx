@@ -5,7 +5,7 @@ interface FileUploadProps {
   accept?: string;
 }
 
-export function FileUpload({ onData, accept = '.json,.csv' }: FileUploadProps) {
+export function FileUpload({ onData, accept = '.json,.csv,.xlsx,.xls,.pdf' }: FileUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -51,7 +51,7 @@ export function FileUpload({ onData, accept = '.json,.csv' }: FileUploadProps) {
       ) : (
         <>
           <p className="text-sm font-medium text-gray-700">Drop a file or click to upload</p>
-          <p className="mt-1 text-xs text-gray-500">JSON or CSV</p>
+          <p className="mt-1 text-xs text-gray-500">JSON, CSV, Excel (.xlsx), or PDF</p>
         </>
       )}
       <input

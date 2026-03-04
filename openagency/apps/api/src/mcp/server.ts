@@ -4,6 +4,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { OpenAgency } from '@openagency/core';
+import { parseFile } from '@openagency/core/data/file-parser';
+import { detectPlatform } from '@openagency/core/data/platform-detect';
 import { SKILL_SCHEMAS } from '@openagency/schemas';
 import type { OodaRuntime, MeshCoordinator } from '@openagency/agent';
 import type { ConnectorPlatform, OAuthTokens } from '@openagency/types';
@@ -61,6 +63,52 @@ export function createMcpServer(
       },
     );
   }
+
+  // ─── File parsing MCP tool ──────────────────────────────────────
+  server.tool(
+    'parse_file',
+    'Parse an uploaded file (CSV, Excel, PDF, JSON) and detect the advertising platform. Accepts base64-encoded file content. Returns structured row data with platform detection. Complements platform_sync tools for offline/exported data.',
+    {
+      content_base64: { type: 'string', description: 'Base64-encoded file content' },
+      filename: { type: 'string', description: 'Original filename with extension (e.g. "report.xlsx")' },
+    } as Record<string, { type: string; description?: string }>,
+    async (args: Record<string, unknown>) => {
+      try {
+        const b64 = args['content_base64'] as string;
+        const filename = args['filename'] as string;
+        if (!b64 || !filename) {
+          return {
+            content: [{ type: 'text' as const, text: 'Both content_base64 and filename are required' }],
+            isError: true,
+          };
+        }
+
+        const buffer = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)).buffer;
+        const result = await parseFile(buffer, filename);
+        const mapping = detectPlatform(result.columns);
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              format: result.format,
+              platform: mapping.platform,
+              confidence: mapping.confidence,
+              columns: result.columns,
+              rows: result.data.length,
+              column_map: mapping.columnMap,
+              data: result.data.slice(0, 50),
+            }, null, 2),
+          }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
+          isError: true,
+        };
+      }
+    },
+  );
 
   // ─── Agent management MCP tools ───────────────────────────────
   if (agents) {

@@ -1,0 +1,56 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/main/schema/mcp-config.json",
+  "mcpServers": {
+    "openagency-dev": {
+      "command": "npx",
+      "args": ["tsx", "apps/api/src/mcp/stdio.ts"],
+      "cwd": "/Users/andresgutierrezhenao/Documents/claude-plugins/openagency",
+      "env": {
+        "NODE_ENV": "development",
+        "LOG_LEVEL": "debug",
+        "PORT": "0"
+      }
+    },
+    "google-ads": {
+      "command": "pipx",
+      "args": [
+        "run", "--spec",
+        "git+https://github.com/google-marketing-solutions/google_ads_mcp.git",
+        "run-mcp-server"
+      ],
+      "env": {
+        "GOOGLE_ADS_CREDENTIALS": "${GOOGLE_ADS_YAML_PATH:-~/.google-ads.yaml}"
+      },
+      "timeout": 30000
+    },
+    "meta-ads": {
+      "url": "https://mcp.pipeboard.co/meta-ads-mcp"
+    },
+    "tiktok-ads": {
+      "command": "python",
+      "args": ["-m", "tiktok_ads_mcp"],
+      "env": {
+        "TIKTOK_APP_ID": "${TIKTOK_APP_ID}",
+        "TIKTOK_SECRET": "${TIKTOK_APP_SECRET}",
+        "TIKTOK_ACCESS_TOKEN": "${TIKTOK_ACCESS_TOKEN}"
+      }
+    },
+    "amazon-ads": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "--env-file", ".env.amazon-ads",
+        "ghcr.io/netzsicht/amazon_ads_mcp:latest"
+      ]
+    },
+    "dv360": {
+      "command": "python",
+      "args": ["server.py"],
+      "cwd": "${DV360_MCP_PATH:-~/dv360-ads-mcp-server}",
+      "env": {
+        "DV360_SERVICE_ACCOUNT": "${DV360_SERVICE_ACCOUNT}",
+        "DV360_PARTNER_ID": "${DV360_PARTNER_ID}"
+      }
+    }
+  }
+}

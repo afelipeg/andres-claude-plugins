@@ -22,6 +22,10 @@
       "types": "./dist/data/parser.d.ts",
       "import": "./dist/data/parser.js"
     },
+    "./data/file-parser": {
+      "types": "./dist/data/file-parser.d.ts",
+      "import": "./dist/data/file-parser.js"
+    },
     "./data/sample-data": {
       "types": "./dist/data/sample-data.d.ts",
       "import": "./dist/data/sample-data.js"
@@ -46,6 +50,8 @@
   },
   "dependencies": {
     "@openagency/types": "workspace:*",
+    "pdfjs-dist": "^5.5.207",
+    "xlsx": "^0.18.5",
     "zod": "^3.24.0"
   },
   "devDependencies": {
