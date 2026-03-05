@@ -1,6 +1,6 @@
 // ─── LLM Provider ───────────────────────────────────────────────────
 // Lightweight multi-provider LLM client. No heavy deps — uses native fetch.
-// Supports: Anthropic (Claude), OpenAI (GPT-4), Ollama (local).
+// Supports: Anthropic (Claude), DeepSeek, OpenAI-compatible, Ollama (local).
 
 import type { LLMConfig, LLMMessage } from '@openagency/types';
 
@@ -17,12 +17,14 @@ export async function callLLM(
   switch (config.provider) {
     case 'anthropic':
       return callAnthropic(config, messages);
+    case 'deepseek':
+      return callDeepSeek(config, messages);
     case 'openai':
       return callOpenAI(config, messages);
     case 'ollama':
       return callOllama(config, messages);
     default:
-      throw new Error(`Unknown LLM provider: ${config.provider}. Use: anthropic, openai, ollama`);
+      throw new Error(`Unknown LLM provider: ${config.provider}. Use: anthropic, deepseek, openai, ollama`);
   }
 }
 
@@ -64,6 +66,45 @@ async function callAnthropic(config: LLMConfig, messages: LLMMessage[]): Promise
     content: data.content[0]?.text ?? '',
     model: data.model,
     usage: data.usage,
+  };
+}
+
+async function callDeepSeek(config: LLMConfig, messages: LLMMessage[]): Promise<LLMResponse> {
+  const apiKey = config.apiKey ?? process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) throw new Error('DeepSeek API key required. Set DEEPSEEK_API_KEY or configure via openagency init.');
+
+  const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: config.model ?? 'deepseek-chat',
+      temperature: config.temperature ?? 0.3,
+      max_tokens: config.maxTokens ?? 2048,
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`DeepSeek API error (${res.status}): ${err}`);
+  }
+
+  const data = await res.json() as {
+    choices: Array<{ message: { content: string } }>;
+    model: string;
+    usage: { prompt_tokens: number; completion_tokens: number };
+  };
+
+  return {
+    content: data.choices[0]?.message?.content ?? '',
+    model: data.model,
+    usage: {
+      input_tokens: data.usage.prompt_tokens,
+      output_tokens: data.usage.completion_tokens,
+    },
   };
 }
 
@@ -142,15 +183,23 @@ export function isLLMConfigured(config: LLMConfig): boolean {
   if (config.provider === 'ollama') return true;
   if (config.provider === 'anthropic')
     return !!(config.apiKey ?? process.env.ANTHROPIC_API_KEY);
+  if (config.provider === 'deepseek')
+    return !!(config.apiKey ?? process.env.DEEPSEEK_API_KEY);
   if (config.provider === 'openai')
     return !!(config.apiKey ?? process.env.OPENAI_API_KEY);
   return false;
 }
 
-/** Auto-detect available LLM provider from environment */
+/**
+ * Auto-detect available LLM provider from environment.
+ * Priority: Anthropic (Claude) > DeepSeek > OpenAI > null
+ */
 export function detectLLMConfig(): LLMConfig | null {
   if (process.env.ANTHROPIC_API_KEY) {
     return { provider: 'anthropic', model: 'claude-sonnet-4-20250514' };
+  }
+  if (process.env.DEEPSEEK_API_KEY) {
+    return { provider: 'deepseek', model: 'deepseek-chat' };
   }
   if (process.env.OPENAI_API_KEY) {
     return { provider: 'openai', model: 'gpt-4o' };

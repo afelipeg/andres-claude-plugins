@@ -134,6 +134,14 @@ export class GoalRepo {
     return rows.map(mapRowToGoal);
   }
 
+  async updateSubTasks(id: string, subTasks: SubTask[]): Promise<void> {
+    const db = this.sql as Db;
+    await db.unsafe(
+      `UPDATE goals SET sub_tasks = $1, updated_at = now() WHERE id = $2`,
+      [JSON.stringify(subTasks), id],
+    );
+  }
+
   async updateStatus(id: string, status: GoalStatus): Promise<void> {
     const db = this.sql as Db;
     await db.unsafe(

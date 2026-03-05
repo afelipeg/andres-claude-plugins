@@ -4,6 +4,7 @@
 
 import { ulid } from 'ulid';
 import type { EventBus, Observation, OodaCycleResult } from '@openagency/types';
+import { createLogger } from '@openagency/core';
 import type { OodaRuntime } from '../ooda-runtime.js';
 import type {
   MeshPipeline,
@@ -29,6 +30,7 @@ export class MeshCoordinator {
   private pipelines = new Map<string, MeshPipeline>();
   private runs = new Map<string, MeshRun>();
   private eventSubscriptions: Array<() => void> = [];
+  private log = createLogger('mesh');
 
   constructor(
     private agents: Map<string, OodaRuntime>,
@@ -100,6 +102,8 @@ export class MeshCoordinator {
 
     this.runs.set(runId, run);
 
+    this.log.info({ run_id: runId, pipeline_id: pipelineId, stage_count: pipeline.stages.length }, 'Pipeline started');
+
     await this.eventBus.publish(
       meshPipelineStarted({
         run_id: runId,
@@ -170,6 +174,7 @@ export class MeshCoordinator {
 
     if (stagesCompleted === 0 && anyFailed) {
       run.status = 'failed';
+      this.log.error({ run_id: runId, pipeline_id: pipelineId }, 'Pipeline failed — all stages failed');
       await this.eventBus.publish(
         meshPipelineFailed({
           run_id: runId,
@@ -191,6 +196,7 @@ export class MeshCoordinator {
       );
     } else {
       run.status = 'completed';
+      this.log.info({ run_id: runId, pipeline_id: pipelineId, total_duration_ms: run.total_duration_ms, stages_completed: stagesCompleted }, 'Pipeline completed');
       await this.eventBus.publish(
         meshPipelineCompleted({
           run_id: runId,
@@ -212,6 +218,7 @@ export class MeshCoordinator {
   ): Promise<MeshStageResult> {
     const agent = this.agents.get(stage.agent_id);
     if (!agent) {
+      this.log.error({ run_id: run.id, agent_id: stage.agent_id }, 'Stage agent not found');
       return {
         agent_id: stage.agent_id,
         status: 'failed',
@@ -220,6 +227,8 @@ export class MeshCoordinator {
         error: `Agent not found: ${stage.agent_id}`,
       };
     }
+
+    this.log.info({ run_id: run.id, agent_id: stage.agent_id, stage_order: stage.order }, 'Stage started');
 
     await this.eventBus.publish(
       meshStageStarted({
@@ -271,17 +280,28 @@ export class MeshCoordinator {
         }),
       );
 
+      this.log.info({ run_id: run.id, agent_id: stage.agent_id, duration_ms: durationMs, skills_invoked: skillsInvoked }, 'Stage completed');
+
+      const outputSummary = this.extractOutputSummary(cycleResult);
+
       return {
         agent_id: stage.agent_id,
         status: 'completed',
         cycle_result: cycleResult,
         duration_ms: durationMs,
         skills_invoked: skillsInvoked,
+        output_summary: outputSummary,
       };
     } catch (err) {
       const durationMs = Date.now() - stageStart;
       const errorMessage = err instanceof Error ? err.message : String(err);
       const isTimeout = errorMessage === 'Stage timed out';
+
+      if (isTimeout) {
+        this.log.warn({ run_id: run.id, agent_id: stage.agent_id, timeout_ms: stage.timeout_ms }, 'Stage timed out');
+      } else {
+        this.log.error({ run_id: run.id, agent_id: stage.agent_id, err }, 'Stage failed');
+      }
 
       await this.eventBus.publish(
         meshStageFailed({
@@ -319,8 +339,29 @@ export class MeshCoordinator {
         status: result.status,
         skills_invoked: result.skills_invoked,
         duration_ms: result.duration_ms,
+        output_summary: result.output_summary,
       };
     }
+    return summary;
+  }
+
+  private extractOutputSummary(cycleResult: OodaCycleResult): Record<string, unknown> {
+    const summary: Record<string, unknown> = {
+      observation_count: cycleResult.observe.observation_count,
+      action_count: cycleResult.decide.action_count,
+      action_results: cycleResult.act.results.map((r) => ({
+        type: r.type,
+        status: r.status,
+      })),
+    };
+
+    if (cycleResult.orient) {
+      summary['anomaly_count'] = cycleResult.orient.anomalies.length;
+      summary['opportunity_count'] = cycleResult.orient.opportunities.length;
+      summary['risk_count'] = cycleResult.orient.risks.length;
+      summary['reasoning_snippet'] = cycleResult.orient.reasoning.slice(0, 300);
+    }
+
     return summary;
   }
 
@@ -351,6 +392,7 @@ export class MeshCoordinator {
         status: result.status,
         duration_ms: result.duration_ms,
         skills_invoked: result.skills_invoked,
+        output_summary: result.output_summary,
         error: result.error,
         cycle_result: result.cycle_result
           ? {

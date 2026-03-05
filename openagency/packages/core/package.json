@@ -37,6 +37,10 @@
     "./llm/provider": {
       "types": "./dist/llm/provider.d.ts",
       "import": "./dist/llm/provider.js"
+    },
+    "./logger": {
+      "types": "./dist/logger.d.ts",
+      "import": "./dist/logger.js"
     }
   },
   "files": [
@@ -51,11 +55,13 @@
   "dependencies": {
     "@openagency/types": "workspace:*",
     "pdfjs-dist": "^5.5.207",
+    "pino": "^9.0.0",
     "xlsx": "^0.18.5",
     "zod": "^3.24.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "pino-pretty": "^11.0.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
   },

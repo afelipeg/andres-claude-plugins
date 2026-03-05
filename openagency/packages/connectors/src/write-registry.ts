@@ -11,11 +11,13 @@ import type {
   SafetyContext,
   SafetyPipelineResult,
 } from '@openagency/types';
+import { createLogger } from '@openagency/core';
 import { SafetyPipeline } from './safety/pipeline.js';
 
 export class ConnectorWriteRegistry {
   private writers = new Map<ConnectorPlatform, WritablePlatformConnector>();
   private safetyPipeline: SafetyPipeline;
+  private log = createLogger('writer');
 
   constructor(safetyPipeline?: SafetyPipeline) {
     this.safetyPipeline = safetyPipeline ?? new SafetyPipeline();
@@ -38,6 +40,8 @@ export class ConnectorWriteRegistry {
     credentials: PlatformCredentials,
     context: SafetyContext,
   ): Promise<{ safety: SafetyPipelineResult; result?: WriteResult }> {
+    this.log.info({ platform: action.platform, operation: action.type }, 'Executing write');
+
     // Run safety pipeline first
     const safety = this.safetyPipeline.evaluate(
       { type: action.type, parameters: action.parameters },
@@ -45,6 +49,7 @@ export class ConnectorWriteRegistry {
     );
 
     if (!safety.approved) {
+      this.log.warn({ platform: action.platform, operation: action.type }, 'Write blocked by safety pipeline');
       return { safety };
     }
 

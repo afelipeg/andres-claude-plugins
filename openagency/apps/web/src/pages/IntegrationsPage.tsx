@@ -1,9 +1,17 @@
 // ─── Integrations Page ──────────────────────────────────────────────
 // Platform cards: connect/disconnect, sync status, interval settings.
+// Wired to real API endpoints with local store fallback.
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { ConnectorPlatform, SyncInterval } from '@openagency/types';
 import { useConnectorStore } from '../stores/connector-store';
+import { isApiMode } from '../api/agency';
+import {
+  listConnectors,
+  connectPlatform,
+  disconnectPlatform,
+  syncPlatform,
+} from '../api/connectors';
 
 interface PlatformCardConfig {
   platform: ConnectorPlatform;
@@ -81,6 +89,25 @@ const SYNC_INTERVALS: { value: SyncInterval; label: string }[] = [
 ];
 
 export function IntegrationsPage() {
+  const setStatus = useConnectorStore((s) => s.setStatus);
+  const apiMode = isApiMode();
+
+  // Load connected platforms from API on mount
+  useEffect(() => {
+    if (!apiMode) return;
+    void listConnectors()
+      .then((connectors) => {
+        for (const conn of connectors) {
+          if (conn.connected) {
+            setStatus(conn.platform as ConnectorPlatform, 'connected');
+          }
+        }
+      })
+      .catch(() => {
+        // API not available — fall back to local state
+      });
+  }, [apiMode, setStatus]);
+
   return (
     <div className="space-y-6">
       <div>
@@ -88,11 +115,16 @@ export function IntegrationsPage() {
         <p className="mt-1 text-sm text-gray-500">
           Connect your advertising platforms to pull campaign data automatically.
         </p>
+        {apiMode && (
+          <p className="mt-1 text-xs text-green-600">
+            API mode active — operations routed to server
+          </p>
+        )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {PLATFORMS.map((config) => (
-          <PlatformCard key={config.platform} config={config} />
+          <PlatformCard key={config.platform} config={config} apiMode={apiMode} />
         ))}
       </div>
 
@@ -121,31 +153,67 @@ export function IntegrationsPage() {
   );
 }
 
-function PlatformCard({ config }: { config: PlatformCardConfig }) {
+function PlatformCard({ config, apiMode }: { config: PlatformCardConfig; apiMode: boolean }) {
   const platformState = useConnectorStore((s) => s.getPlatform(config.platform));
   const connect = useConnectorStore((s) => s.connect);
   const disconnect = useConnectorStore((s) => s.disconnect);
   const setSyncInterval = useConnectorStore((s) => s.setSyncInterval);
   const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
 
   const isConnected = platformState?.status === 'connected';
   const hasError = platformState?.status === 'error';
 
   const handleConnect = useCallback(async () => {
-    // In production, this would open the OAuth popup
-    // For now, mark as connected (OAuth flow requires backend)
-    connect(config.platform);
-  }, [config.platform, connect]);
+    setConnecting(true);
+    setSyncError(null);
+    try {
+      if (apiMode) {
+        // In API mode, call the server (which requires real OAuth tokens)
+        // For MVP, simulate with a placeholder token to demonstrate the flow
+        await connectPlatform(config.platform, {
+          access_token: 'mvp_placeholder_token',
+        });
+      }
+      connect(config.platform);
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : 'Connection failed');
+    } finally {
+      setConnecting(false);
+    }
+  }, [config.platform, connect, apiMode]);
 
-  const handleDisconnect = useCallback(() => {
-    disconnect(config.platform);
-  }, [config.platform, disconnect]);
+  const handleDisconnect = useCallback(async () => {
+    try {
+      if (apiMode) {
+        await disconnectPlatform(config.platform);
+      }
+      disconnect(config.platform);
+    } catch {
+      disconnect(config.platform); // Disconnect locally anyway
+    }
+  }, [config.platform, disconnect, apiMode]);
 
   const handleSync = useCallback(async () => {
     setSyncing(true);
-    // Simulated sync — in production, uses usePlatformSync
-    setTimeout(() => setSyncing(false), 2000);
-  }, []);
+    setSyncError(null);
+    try {
+      if (apiMode) {
+        const result = await syncPlatform(config.platform);
+        if (result.error) {
+          setSyncError(result.error);
+        }
+      } else {
+        // Simulated sync in local mode
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : 'Sync failed');
+    } finally {
+      setSyncing(false);
+    }
+  }, [config.platform, apiMode]);
 
   return (
     <div className={`rounded-xl border p-5 transition-shadow hover:shadow-md ${
@@ -182,6 +250,11 @@ function PlatformCard({ config }: { config: PlatformCardConfig }) {
         </p>
       )}
 
+      {/* Sync error */}
+      {syncError && (
+        <p className="mt-2 text-xs text-red-600">{syncError}</p>
+      )}
+
       {/* Sync interval */}
       {isConnected && (
         <div className="mt-3">
@@ -202,14 +275,14 @@ function PlatformCard({ config }: { config: PlatformCardConfig }) {
         {isConnected ? (
           <>
             <button
-              onClick={handleSync}
+              onClick={() => void handleSync()}
               disabled={syncing}
               className="flex-1 rounded-lg bg-brand-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
             >
               {syncing ? 'Syncing...' : 'Sync Now'}
             </button>
             <button
-              onClick={handleDisconnect}
+              onClick={() => void handleDisconnect()}
               className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
             >
               Disconnect
@@ -217,10 +290,11 @@ function PlatformCard({ config }: { config: PlatformCardConfig }) {
           </>
         ) : (
           <button
-            onClick={handleConnect}
-            className="flex-1 rounded-lg bg-gray-900 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-gray-800"
+            onClick={() => void handleConnect()}
+            disabled={connecting}
+            className="flex-1 rounded-lg bg-gray-900 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-gray-800 disabled:opacity-50"
           >
-            Connect
+            {connecting ? 'Connecting...' : 'Connect'}
           </button>
         )}
       </div>

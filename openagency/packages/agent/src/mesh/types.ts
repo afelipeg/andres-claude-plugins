@@ -26,6 +26,7 @@ export interface MeshStageResult {
   cycle_result?: OodaCycleResult;
   duration_ms: number;
   skills_invoked: string[];
+  output_summary?: Record<string, unknown>;
   error?: string;
 }
 

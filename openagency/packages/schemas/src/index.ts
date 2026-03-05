@@ -26,3 +26,4 @@ export {
   type GoalUpdateInput,
   type AgentConfigUpdate,
 } from './agent.js';
+export { DynamicSkillRegistry, type DynamicSkillDef } from './dynamic-registry.js';

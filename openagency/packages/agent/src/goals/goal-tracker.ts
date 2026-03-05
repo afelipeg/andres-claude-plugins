@@ -83,17 +83,10 @@ export class GoalTracker {
     if (newSubTasks.length > 0) {
       // Replace uncompleted sub-tasks with new plan
       const completedTasks = goal.sub_tasks.filter((t) => t.status === 'completed');
-      const updatedGoal = {
-        ...goal,
-        sub_tasks: [...completedTasks, ...newSubTasks],
-      };
+      const updatedSubTasks = [...completedTasks, ...newSubTasks];
 
-      // Persist via goal repo (update sub_tasks JSONB)
-      await this.goalRepo.updateProgress(
-        goalId,
-        goal.current_value ?? 0,
-        goal.progress_pct,
-      );
+      // Persist sub_tasks via dedicated method
+      await this.goalRepo.updateSubTasks(goalId, updatedSubTasks);
     }
   }
 

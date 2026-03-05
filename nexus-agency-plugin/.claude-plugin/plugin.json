@@ -1,9 +1,0 @@
-{
-  "name": "nexus-agency-plugin",
-  "version": "1.1.0",
-  "description": "AI-native advertising agency operations system. 6 concurrent engines, 24 skills, 12 scripts. Replaces 103-day waterfall with 8-10 day parallel execution. MMM via Google Meridian framework.",
-  "author": {
-    "name": "NEXUS Agency"
-  },
-  "keywords": ["advertising", "media", "agency", "mmm", "governance", "attribution"]
-}

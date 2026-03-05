@@ -177,6 +177,79 @@ export function agentRoutes(registry: AgentRegistry) {
     return c.json({ status: 'rolled_back', decision_id: did });
   });
 
+  // ─── Chat (human feedback to agent) ────────────────────────────
+  // In-memory chat history per agent. Messages become observations on next cycle.
+  const chatStore = new Map<string, Array<{ role: string; content: string; timestamp: string }>>();
+
+  app.post('/v1/agents/:id/chat', async (c) => {
+    const agentId = c.req.param('id');
+    const runtime = registry.agents.get(agentId);
+    if (!runtime) {
+      return c.json({ error: 'not_found', message: 'Agent not found', status: 404 }, 404);
+    }
+
+    const body = await c.req.json<{ message: string }>();
+    if (!body.message?.trim()) {
+      return c.json({ error: 'validation_error', message: 'message is required', status: 400 }, 400);
+    }
+
+    if (!chatStore.has(agentId)) chatStore.set(agentId, []);
+    const messages = chatStore.get(agentId)!;
+
+    const userMsg = {
+      role: 'human',
+      content: body.message.trim(),
+      timestamp: new Date().toISOString(),
+    };
+    messages.push(userMsg);
+
+    // Feed as observation to next cycle
+    const observations = [{
+      id: `chat-${Date.now()}`,
+      source: 'human',
+      type: 'event_signal' as const,
+      data: { event_type: 'human_feedback', message: body.message.trim(), agent_id: agentId },
+      timestamp: new Date().toISOString(),
+    }];
+
+    // Trigger a cycle with the feedback observation
+    try {
+      const cycleResult = await runtime.cycle(observations);
+      const agentReply = {
+        role: 'agent',
+        content: cycleResult.orient?.reasoning ?? 'Acknowledged. Will incorporate feedback in next analysis.',
+        timestamp: new Date().toISOString(),
+      };
+      messages.push(agentReply);
+
+      return c.json({
+        messages: messages.slice(-20), // Last 20 messages
+        cycle_result: {
+          cycle_id: cycleResult.cycle_id,
+          actions: cycleResult.decide.action_count,
+          reasoning: cycleResult.orient?.reasoning,
+        },
+      });
+    } catch (err) {
+      const agentReply = {
+        role: 'agent',
+        content: 'Feedback received. Will process in next cycle.',
+        timestamp: new Date().toISOString(),
+      };
+      messages.push(agentReply);
+      return c.json({ messages: messages.slice(-20) });
+    }
+  });
+
+  app.get('/v1/agents/:id/chat', (c) => {
+    const agentId = c.req.param('id');
+    if (!registry.agents.has(agentId)) {
+      return c.json({ error: 'not_found', message: 'Agent not found', status: 404 }, 404);
+    }
+    const messages = chatStore.get(agentId) ?? [];
+    return c.json({ messages: messages.slice(-50) });
+  });
+
   // ─── Outcomes ───────────────────────────────────────────────────
   app.get('/v1/agents/:id/outcomes', async (c) => {
     return c.json({ outcomes: [] }); // populated when outcome repo is available

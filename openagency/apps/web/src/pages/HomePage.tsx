@@ -1,7 +1,9 @@
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Card } from '../components/Card';
 import { ReportHistory } from '../components/ReportHistory';
 import { listEngines } from '../api/agency';
+import { runFullDemo, DEMO_AD_SPEND } from '../api/demo';
 
 const ENGINE_ICONS: Record<string, string> = {
   'leak-detector': 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z',
@@ -26,30 +28,70 @@ const ENGINE_COLORS: Record<string, string> = {
 
 export function HomePage() {
   const engines = listEngines();
+  const navigate = useNavigate();
+  const [demoRunning, setDemoRunning] = useState(false);
+  const [demoError, setDemoError] = useState<string | null>(null);
+
+  const handleRunDemo = async () => {
+    if (demoRunning) return;
+    setDemoRunning(true);
+    setDemoError(null);
+    try {
+      await runFullDemo();
+      navigate('/scorecard');
+    } catch (err) {
+      setDemoError(err instanceof Error ? err.message : 'Demo failed. Is the API server running?');
+    } finally {
+      setDemoRunning(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
       {/* Hero */}
       <div className="rounded-2xl bg-gradient-to-br from-gray-900 to-gray-800 p-8 text-white">
-        <h2 className="text-3xl font-bold">OpenAgency Dashboard</h2>
+        <h2 className="text-3xl font-bold">OpenAgency</h2>
         <p className="mt-2 max-w-xl text-gray-300">
-          Your open-source advertising agency toolkit. Find where your ad budget leaks money,
-          optimize channel allocation, manage campaigns, and translate metrics for the C-Suite.
+          A2A advertising intelligence infrastructure. Four autonomous engines analyze your ad spend,
+          find waste, optimize channels, and deliver transparent outcome-based billing.
         </p>
-        <div className="mt-6 flex gap-3">
+        <div className="mt-6 flex flex-wrap gap-3">
+          <button
+            onClick={() => void handleRunDemo()}
+            disabled={demoRunning}
+            className="rounded-lg bg-brand-500 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
+          >
+            {demoRunning ? (
+              <span className="flex items-center gap-2">
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                  <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" className="opacity-75" />
+                </svg>
+                Running all 4 engines...
+              </span>
+            ) : (
+              `Run Full Demo ($${(DEMO_AD_SPEND / 1_000_000).toFixed(1)}M spend)`
+            )}
+          </button>
           <Link
             to="/leak-detector"
-            className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+            className="rounded-lg bg-white/10 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/20"
           >
             Run Waste Analysis
           </Link>
           <Link
-            to="/media-architect"
+            to="/command-center"
             className="rounded-lg bg-white/10 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/20"
           >
-            Optimize Channels
+            Command Center
           </Link>
         </div>
+        {demoError && (
+          <p className="mt-3 rounded-lg bg-red-500/20 px-4 py-2 text-sm text-red-200">{demoError}</p>
+        )}
+        <p className="mt-4 text-xs text-gray-400">
+          Demo runs 8 campaigns across Meta, Google, DV360, TikTok, and Amazon through all 4 engines.
+        </p>
       </div>
 
       {/* Engine Cards */}
@@ -113,7 +155,7 @@ export function HomePage() {
 
       {/* Footer */}
       <p className="text-center text-xs text-gray-400">
-        OpenAgency v0.2.0 &mdash; 4 engines, 33 skills &mdash; MIT License
+        OpenAgency v3.1.0 &mdash; 4 engines, 29 skills &mdash; MIT License
       </p>
     </div>
   );

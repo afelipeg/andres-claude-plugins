@@ -1,7 +1,7 @@
 // ─── @openagency/agent ──────────────────────────────────────────────
 // Autonomous OODA loop runtime for OpenAgency engines.
 
-export { OodaRuntime, type OodaRuntimeDeps } from './ooda-runtime.js';
+export { OodaRuntime, type OodaRuntimeDeps, type CredentialLookup } from './ooda-runtime.js';
 export { ObserverPipeline } from './observers/pipeline.js';
 export { SyncObserver } from './observers/sync-observer.js';
 export { EventObserver } from './observers/event-observer.js';
@@ -31,3 +31,14 @@ export type {
   MeshRunStatus,
   UsageMeter,
 } from './mesh/types.js';
+
+// Federation (external agent consumption)
+export { A2AClient } from './federation/a2a-client.js';
+export { McpClientRegistry } from './federation/mcp-client.js';
+export type {
+  AgentCard as FederatedAgentCard,
+  ExternalMcpServer,
+  RemoteSkillInvocation,
+  RemoteSkillResult,
+  FederationDiscoveryResult,
+} from './federation/types.js';

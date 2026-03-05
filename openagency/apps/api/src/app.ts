@@ -2,15 +2,33 @@
 
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { OpenAgency, detectLLMConfig } from '@openagency/core';
+import { OpenAgency, detectLLMConfig, createLogger } from '@openagency/core';
 import { LeakDetectorEngine } from '@openagency/engines';
 import { MediaArchitectEngine } from '@openagency/engines';
 import { CampaignOpsEngine } from '@openagency/engines';
 import { ExecutiveBridgeEngine } from '@openagency/engines';
 import { createEventBus } from '@openagency/events';
-import { OodaRuntime, MeshCoordinator, DEFAULT_PIPELINE } from '@openagency/agent';
+import {
+  OodaRuntime,
+  MeshCoordinator,
+  DEFAULT_PIPELINE,
+  GoalDecomposer,
+  GoalTracker,
+  A2AClient,
+  McpClientRegistry,
+} from '@openagency/agent';
 import { listAgentEngineIds } from '@openagency/agent';
+import { SKILL_SCHEMAS, DynamicSkillRegistry } from '@openagency/schemas';
+import {
+  AgentStateRepo,
+  DecisionRepo,
+  ActionLogRepo,
+  OutcomeRepo,
+  GoalRepo,
+  MemoryRepo,
+} from '@openagency/memory';
 import { setupConnectors } from './connectors/setup.js';
+import { getDb } from './db/client.js';
 import { healthRoutes } from './routes/health.js';
 import { engineRoutes } from './routes/engines.js';
 import { schemaRoutes } from './routes/schemas.js';
@@ -20,16 +38,21 @@ import { goalRoutes } from './routes/goals.js';
 import { meshRoutes } from './routes/mesh.js';
 import { connectorRoutes } from './routes/connectors.js';
 import { uploadRoutes } from './routes/upload.js';
+import { scorecardRoutes } from './routes/scorecard.js';
+import { analyzeRoutes } from './routes/analyze.js';
 import { eventStreamRoutes } from './routes/event-stream.js';
 import { mcpRoute } from './mcp/transport.js';
 import { a2aDiscoveryRoute } from './a2a/discovery.js';
+import { federationRoutes } from './routes/federation.js';
+import { marketplaceRoutes } from './routes/marketplace.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/logger.js';
 import { rateLimiter } from './middleware/rate-limiter.js';
 
 const startTime = Date.now();
+const log = createLogger('app');
 
-export function createApp() {
+export async function createApp() {
   const app = new Hono();
 
   // ─── Bootstrap engines ──────────────────────────────────────────
@@ -46,9 +69,34 @@ export function createApp() {
   const connectorInfra = setupConnectors(eventBus);
   const writeRegistry = connectorInfra.writeRegistry;
 
+  // ─── Database (optional — graceful fallback to null repos) ─────
+  const db = await getDb();
+  let agentStateRepo: AgentStateRepo | null = null;
+  let decisionRepo: DecisionRepo | null = null;
+  let actionLogRepo: ActionLogRepo | null = null;
+  let outcomeRepo: OutcomeRepo | null = null;
+  let goalRepo: GoalRepo | null = null;
+  let memoryRepo: MemoryRepo | null = null;
+
+  if (db) {
+    log.info('Database connected — repos active');
+    agentStateRepo = new AgentStateRepo(db);
+    decisionRepo = new DecisionRepo(db);
+    actionLogRepo = new ActionLogRepo(db);
+    outcomeRepo = new OutcomeRepo(db);
+    goalRepo = new GoalRepo(db);
+    memoryRepo = new MemoryRepo(db);
+  } else {
+    log.warn('No DATABASE_URL — running without persistence');
+  }
+
   // ─── Autonomous agents (OODA runtimes) ────────────────────────
   const llmConfig = detectLLMConfig() ?? { provider: 'anthropic' as const, model: 'claude-sonnet-4-20250514' };
   const agentMap = new Map<string, OodaRuntime>();
+
+  // ─── Goal intelligence ────────────────────────────────────────
+  const goalDecomposer = new GoalDecomposer(llmConfig, SKILL_SCHEMAS);
+  const goalTracker = goalRepo ? new GoalTracker(goalRepo) : null;
 
   for (const engineId of listAgentEngineIds()) {
     const runtime = new OodaRuntime({
@@ -57,27 +105,36 @@ export function createApp() {
       eventBus,
       connectors: writeRegistry,
       llmConfig,
-      // Repos null until database is connected — injected via initAgentRepos()
-      agentStateRepo: null,
-      decisionRepo: null,
-      actionLogRepo: null,
-      outcomeRepo: null,
-      memoryRepo: null,
-      goalRepo: null,
+      credentialStore: connectorInfra.credentialStore,
+      goalTracker: goalTracker ?? undefined,
+      goalDecomposer,
+      agentStateRepo,
+      decisionRepo,
+      actionLogRepo,
+      outcomeRepo,
+      memoryRepo,
+      goalRepo,
     });
     agentMap.set(engineId, runtime);
   }
 
   const registry: AgentRegistry = {
     agents: agentMap,
-    decisionRepo: null,
-    agentStateRepo: null,
+    decisionRepo,
+    agentStateRepo,
   };
 
   // ─── Mesh Coordinator (multi-agent orchestration) ───────────────
   const mesh = new MeshCoordinator(agentMap, eventBus);
   mesh.registerPipeline(DEFAULT_PIPELINE);
   mesh.start();
+
+  // ─── Federation (external agent consumption) ──────────────────
+  const a2aClient = new A2AClient();
+  const mcpClientRegistry = new McpClientRegistry();
+
+  // ─── Skill Marketplace (dynamic skill registration) ──────────
+  const dynamicSkillRegistry = new DynamicSkillRegistry();
 
   // ─── Global middleware ──────────────────────────────────────────
   app.use('*', requestLogger());
@@ -103,7 +160,7 @@ export function createApp() {
 
   // ─── Agent routes ─────────────────────────────────────────────
   app.route('/', agentRoutes(registry));
-  app.route('/', goalRoutes({ goalRepo: null, decomposer: null, tracker: null }));
+  app.route('/', goalRoutes({ goalRepo, decomposer: goalDecomposer, tracker: goalTracker }));
 
   // ─── Mesh routes ────────────────────────────────────────────────
   app.route('/', meshRoutes(mesh));
@@ -114,11 +171,23 @@ export function createApp() {
   // ─── File upload route ──────────────────────────────────────────
   app.route('/', uploadRoutes());
 
+  // ─── Scorecard + Billing ──────────────────────────────────────
+  app.route('/', scorecardRoutes(agency, mesh, connectorInfra));
+
+  // ─── Analyze pipeline (upload → engines → scorecard) ──────────
+  app.route('/', analyzeRoutes(agency));
+
   // ─── SSE event stream ──────────────────────────────────────────
   app.route('/', eventStreamRoutes(eventBus));
 
+  // ─── Federation routes ─────────────────────────────────────────
+  app.route('/', federationRoutes({ a2aClient, mcpRegistry: mcpClientRegistry }));
+
+  // ─── Marketplace routes ──────────────────────────────────────
+  app.route('/', marketplaceRoutes(dynamicSkillRegistry));
+
   // ─── MCP endpoint ───────────────────────────────────────────────
-  app.route('/', mcpRoute(agency, agentMap, mesh, connectorInfra));
+  app.route('/', mcpRoute(agency, agentMap, mesh, connectorInfra, a2aClient, mcpClientRegistry, dynamicSkillRegistry));
 
   // ─── Error handler ──────────────────────────────────────────────
   app.onError(errorHandler);

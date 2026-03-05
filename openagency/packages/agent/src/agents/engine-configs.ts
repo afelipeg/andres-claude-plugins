@@ -20,6 +20,7 @@ export const AGENT_CONFIGS: Record<string, EngineAgentConfig> = {
     ],
     default_config: {
       cycle_interval_ms: 3_600_000, // 1 hour
+      min_cycle_interval_ms: 5_000,
       max_budget_change_pct: 0, // does not modify budgets
       approval_threshold_usd: Infinity,
       dry_run: true,
@@ -38,6 +39,7 @@ export const AGENT_CONFIGS: Record<string, EngineAgentConfig> = {
     ],
     default_config: {
       cycle_interval_ms: 3_600_000,
+      min_cycle_interval_ms: 5_000,
       max_budget_change_pct: 15,
       approval_threshold_usd: 5000,
       dry_run: true,
@@ -59,6 +61,7 @@ export const AGENT_CONFIGS: Record<string, EngineAgentConfig> = {
     ],
     default_config: {
       cycle_interval_ms: 1_800_000, // 30 minutes
+      min_cycle_interval_ms: 5_000,
       max_budget_change_pct: 20,
       approval_threshold_usd: 2000,
       dry_run: true,
@@ -80,6 +83,7 @@ export const AGENT_CONFIGS: Record<string, EngineAgentConfig> = {
     ],
     default_config: {
       cycle_interval_ms: 7_200_000, // 2 hours
+      min_cycle_interval_ms: 5_000,
       max_budget_change_pct: 0,
       approval_threshold_usd: Infinity,
       dry_run: true,

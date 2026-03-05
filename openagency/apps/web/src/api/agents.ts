@@ -149,3 +149,26 @@ export async function listGoals(): Promise<GoalSummary[]> {
   const res = await fetchJson<{ goals: GoalSummary[] }>('/v1/goals');
   return res.goals;
 }
+
+// ─── Chat endpoints ───────────────────────────────────────────────
+
+export interface ChatMessage {
+  role: string;
+  content: string;
+  timestamp: string;
+}
+
+export async function getChatHistory(agentId: string): Promise<ChatMessage[]> {
+  const res = await fetchJson<{ messages: ChatMessage[] }>(`/v1/agents/${agentId}/chat`);
+  return res.messages;
+}
+
+export async function sendChatMessage(agentId: string, message: string): Promise<{
+  messages: ChatMessage[];
+  cycle_result?: { cycle_id: string; actions: number; reasoning?: string };
+}> {
+  return fetchJson(`/v1/agents/${agentId}/chat`, {
+    method: 'POST',
+    body: JSON.stringify({ message }),
+  });
+}

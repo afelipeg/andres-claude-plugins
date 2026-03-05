@@ -18,7 +18,7 @@ export function serveCommand(): Command {
         const { createApp } = await import('@openagency/api/app');
         const { serve } = await import('@hono/node-server');
 
-        const app = createApp();
+        const app = await createApp();
         serve({ fetch: app.fetch, port }, () => {
           console.log(chalk.green(`  API server running on http://localhost:${port}`));
           console.log(chalk.dim(`  Health:     http://localhost:${port}/health`));

@@ -1,0 +1,238 @@
+// ─── Architecture Page ─────────────────────────────────────────────
+// Visualizes the OpenAgency stack: monorepo, engine pipeline, data flow.
+
+import { Card } from '../components/Card';
+
+// ─── Package Dependency Graph ────────────────────────────────────
+
+const PACKAGES = [
+  { name: 'types', desc: 'Shared TypeScript interfaces', deps: [], color: 'bg-gray-100 text-gray-700' },
+  { name: 'schemas', desc: 'Zod validation for 29 skills', deps: ['types'], color: 'bg-indigo-100 text-indigo-700' },
+  { name: 'core', desc: 'Orchestration, LLM, file parser, billing', deps: ['types'], color: 'bg-blue-100 text-blue-700' },
+  { name: 'auth', desc: 'JWT, API keys, RBAC, Hono middleware', deps: ['types'], color: 'bg-yellow-100 text-yellow-700' },
+  { name: 'events', desc: 'Event bus (InMemory + Redis), 37 event types', deps: ['types'], color: 'bg-green-100 text-green-700' },
+  { name: 'memory', desc: 'PostgreSQL repos, pgvector episodic memory', deps: ['types'], color: 'bg-purple-100 text-purple-700' },
+  { name: 'engines', desc: '4 engines, 29 skills across ad intelligence', deps: ['types', 'schemas', 'core'], color: 'bg-red-100 text-red-700' },
+  { name: 'connectors', desc: '6 platform connectors, OAuth2, safety pipeline', deps: ['types', 'events'], color: 'bg-orange-100 text-orange-700' },
+  { name: 'agent', desc: 'OODA runtime, mesh coordinator, goal tracker', deps: ['types', 'core', 'events', 'connectors', 'memory'], color: 'bg-brand-100 text-brand-700' },
+];
+
+const APPS = [
+  { name: 'api', desc: 'Hono REST + MCP + A2A + SSE', deps: ['all packages'], color: 'bg-emerald-100 text-emerald-700' },
+  { name: 'web', desc: 'Vite + React dashboard', deps: ['api (HTTP)'], color: 'bg-cyan-100 text-cyan-700' },
+  { name: 'cli', desc: 'CLI tool + serve command', deps: ['api'], color: 'bg-pink-100 text-pink-700' },
+];
+
+// ─── Tech Stack Badges ────────────────────────────────────────────
+
+const TECH_STACK = [
+  { category: 'Runtime', items: ['Node.js 20', 'TypeScript 5.7', 'ESM'] },
+  { category: 'API', items: ['Hono', 'MCP SDK', 'A2A Protocol', 'SSE'] },
+  { category: 'Database', items: ['PostgreSQL 16', 'pgvector', 'porsager/postgres'] },
+  { category: 'AI/LLM', items: ['Claude (Anthropic)', 'OpenAI', 'Google Gemini'] },
+  { category: 'Auth', items: ['JWT (jose)', 'API Keys', 'OAuth2 M2M', 'RBAC'] },
+  { category: 'Events', items: ['InMemory Bus', 'Redis Pub/Sub', '37 Event Types'] },
+  { category: 'Connectors', items: ['Meta Ads', 'Google Ads', 'DV360', 'TikTok', 'Amazon Ads'] },
+  { category: 'Build', items: ['pnpm', 'Turborepo', 'Vitest', 'Docker'] },
+  { category: 'Frontend', items: ['React 18', 'Vite 5', 'Tailwind CSS', 'Recharts'] },
+];
+
+// ─── Pipeline Flow ────────────────────────────────────────────────
+
+const PIPELINE_STAGES = [
+  {
+    engine: 'Leak Detector',
+    color: 'border-red-300 bg-red-50',
+    textColor: 'text-red-700',
+    skills: ['waste-waterfall', 'media-quality-score', 'supply-chain-audit', 'fraud-detector', 'viewability-audit', 'frequency-cap', 'geo-waste'],
+    output: 'Waste eliminated, quality waste, supply chain savings',
+  },
+  {
+    engine: 'Media Architect',
+    color: 'border-blue-300 bg-blue-50',
+    textColor: 'text-blue-700',
+    skills: ['mmm-optimize', 'mmm-model', 'channel-mix', 'saturation-curve', 'response-curve', 'marginal-roi', 'budget-optimizer'],
+    output: 'KPI lift, ROAS improvement, channel reallocation',
+  },
+  {
+    engine: 'Campaign Ops',
+    color: 'border-green-300 bg-green-50',
+    textColor: 'text-green-700',
+    skills: ['optimization-analyze', 'optimization-reallocate', 'pacing-monitor', 'audience-overlap', 'creative-fatigue'],
+    output: 'CPA savings, reallocation amounts, pacing corrections',
+  },
+  {
+    engine: 'Executive Bridge',
+    color: 'border-purple-300 bg-purple-50',
+    textColor: 'text-purple-700',
+    skills: ['revenue-translate', 'reconcile', 'incrementality', 'media-plan'],
+    output: 'Media-Driven Sales, measurement waste, validated lift',
+  },
+];
+
+// ─── Data Flow Steps ──────────────────────────────────────────────
+
+const DATA_FLOW = [
+  { step: 1, label: 'Ingest', desc: 'CSV/Excel/PDF upload or platform API sync (6 connectors)', icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12' },
+  { step: 2, label: 'Parse', desc: 'Smart auto-detect platform format, column mapping', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
+  { step: 3, label: 'Analyze', desc: '4 engines run 29 skills: waste, optimize, ops, executive', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
+  { step: 4, label: 'Decide', desc: 'OODA loop: orient (LLM reasoning) + decide (action plan)', icon: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z' },
+  { step: 5, label: 'Act', desc: 'Safety pipeline validates, then execute connector writes', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
+  { step: 6, label: 'Bill', desc: 'Outcome-based billing: 3 fee streams on value delivered', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+];
+
+// ─── Main Page ──────────────────────────────────────────────────────
+
+export function ArchitecturePage() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold text-gray-900">Architecture</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          OpenAgency infrastructure: A2A advertising intelligence with autonomous OODA agents.
+        </p>
+      </div>
+
+      {/* Data Flow Pipeline */}
+      <Card title="Data Flow">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {DATA_FLOW.map((step) => (
+            <div key={step.step} className="flex items-start gap-3 rounded-lg border border-gray-100 bg-gray-50 p-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white">
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d={step.icon} />
+                </svg>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-brand-100 px-1.5 py-0.5 text-[10px] font-bold text-brand-700">{step.step}</span>
+                  <h4 className="text-sm font-semibold text-gray-900">{step.label}</h4>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">{step.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Engine Pipeline */}
+      <Card title="Engine Pipeline (Mesh)">
+        <p className="mb-4 text-xs text-gray-500">
+          The mesh coordinator executes engines sequentially. Each stage passes context to the next via output_summary.
+        </p>
+        <div className="space-y-3">
+          {PIPELINE_STAGES.map((stage, i) => (
+            <div key={stage.engine} className={`rounded-xl border p-4 ${stage.color}`}>
+              <div className="flex items-center gap-3">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-bold text-gray-700 shadow-sm">
+                  {i + 1}
+                </span>
+                <h4 className={`text-sm font-semibold ${stage.textColor}`}>{stage.engine}</h4>
+                {i < PIPELINE_STAGES.length - 1 && (
+                  <span className="ml-auto text-xs text-gray-400">output_summary --&gt;</span>
+                )}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {stage.skills.map((s) => (
+                  <span key={s} className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-gray-600 shadow-sm">
+                    {s}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-gray-600">{stage.output}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* OODA Loop */}
+      <Card title="OODA Loop (Autonomous Agent Cycle)">
+        <div className="grid gap-4 md:grid-cols-4">
+          {[
+            { phase: 'Observe', desc: 'Collect observations from events, platform sync data, human feedback. Observer pipeline filters and enriches.', color: 'border-blue-200 bg-blue-50 text-blue-700' },
+            { phase: 'Orient', desc: 'LLM analyzes observations: finds anomalies, opportunities, risks. Context-aware with agent memory and goal progress.', color: 'border-green-200 bg-green-50 text-green-700' },
+            { phase: 'Decide', desc: 'LLM produces action plan with confidence and risk level. High-risk decisions require human approval.', color: 'border-yellow-200 bg-yellow-50 text-yellow-700' },
+            { phase: 'Act', desc: 'Execute actions through safety pipeline. Connector writes to platforms. Outcomes measured for next cycle.', color: 'border-red-200 bg-red-50 text-red-700' },
+          ].map((phase) => (
+            <div key={phase.phase} className={`rounded-xl border p-4 ${phase.color}`}>
+              <h4 className="font-semibold">{phase.phase}</h4>
+              <p className="mt-2 text-xs">{phase.desc}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Monorepo Structure */}
+      <Card title="Monorepo Structure">
+        <div className="space-y-4">
+          <div>
+            <h4 className="text-sm font-semibold text-gray-900 mb-2">Packages (libraries)</h4>
+            <div className="grid gap-2 md:grid-cols-3">
+              {PACKAGES.map((pkg) => (
+                <div key={pkg.name} className="rounded-lg border border-gray-100 p-3">
+                  <div className="flex items-center gap-2">
+                    <span className={`rounded-md px-1.5 py-0.5 text-xs font-bold ${pkg.color}`}>{pkg.name}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">{pkg.desc}</p>
+                  {pkg.deps.length > 0 && (
+                    <p className="mt-1 text-[10px] text-gray-400">depends: {pkg.deps.join(', ')}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <h4 className="text-sm font-semibold text-gray-900 mb-2">Apps (deployables)</h4>
+            <div className="grid gap-2 md:grid-cols-3">
+              {APPS.map((app) => (
+                <div key={app.name} className="rounded-lg border border-gray-100 p-3">
+                  <div className="flex items-center gap-2">
+                    <span className={`rounded-md px-1.5 py-0.5 text-xs font-bold ${app.color}`}>{app.name}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">{app.desc}</p>
+                  <p className="mt-1 text-[10px] text-gray-400">depends: {app.deps.join(', ')}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Tech Stack */}
+      <Card title="Tech Stack">
+        <div className="grid gap-4 md:grid-cols-3">
+          {TECH_STACK.map((cat) => (
+            <div key={cat.category}>
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{cat.category}</h4>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {cat.items.map((item) => (
+                  <span key={item} className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Protocols */}
+      <Card title="Communication Protocols">
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+            <h4 className="font-semibold text-blue-700">REST API</h4>
+            <p className="mt-1 text-xs text-blue-600">12 route modules, 40+ endpoints. Hono framework with JWT/API key auth.</p>
+          </div>
+          <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+            <h4 className="font-semibold text-green-700">MCP (Model Context Protocol)</h4>
+            <p className="mt-1 text-xs text-green-600">44 tools: 29 skills + file parser + agent + connector + mesh tools. Streamable HTTP transport.</p>
+          </div>
+          <div className="rounded-lg border border-purple-200 bg-purple-50 p-4">
+            <h4 className="font-semibold text-purple-700">A2A (Agent-to-Agent)</h4>
+            <p className="mt-1 text-xs text-purple-600">Agent Cards at /.well-known/agent.json. Skill discovery, remote invocation, mesh orchestration.</p>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}

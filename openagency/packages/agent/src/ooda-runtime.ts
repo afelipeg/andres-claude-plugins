@@ -12,10 +12,12 @@ import type {
   Decision,
   ActionResult,
   PlannedAction,
+  PlatformCredentials,
   LLMConfig,
   EventBus,
 } from '@openagency/types';
 import type { OpenAgency } from '@openagency/core';
+import { createLogger } from '@openagency/core';
 import type { ConnectorWriteRegistry } from '@openagency/connectors';
 import type {
   AgentStateRepo,
@@ -42,7 +44,13 @@ import { orient } from './reasoning/orient-prompt.js';
 import { decide } from './reasoning/decide-prompt.js';
 import { ActionExecutor } from './safety/action-executor.js';
 import { OutcomeTracker } from './outcome-tracker.js';
+import { GoalTracker } from './goals/goal-tracker.js';
+import { GoalDecomposer } from './goals/goal-decomposer.js';
 import { getAgentConfig } from './agents/engine-configs.js';
+
+export interface CredentialLookup {
+  get(platform: string): PlatformCredentials | undefined;
+}
 
 export interface OodaRuntimeDeps {
   engineId: string;
@@ -51,6 +59,9 @@ export interface OodaRuntimeDeps {
   connectors: ConnectorWriteRegistry;
   llmConfig: LLMConfig;
   config?: Partial<AgentConfiguration>;
+  credentialStore?: CredentialLookup;
+  goalTracker?: GoalTracker;
+  goalDecomposer?: GoalDecomposer;
   // Repos (null if no database)
   agentStateRepo: AgentStateRepo | null;
   decisionRepo: DecisionRepo | null;
@@ -66,11 +77,14 @@ export class OodaRuntime implements AgentEngine {
   private actionExecutor: ActionExecutor;
   private outcomeTracker: OutcomeTracker;
   private cycleTimer: ReturnType<typeof setInterval> | null = null;
+  private lastCycleAt = 0;
+  private log;
 
   private readonly deps: OodaRuntimeDeps;
 
   constructor(deps: OodaRuntimeDeps) {
     this.deps = deps;
+    this.log = createLogger(`ooda:${deps.engineId}`);
 
     const engineConfig = getAgentConfig(deps.engineId);
     const mergedConfig: AgentConfiguration = {
@@ -158,6 +172,15 @@ export class OodaRuntime implements AgentEngine {
     const cycleId = ulid();
     const startedAt = new Date();
 
+    // Rate floor — prevent runaway cycles
+    const minInterval = this.state.configuration.min_cycle_interval_ms ?? 0;
+    if (minInterval > 0 && Date.now() - this.lastCycleAt < minInterval) {
+      this.log.info({ cycleId, agent_id: this.state.agent_id, min_interval_ms: minInterval }, 'Cycle skipped — rate floor');
+      return this.emptyResult(cycleId, startedAt);
+    }
+
+    this.log.info({ cycleId, agent_id: this.state.agent_id }, 'Cycle started');
+
     await this.deps.eventBus.publish(
       agentCycleStarted({ agent_id: this.state.agent_id, cycle_id: cycleId }),
     );
@@ -168,7 +191,10 @@ export class OodaRuntime implements AgentEngine {
       this.state.status = 'observing';
       const obs = observations ?? this.observers.flush();
 
+      this.log.info({ cycleId, observation_count: obs.length }, 'Observe complete');
+
       if (obs.length === 0) {
+        this.log.info({ cycleId }, 'No observations — skipping cycle');
         const result = this.emptyResult(cycleId, startedAt);
         await this.completeCycle(cycleId, result);
         return result;
@@ -208,6 +234,8 @@ export class OodaRuntime implements AgentEngine {
         recent_decisions: recentDecisions,
         memory_snippets: memorySnippets,
       });
+
+      this.log.info({ cycleId, anomalies: orientation.anomalies.length, opportunities: orientation.opportunities.length }, 'Orient complete');
 
       // ─── DECIDE ───────────────────────────────────────────────
       this.state.current_phase = 'decide';
@@ -262,6 +290,8 @@ export class OodaRuntime implements AgentEngine {
         }),
       );
 
+      this.log.info({ cycleId, decision_id: decision.id, action_count: decision.actions.length, confidence: decision.confidence }, 'Decide complete');
+
       // ─── ACT ──────────────────────────────────────────────────
       this.state.current_phase = 'act';
       this.state.status = 'acting';
@@ -275,9 +305,18 @@ export class OodaRuntime implements AgentEngine {
           await this.deps.decisionRepo.approve(decision.id, 'auto');
         }
 
+        // Build credentials map from credential store
+        const credentials = new Map<string, PlatformCredentials>();
+        if (this.deps.credentialStore) {
+          for (const platform of this.state.configuration.writable_platforms) {
+            const creds = this.deps.credentialStore.get(platform);
+            if (creds) credentials.set(platform, creds);
+          }
+        }
+
         actionResults = await this.actionExecutor.execute(
           decision,
-          new Map(), // credentials injected at API level
+          credentials,
           {
             max_budget_change_pct: this.state.configuration.max_budget_change_pct,
             approval_threshold_usd: this.state.configuration.approval_threshold_usd,
@@ -324,6 +363,21 @@ export class OodaRuntime implements AgentEngine {
         }
       }
 
+      // ─── Goal progress check ─────────────────────────────────────
+      if (this.deps.goalTracker && this.deps.goalRepo) {
+        try {
+          const reports = await this.deps.goalTracker.checkProgress(this.state.agent_id);
+          for (const report of reports) {
+            if (!report.on_track && this.deps.goalDecomposer) {
+              this.log.info({ cycleId, goal_id: report.goal_id, progress: report.progress_pct }, 'Goal off track — adjusting plan');
+              await this.deps.goalTracker.adjustPlan(report.goal_id, this.deps.goalDecomposer);
+            }
+          }
+        } catch (err) {
+          this.log.warn({ err, cycleId }, 'Goal progress check failed');
+        }
+      }
+
       // Store in memory
       if (this.deps.memoryRepo) {
         try {
@@ -358,9 +412,14 @@ export class OodaRuntime implements AgentEngine {
         },
       };
 
+      this.log.info({ cycleId, duration_ms: result.duration_ms, action_count: result.decide.action_count }, 'Cycle completed');
+
+      this.lastCycleAt = Date.now();
       await this.completeCycle(cycleId, result);
       return result;
     } catch (err) {
+      this.log.error({ err, cycleId, phase: this.state.current_phase }, 'Cycle failed');
+
       this.state.status = 'error';
       await this.persistState();
 

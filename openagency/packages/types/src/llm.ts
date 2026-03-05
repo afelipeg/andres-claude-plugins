@@ -1,6 +1,6 @@
 // ─── LLM Provider Types ─────────────────────────────────────────────
 
-export type LLMProviderType = 'anthropic' | 'openai' | 'ollama';
+export type LLMProviderType = 'anthropic' | 'deepseek' | 'openai' | 'ollama';
 
 export interface LLMConfig {
   provider: LLMProviderType;

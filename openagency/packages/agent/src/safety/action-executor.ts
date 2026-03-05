@@ -13,8 +13,11 @@ import type {
 } from '@openagency/types';
 import type { ConnectorWriteRegistry } from '@openagency/connectors';
 import type { ActionLogRepo } from '@openagency/memory';
+import { createLogger } from '@openagency/core';
 
 export class ActionExecutor {
+  private log = createLogger('action');
+
   constructor(
     private writeRegistry: ConnectorWriteRegistry,
     private actionLogRepo: ActionLogRepo | null,
@@ -31,6 +34,8 @@ export class ActionExecutor {
       const startedAt = new Date();
       let result: ActionResult;
 
+      this.log.info({ action_id: action.id, type: action.type, platform: action.target.platform }, 'Executing action');
+
       try {
         if (action.type === 'skill_execution' || action.type === 'notification') {
           // These don't go through connector writes
@@ -43,9 +48,10 @@ export class ActionExecutor {
             rollback_available: false,
           };
         } else {
-          result = await this.executeConnectorWrite(action, credentials, agentConfig);
+          result = await this.executeConnectorWrite(action, credentials, agentConfig, decision.agent_id);
         }
       } catch (err) {
+        this.log.error({ action_id: action.id, err }, 'Action failed');
         result = {
           action_id: action.id,
           status: 'failed',
@@ -88,6 +94,7 @@ export class ActionExecutor {
     action: PlannedAction,
     credentials: Map<string, PlatformCredentials>,
     agentConfig: { max_budget_change_pct: number; approval_threshold_usd: number; dry_run: boolean },
+    agentId?: string,
   ): Promise<ActionResult> {
     const platform = action.target.platform as ConnectorPlatform | undefined;
     if (!platform) {
@@ -113,12 +120,35 @@ export class ActionExecutor {
       };
     }
 
+    // Populate recent writes from action log for safety gate evaluation
+    let recentWrites: SafetyContext['recent_writes'] = [];
+    if (this.actionLogRepo && agentId) {
+      try {
+        const logs = await this.actionLogRepo.listByAgent(agentId, 50);
+        const today = new Date().toISOString().slice(0, 10);
+        recentWrites = (logs as Array<Record<string, unknown>>)
+          .filter((l) =>
+            l['target_platform'] === platform &&
+            l['status'] === 'executed' &&
+            typeof l['executed_at'] === 'string' &&
+            (l['executed_at'] as string).startsWith(today),
+          )
+          .map((l) => ({
+            operation: l['action_type'] as WriteOperation,
+            timestamp: l['executed_at'] as string,
+            target_id: (l['target_id'] as string) ?? '',
+          }));
+      } catch {
+        // Non-critical — fall back to empty
+      }
+    }
+
     const safetyContext: SafetyContext = {
       current_budget: (action.parameters['current_budget'] as number) ?? 0,
       daily_spend_rate: (action.parameters['daily_spend_rate'] as number) ?? 0,
       campaign_status: (action.parameters['campaign_status'] as string) ?? 'unknown',
       agent_config: agentConfig,
-      recent_writes: [], // populated from action log in full implementation
+      recent_writes: recentWrites,
     };
 
     const startMs = Date.now();
@@ -133,6 +163,30 @@ export class ActionExecutor {
     );
 
     const durationMs = Date.now() - startMs;
+
+    // Persist safety evaluation audit trail
+    if (this.actionLogRepo && agentId) {
+      try {
+        await this.actionLogRepo.create({
+          id: ulid(),
+          decision_id: action.id,
+          agent_id: agentId,
+          action_type: `safety:${action.type}`,
+          target_platform: platform,
+          target_id: undefined,
+          parameters: { checks: writeResult.safety.checks },
+          previous_value: undefined,
+          new_value: undefined,
+          status: writeResult.safety.approved ? 'executed' : 'skipped',
+          dry_run: false,
+          duration_ms: durationMs,
+        });
+      } catch {
+        // Non-critical — don't fail the action
+      }
+    }
+
+    this.log.info({ action_id: action.id, platform, safety_approved: writeResult.safety.approved, checks: writeResult.safety.checks.length }, 'Safety evaluation complete');
 
     if (!writeResult.safety.approved) {
       const failedCheck = writeResult.safety.checks.find((c) => c.status === 'failed');

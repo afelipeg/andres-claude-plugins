@@ -6,8 +6,8 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { OpenAgency } from '@openagency/core';
 import { parseFile } from '@openagency/core/data/file-parser';
 import { detectPlatform } from '@openagency/core/data/platform-detect';
-import { SKILL_SCHEMAS } from '@openagency/schemas';
-import type { OodaRuntime, MeshCoordinator } from '@openagency/agent';
+import { SKILL_SCHEMAS, type DynamicSkillRegistry } from '@openagency/schemas';
+import type { OodaRuntime, MeshCoordinator, A2AClient, McpClientRegistry } from '@openagency/agent';
 import type { ConnectorPlatform, OAuthTokens } from '@openagency/types';
 import { getConnector, hasConnector } from '@openagency/connectors';
 import type { ConnectorInfra } from '../connectors/setup.js';
@@ -25,6 +25,9 @@ export function createMcpServer(
   agents?: Map<string, OodaRuntime>,
   mesh?: MeshCoordinator,
   connectorInfra?: ConnectorInfra,
+  a2aClient?: A2AClient,
+  mcpClientRegistry?: McpClientRegistry,
+  dynamicSkillRegistry?: DynamicSkillRegistry,
 ): McpServer {
   const server = new McpServer({
     name: 'openagency',
@@ -492,6 +495,175 @@ export function createMcpServer(
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(mesh.serializeRun(run), null, 2) }],
         };
+      },
+    );
+  }
+
+  // ─── Federation MCP tools ──────────────────────────────────────
+  if (a2aClient) {
+    server.tool(
+      'federation_discover',
+      'Discover a remote OpenAgency instance or A2A-compatible agent by URL. Fetches its /.well-known/agent.json and returns capabilities, engines, and available skills.',
+      {
+        url: { type: 'string', description: 'Base URL of the remote agent (e.g. https://remote.openagency.ai)' },
+      } as Record<string, { type: string; description?: string }>,
+      async (args: Record<string, unknown>) => {
+        try {
+          const result = await a2aClient.discover(args['url'] as string);
+          return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+        } catch (err) {
+          return { content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+        }
+      },
+    );
+
+    server.tool(
+      'federation_invoke_skill',
+      'Invoke a skill on a remote agent via A2A REST protocol. The remote agent must have been discovered first or you can provide the base_url directly.',
+      {
+        base_url: { type: 'string', description: 'Base URL of the remote agent' },
+        engine_id: { type: 'string', description: 'Remote engine ID' },
+        skill_id: { type: 'string', description: 'Remote skill ID' },
+        input: { type: 'object', description: 'Skill input parameters' },
+        api_key: { type: 'string', description: 'Optional API key for authentication' },
+      } as Record<string, unknown>,
+      async (args: Record<string, unknown>) => {
+        try {
+          const result = await a2aClient.invokeSkill({
+            base_url: args['base_url'] as string,
+            engine_id: args['engine_id'] as string,
+            skill_id: args['skill_id'] as string,
+            input: (args['input'] as Record<string, unknown>) ?? {},
+            api_key: args['api_key'] as string | undefined,
+          });
+          return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+        } catch (err) {
+          return { content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+        }
+      },
+    );
+
+    server.tool(
+      'federation_list_agents',
+      'List all discovered remote agents with their capabilities.',
+      {},
+      async () => {
+        return { content: [{ type: 'text' as const, text: JSON.stringify(a2aClient.listDiscovered(), null, 2) }] };
+      },
+    );
+  }
+
+  if (mcpClientRegistry) {
+    server.tool(
+      'federation_mcp_connect',
+      'Connect to an external MCP server. Discovers all available tools and caches them for future invocation.',
+      {
+        name: { type: 'string', description: 'A unique name for this MCP server connection' },
+        url: { type: 'string', description: 'URL of the MCP server endpoint' },
+      } as Record<string, { type: string; description?: string }>,
+      async (args: Record<string, unknown>) => {
+        try {
+          const server = await mcpClientRegistry.connect(args['name'] as string, args['url'] as string);
+          return { content: [{ type: 'text' as const, text: JSON.stringify(server, null, 2) }] };
+        } catch (err) {
+          return { content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+        }
+      },
+    );
+
+    server.tool(
+      'federation_mcp_call_tool',
+      'Call a tool on a connected external MCP server.',
+      {
+        server_name: { type: 'string', description: 'Name of the connected MCP server' },
+        tool_name: { type: 'string', description: 'Name of the tool to call' },
+        arguments: { type: 'object', description: 'Tool arguments' },
+      } as Record<string, unknown>,
+      async (args: Record<string, unknown>) => {
+        try {
+          const result = await mcpClientRegistry.callTool(
+            args['server_name'] as string,
+            args['tool_name'] as string,
+            (args['arguments'] as Record<string, unknown>) ?? {},
+          );
+          return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+        } catch (err) {
+          return { content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+        }
+      },
+    );
+
+    server.tool(
+      'federation_mcp_servers',
+      'List all connected external MCP servers with their available tools.',
+      {},
+      async () => {
+        return { content: [{ type: 'text' as const, text: JSON.stringify(mcpClientRegistry.listServers(), null, 2) }] };
+      },
+    );
+  }
+
+  // ─── Marketplace MCP tools ────────────────────────────────────
+  if (dynamicSkillRegistry) {
+    server.tool(
+      'marketplace_register_skill',
+      'Register a dynamic skill in the marketplace. The skill can be a remote endpoint that implements the OpenAgency skill protocol.',
+      {
+        engine_id: { type: 'string', description: 'Engine to register the skill under' },
+        skill_id: { type: 'string', description: 'Unique skill identifier' },
+        name: { type: 'string', description: 'Human-readable skill name' },
+        description: { type: 'string', description: 'What the skill does' },
+        remote_url: { type: 'string', description: 'URL of the remote skill endpoint' },
+        remote_api_key: { type: 'string', description: 'Optional API key for the remote endpoint' },
+      } as Record<string, { type: string; description?: string }>,
+      async (args: Record<string, unknown>) => {
+        try {
+          dynamicSkillRegistry.register({
+            engineId: args['engine_id'] as string,
+            skillId: args['skill_id'] as string,
+            name: args['name'] as string,
+            description: (args['description'] as string) ?? '',
+            inputSchema: {},
+            remoteUrl: args['remote_url'] as string,
+            remoteApiKey: args['remote_api_key'] as string | undefined,
+          });
+          return { content: [{ type: 'text' as const, text: JSON.stringify({ status: 'registered', key: `${args['engine_id']}:${args['skill_id']}` }, null, 2) }] };
+        } catch (err) {
+          return { content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+        }
+      },
+    );
+
+    server.tool(
+      'marketplace_execute_skill',
+      'Execute a dynamically registered skill from the marketplace.',
+      {
+        engine_id: { type: 'string', description: 'Engine the skill belongs to' },
+        skill_id: { type: 'string', description: 'Skill ID to execute' },
+        input: { type: 'object', description: 'Skill input parameters' },
+      } as Record<string, unknown>,
+      async (args: Record<string, unknown>) => {
+        try {
+          const result = await dynamicSkillRegistry.execute(
+            args['engine_id'] as string,
+            args['skill_id'] as string,
+            (args['input'] as Record<string, unknown>) ?? {},
+          );
+          return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+        } catch (err) {
+          return { content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+        }
+      },
+    );
+
+    server.tool(
+      'marketplace_list_skills',
+      'List all skills available in the marketplace (both built-in and dynamically registered).',
+      {},
+      async () => {
+        const builtIn = SKILL_SCHEMAS.map((s) => ({ engine_id: s.engineId, skill_id: s.skillId, name: s.name, source: 'built-in' }));
+        const dynamic = dynamicSkillRegistry.listAll().map((s) => ({ engine_id: s.engineId, skill_id: s.skillId, name: s.name, source: 'dynamic' }));
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ skills: [...builtIn, ...dynamic], total: builtIn.length + dynamic.length }, null, 2) }] };
       },
     );
   }

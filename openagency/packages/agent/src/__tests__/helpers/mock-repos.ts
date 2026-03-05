@@ -227,6 +227,11 @@ export class MockGoalRepo {
     );
   }
 
+  async updateSubTasks(id: string, subTasks: Goal['sub_tasks']): Promise<void> {
+    const g = this._store.get(id);
+    if (g) g.sub_tasks = subTasks;
+  }
+
   async updateStatus(id: string, status: GoalStatus): Promise<void> {
     const g = this._store.get(id);
     if (g) g.status = status;

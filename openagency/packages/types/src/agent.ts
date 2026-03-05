@@ -65,6 +65,7 @@ export interface Orientation {
 
 export interface AgentConfiguration {
   cycle_interval_ms: number;
+  min_cycle_interval_ms?: number;
   max_budget_change_pct: number;
   approval_threshold_usd: number;
   dry_run: boolean;
