@@ -149,6 +149,12 @@ Seguir patrón ConnectorInfra / BillingInfra → HFLInfra.
 - `coordinator.test.ts`: flujo completo auto-approve, flujo completo con escalation
 - integration: mesh pipeline → HFL → auto-approve → acciones ejecutadas
 
+## Referencia visual del Nivel 3 (scorecard)
+
+**Demo:** https://plinth.polanyi.tech/demo/
+
+Los payloads de `render_level: 'full'` deben contener **toda la data** que esas 10 páginas necesitan para renderizar. Al inicio de la próxima sesión, revisar la estructura del scorecard (fetch la URL demo) para entender qué campos requiere el frontend y mapearlos al `RenderOutput` JSON payload.
+
 ## Importante
 - `packages/hfl/` es backend puro — no React, no CSS, no HTML
 - El scorecard web (plinth) consume los payloads de Nivel 3 vía REST API — es un cliente externo
