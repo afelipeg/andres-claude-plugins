@@ -52,7 +52,7 @@ ${chalk.bold.cyan('  └──────────────────�
           message: 'Which LLM provider?',
           choices: [
             { value: 'anthropic' as const, name: 'Anthropic (Claude)', description: 'Best for marketing analysis' },
-            { value: 'openai' as const, name: 'OpenAI (GPT-4)', description: 'Strong general purpose' },
+            { value: 'deepseek' as const, name: 'DeepSeek (Chat)', description: 'Fast and affordable fallback' },
             { value: 'ollama' as const, name: 'Ollama (Local)', description: 'Free, runs on your machine' },
           ],
           default: detected?.provider ?? 'anthropic',
@@ -69,10 +69,10 @@ ${chalk.bold.cyan('  └──────────────────�
           });
           config.llm = { provider, model, baseUrl };
         } else {
-          const envKey = provider === 'anthropic' ? 'ANTHROPIC_API_KEY' : 'OPENAI_API_KEY';
+          const envKey = provider === 'anthropic' ? 'ANTHROPIC_API_KEY' : 'DEEPSEEK_API_KEY';
           const hasEnv = provider === 'anthropic'
             ? !!process.env.ANTHROPIC_API_KEY
-            : !!process.env.OPENAI_API_KEY;
+            : !!process.env.DEEPSEEK_API_KEY;
 
           if (hasEnv) {
             console.log(chalk.green(`  ✓ Using ${envKey} from environment`));
@@ -94,7 +94,7 @@ ${chalk.bold.cyan('  └──────────────────�
           if (!config.llm) {
             config.llm = {
               provider,
-              model: provider === 'anthropic' ? 'claude-sonnet-4-20250514' : 'gpt-4o',
+              model: provider === 'anthropic' ? 'claude-sonnet-4-20250514' : 'deepseek-chat',
             };
           }
         }

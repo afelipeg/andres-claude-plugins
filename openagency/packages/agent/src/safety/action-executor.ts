@@ -75,7 +75,7 @@ export class ActionExecutor {
             target_platform: action.target.platform,
             target_id: action.target.campaign_id ?? action.target.ad_set_id,
             parameters: action.parameters,
-            previous_value: undefined,
+            previous_value: result.rollback_metadata,
             new_value: result.result,
             status: result.status,
             dry_run: action.dry_run,
@@ -200,6 +200,10 @@ export class ActionExecutor {
       };
     }
 
+    // Extract rollback metadata from the rollback_tracker safety check
+    const rollbackCheck = writeResult.safety.checks.find((c) => c.gate === 'rollback_tracker');
+    const rollbackMetadata = rollbackCheck?.metadata as Record<string, unknown> | undefined;
+
     return {
       action_id: action.id,
       status: writeResult.result?.success ? 'executed' : 'failed',
@@ -208,6 +212,169 @@ export class ActionExecutor {
       executed_at: new Date().toISOString(),
       duration_ms: durationMs,
       rollback_available: writeResult.result?.success ?? false,
+      rollback_metadata: rollbackMetadata,
     };
+  }
+
+  /**
+   * Rollback a previously executed action by constructing and executing the inverse operation.
+   * Reads the action_log entry, uses previous_value to build the reverse action.
+   */
+  async rollbackAction(
+    actionLogId: string,
+    credentials: Map<string, PlatformCredentials>,
+    agentConfig: { max_budget_change_pct: number; approval_threshold_usd: number; dry_run: boolean },
+  ): Promise<ActionResult> {
+    if (!this.actionLogRepo) {
+      return {
+        action_id: actionLogId,
+        status: 'failed',
+        error: 'No action log repository configured',
+        executed_at: new Date().toISOString(),
+        duration_ms: 0,
+        rollback_available: false,
+      };
+    }
+
+    const entry = await this.actionLogRepo.getById(actionLogId);
+    if (!entry) {
+      return {
+        action_id: actionLogId,
+        status: 'failed',
+        error: `Action log entry not found: ${actionLogId}`,
+        executed_at: new Date().toISOString(),
+        duration_ms: 0,
+        rollback_available: false,
+      };
+    }
+
+    if (entry['status'] !== 'executed') {
+      return {
+        action_id: actionLogId,
+        status: 'failed',
+        error: `Cannot rollback action with status: ${entry['status']}`,
+        executed_at: new Date().toISOString(),
+        duration_ms: 0,
+        rollback_available: false,
+      };
+    }
+
+    const previousValue = entry['previous_value'] as Record<string, unknown> | null;
+    if (!previousValue) {
+      return {
+        action_id: actionLogId,
+        status: 'failed',
+        error: 'No previous value recorded — cannot rollback',
+        executed_at: new Date().toISOString(),
+        duration_ms: 0,
+        rollback_available: false,
+      };
+    }
+
+    const actionType = entry['action_type'] as string;
+    const platform = entry['target_platform'] as ConnectorPlatform;
+    const targetId = entry['target_id'] as string;
+    const originalParams = entry['parameters'] as Record<string, unknown>;
+
+    // Build inverse action based on the operation type
+    const inverseAction = this.buildInverseAction(
+      actionType, platform, targetId, previousValue, originalParams,
+    );
+
+    if (!inverseAction) {
+      return {
+        action_id: actionLogId,
+        status: 'failed',
+        error: `Cannot build inverse action for type: ${actionType}`,
+        executed_at: new Date().toISOString(),
+        duration_ms: 0,
+        rollback_available: false,
+      };
+    }
+
+    this.log.info({ actionLogId, inverse_type: inverseAction.type, platform }, 'Executing rollback');
+
+    const result = await this.executeConnectorWrite(inverseAction, credentials, agentConfig, entry['agent_id'] as string);
+
+    // Log the rollback action
+    if (this.actionLogRepo) {
+      try {
+        await this.actionLogRepo.create({
+          id: ulid(),
+          decision_id: entry['decision_id'] as string,
+          agent_id: entry['agent_id'] as string,
+          action_type: `rollback:${actionType}`,
+          target_platform: platform,
+          target_id: targetId,
+          parameters: inverseAction.parameters,
+          previous_value: undefined,
+          new_value: result.result,
+          status: result.status,
+          dry_run: false,
+          duration_ms: result.duration_ms,
+        });
+      } catch {
+        // Non-critical
+      }
+    }
+
+    return result;
+  }
+
+  private buildInverseAction(
+    actionType: string,
+    platform: ConnectorPlatform,
+    targetId: string,
+    previousValue: Record<string, unknown>,
+    originalParams: Record<string, unknown>,
+  ): PlannedAction | null {
+    const base = {
+      id: ulid(),
+      target: { platform, campaign_id: targetId },
+      dry_run: false as const,
+      safety_checks: ['rollback_tracker'] as string[],
+      estimated_impact: 'Rollback to previous value',
+    };
+
+    switch (actionType) {
+      case 'budget_update':
+        return {
+          ...base,
+          type: 'budget_update',
+          parameters: {
+            campaign_id: targetId,
+            new_budget: previousValue['previous_budget'],
+            budget_type: originalParams['budget_type'],
+            current_budget: originalParams['new_budget'],
+          },
+          rollback_plan: 'Restore original budget',
+        };
+      case 'campaign_pause':
+        return {
+          ...base,
+          type: 'campaign_enable',
+          parameters: { campaign_id: targetId },
+          rollback_plan: 'Re-enable paused campaign',
+        };
+      case 'campaign_enable':
+        return {
+          ...base,
+          type: 'campaign_pause',
+          parameters: { campaign_id: targetId },
+          rollback_plan: 'Re-pause enabled campaign',
+        };
+      case 'bid_adjustment':
+        return {
+          ...base,
+          type: 'bid_adjustment',
+          parameters: {
+            ad_set_id: originalParams['ad_set_id'],
+            new_bid: previousValue['new_bid'] ?? originalParams['current_bid'],
+          },
+          rollback_plan: 'Restore previous bid',
+        };
+      default:
+        return null;
+    }
   }
 }

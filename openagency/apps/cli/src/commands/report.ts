@@ -63,7 +63,7 @@ export function reportCommand(): Command {
     .argument('[skill]', 'Skill to run (defaults to primary skill per engine)')
     .option('-f, --file <path>', 'Path to JSON input file')
     .option('-d, --demo', 'Use demo data')
-    .option('--provider <type>', 'LLM provider: anthropic, openai, ollama')
+    .option('--provider <type>', 'LLM provider: anthropic, deepseek, ollama')
     .option('--model <name>', 'Model name (e.g. claude-sonnet-4-20250514, gpt-4o)')
     .option('--no-llm', 'Skip LLM, output structured data only')
     .option('--json', 'Output raw JSON')
@@ -154,7 +154,7 @@ export function reportCommand(): Command {
 
       if (!llmConfig) {
         console.log(chalk.yellow('\n  No LLM configured. Showing structured data only.'));
-        console.log(chalk.dim('  Set ANTHROPIC_API_KEY or OPENAI_API_KEY for AI-powered narratives.'));
+        console.log(chalk.dim('  Set ANTHROPIC_API_KEY or DEEPSEEK_API_KEY for AI-powered narratives.'));
         if (engineId !== 'leak-detector') {
           console.log(JSON.stringify(result.data, null, 2));
         }

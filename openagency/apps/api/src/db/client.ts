@@ -51,22 +51,7 @@ async function runMigrations() {
     // Table might not exist yet in edge cases
   }
 
-  // 3. Always run schema.sql first (idempotent CREATE IF NOT EXISTS)
-  const schemaPath = join(__dirname, 'schema.sql');
-  if (existsSync(schemaPath)) {
-    try {
-      const schema = readFileSync(schemaPath, 'utf-8');
-      await db.unsafe(schema);
-      if (!applied.has('001_schema.sql')) {
-        await db.unsafe('INSERT INTO _migrations (name) VALUES ($1) ON CONFLICT DO NOTHING', ['001_schema.sql']);
-      }
-      console.log('[db] schema.sql applied');
-    } catch (err) {
-      console.error('[db] Migration error (schema.sql):', err);
-    }
-  }
-
-  // 4. Auto-discover and run all migrations/*.sql in sorted order
+  // 3. Auto-discover and run all migrations/*.sql in sorted order
   const migrationsDir = join(__dirname, 'migrations');
   if (!existsSync(migrationsDir)) return;
 

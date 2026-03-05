@@ -16,6 +16,7 @@ import {
   GoalTracker,
   A2AClient,
   McpClientRegistry,
+  ActionExecutor,
 } from '@openagency/agent';
 import { listAgentEngineIds } from '@openagency/agent';
 import { SKILL_SCHEMAS, DynamicSkillRegistry } from '@openagency/schemas';
@@ -118,10 +119,16 @@ export async function createApp() {
     agentMap.set(engineId, runtime);
   }
 
+  const actionExecutor = new ActionExecutor(writeRegistry, actionLogRepo);
+
   const registry: AgentRegistry = {
     agents: agentMap,
     decisionRepo,
     agentStateRepo,
+    actionLogRepo,
+    actionExecutor,
+    credentials: new Map(connectorInfra.credentialStore.getAll().map((c) => [c.platform, c])),
+    agentConfig: { max_budget_change_pct: 25, approval_threshold_usd: 1000, dry_run: false },
   };
 
   // ─── Mesh Coordinator (multi-agent orchestration) ───────────────

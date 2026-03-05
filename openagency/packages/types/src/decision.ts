@@ -58,4 +58,6 @@ export interface ActionResult {
   executed_at: string; // ISO 8601
   duration_ms: number;
   rollback_available: boolean;
+  /** Metadata captured by RollbackTracker (previous_budget, previous_status, etc.) */
+  rollback_metadata?: Record<string, unknown>;
 }

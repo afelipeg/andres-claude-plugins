@@ -45,6 +45,15 @@ export class ActionLogRepo {
     );
   }
 
+  async getById(id: string): Promise<Record<string, unknown> | null> {
+    const db = this.sql as Db;
+    const rows = await db.unsafe(
+      'SELECT * FROM action_log WHERE id = $1 LIMIT 1',
+      [id],
+    );
+    return (rows[0] as Record<string, unknown>) ?? null;
+  }
+
   async listByDecision(decisionId: string): Promise<unknown[]> {
     const db = this.sql as Db;
     return db.unsafe(

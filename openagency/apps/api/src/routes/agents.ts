@@ -1,8 +1,9 @@
 // ─── Agent Management Routes ────────────────────────────────────────
 
 import { Hono } from 'hono';
-import type { OodaRuntime } from '@openagency/agent';
-import type { DecisionRepo, AgentStateRepo } from '@openagency/memory';
+import type { OodaRuntime, ActionExecutor } from '@openagency/agent';
+import type { DecisionRepo, AgentStateRepo, ActionLogRepo } from '@openagency/memory';
+import type { PlatformCredentials } from '@openagency/types';
 import { AgentConfigUpdateSchema } from '@openagency/schemas';
 import { authMiddleware } from '@openagency/auth';
 
@@ -10,6 +11,10 @@ export interface AgentRegistry {
   agents: Map<string, OodaRuntime>;
   decisionRepo: DecisionRepo | null;
   agentStateRepo: AgentStateRepo | null;
+  actionLogRepo: ActionLogRepo | null;
+  actionExecutor: ActionExecutor | null;
+  credentials: Map<string, PlatformCredentials>;
+  agentConfig: { max_budget_change_pct: number; approval_threshold_usd: number; dry_run: boolean };
 }
 
 export function agentRoutes(registry: AgentRegistry) {
@@ -167,7 +172,35 @@ export function agentRoutes(registry: AgentRegistry) {
     return c.json({ status: 'rejected', decision_id: did });
   });
 
-  // ─── Rollback decision ─────────────────────────────────────────
+  // ─── Rollback action ───────────────────────────────────────────
+  app.post('/v1/agents/:id/actions/:actionId/rollback', async (c) => {
+    if (!registry.actionExecutor || !registry.actionLogRepo) {
+      return c.json({ error: 'no_database', message: 'Database or executor not configured', status: 503 }, 503);
+    }
+    const actionId = c.req.param('actionId');
+
+    try {
+      const result = await registry.actionExecutor.rollbackAction(
+        actionId,
+        registry.credentials,
+        registry.agentConfig,
+      );
+
+      if (result.status === 'failed') {
+        return c.json({ error: 'rollback_failed', message: result.error, status: 400 }, 400);
+      }
+
+      return c.json({ status: 'rolled_back', action_id: actionId, result });
+    } catch (err) {
+      return c.json({
+        error: 'rollback_error',
+        message: err instanceof Error ? err.message : String(err),
+        status: 500,
+      }, 500);
+    }
+  });
+
+  // ─── Rollback decision (all actions) ──────────────────────────
   app.post('/v1/agents/:id/decisions/:did/rollback', async (c) => {
     if (!registry.decisionRepo) {
       return c.json({ error: 'no_database', message: 'Database not configured', status: 503 }, 503);

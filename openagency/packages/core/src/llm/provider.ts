@@ -192,7 +192,10 @@ export function isLLMConfigured(config: LLMConfig): boolean {
 
 /**
  * Auto-detect available LLM provider from environment.
- * Priority: Anthropic (Claude) > DeepSeek > OpenAI > null
+ * Priority: Anthropic (Claude) > DeepSeek > null
+ *
+ * ARCHITECTURAL RULE: All reasoning must use Anthropic. DeepSeek is an emergency
+ * fallback. OpenAI is available only via explicit config, never auto-detected.
  */
 export function detectLLMConfig(): LLMConfig | null {
   if (process.env.ANTHROPIC_API_KEY) {
@@ -200,9 +203,6 @@ export function detectLLMConfig(): LLMConfig | null {
   }
   if (process.env.DEEPSEEK_API_KEY) {
     return { provider: 'deepseek', model: 'deepseek-chat' };
-  }
-  if (process.env.OPENAI_API_KEY) {
-    return { provider: 'openai', model: 'gpt-4o' };
   }
   return null;
 }

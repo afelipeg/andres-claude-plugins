@@ -10,6 +10,8 @@ import type {
   TierRates,
 } from '../api/scorecard';
 import { listScorecards, getLatestScorecard, getTierPreview } from '../api/scorecard';
+import { calculateBilling } from '@openagency/core';
+import type { BillingInput } from '@openagency/core';
 
 // ─── Tier Data (mirrors packages/core/src/billing.ts) ─────────────
 
@@ -37,6 +39,149 @@ function fmtUsd(n: number): string {
 
 function fmtPct(n: number): string {
   return `${n.toFixed(1)}%`;
+}
+
+// ─── Billing Calculator Form ─────────────────────────────────────
+
+function BillingCalculatorForm({ onResult }: { onResult: (r: BillingResult) => void }) {
+  const [adSpend, setAdSpend] = useState('1000000');
+  const [wasteTotal, setWasteTotal] = useState('150000');
+  const [qualityWaste, setQualityWaste] = useState('25000');
+  const [supplyChainSavings, setSupplyChainSavings] = useState('10000');
+  const [cpaOvershoot, setCpaOvershoot] = useState('20000');
+  const [reallocationSavings, setReallocationSavings] = useState('15000');
+  const [measurementWaste, setMeasurementWaste] = useState('8000');
+  const [kpiLift, setKpiLift] = useState('50000');
+  const [roasLift, setRoasLift] = useState('75000');
+  const [roiLift, setRoiLift] = useState('30000');
+  const [attributionRevenue, setAttributionRevenue] = useState('200000');
+  const [modeledContribution, setModeledContribution] = useState('180000');
+  const [cpcSavings, setCpcSavings] = useState('12000');
+  const [cpmSavings, setCpmSavings] = useState('8000');
+  const [ctrRevenue, setCtrRevenue] = useState('15000');
+  const [viewability, setViewability] = useState('5000');
+  const [brandSafety, setBrandSafety] = useState('3000');
+
+  const handleCalculate = () => {
+    const input: BillingInput = {
+      ad_spend: num(adSpend),
+      recovery: {
+        waste_total: num(wasteTotal),
+        quality_waste: num(qualityWaste),
+        supply_chain_savings: num(supplyChainSavings),
+        cpa_overshoot_savings: num(cpaOvershoot),
+        reallocation_savings: num(reallocationSavings),
+        measurement_waste: num(measurementWaste),
+      },
+      lift: {
+        kpi_lift_dollars: num(kpiLift),
+        roas_lift_dollars: num(roasLift),
+        roi_lift_dollars: num(roiLift),
+        media_driven_sales: {
+          attribution_revenue: num(attributionRevenue),
+          modeled_contribution: num(modeledContribution),
+        },
+      },
+      efficiency: {
+        cpc_savings: num(cpcSavings),
+        cpm_savings: num(cpmSavings),
+        ctr_revenue_impact: num(ctrRevenue),
+        viewability_savings: num(viewability),
+        brand_safety_savings: num(brandSafety),
+      },
+    };
+    onResult(calculateBilling(input));
+  };
+
+  return (
+    <Card title="Billing Calculator">
+      <p className="mb-4 text-sm text-gray-500">
+        Enter estimated values to preview your outcome-based fee. All calculations run locally.
+      </p>
+
+      {/* Ad Spend */}
+      <div className="mb-5">
+        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Monthly Ad Spend</label>
+        <NumberInput value={adSpend} onChange={setAdSpend} placeholder="1000000" />
+      </div>
+
+      {/* Recovery */}
+      <FieldGroup title="Recovery Sources" color="green">
+        <NumberInput label="Waste detected (Leak Detector)" value={wasteTotal} onChange={setWasteTotal} />
+        <NumberInput label="Quality waste" value={qualityWaste} onChange={setQualityWaste} />
+        <NumberInput label="Supply chain savings" value={supplyChainSavings} onChange={setSupplyChainSavings} />
+        <NumberInput label="CPA overshoot savings" value={cpaOvershoot} onChange={setCpaOvershoot} />
+        <NumberInput label="Reallocation savings" value={reallocationSavings} onChange={setReallocationSavings} />
+        <NumberInput label="Measurement waste" value={measurementWaste} onChange={setMeasurementWaste} />
+      </FieldGroup>
+
+      {/* Lift */}
+      <FieldGroup title="Lift Sources" color="blue">
+        <NumberInput label="KPI lift from optimization" value={kpiLift} onChange={setKpiLift} />
+        <NumberInput label="ROAS improvement value" value={roasLift} onChange={setRoasLift} />
+        <NumberInput label="ROI improvement value" value={roiLift} onChange={setRoiLift} />
+        <NumberInput label="Attribution revenue (MDS)" value={attributionRevenue} onChange={setAttributionRevenue} />
+        <NumberInput label="Modeled contribution (MDS)" value={modeledContribution} onChange={setModeledContribution} />
+      </FieldGroup>
+
+      {/* Efficiency */}
+      <FieldGroup title="Efficiency Savings" color="purple">
+        <NumberInput label="CPC reduction savings" value={cpcSavings} onChange={setCpcSavings} />
+        <NumberInput label="CPM optimization savings" value={cpmSavings} onChange={setCpmSavings} />
+        <NumberInput label="CTR improvement revenue" value={ctrRevenue} onChange={setCtrRevenue} />
+        <NumberInput label="Viewability savings" value={viewability} onChange={setViewability} />
+        <NumberInput label="Brand safety savings" value={brandSafety} onChange={setBrandSafety} />
+      </FieldGroup>
+
+      <button
+        onClick={handleCalculate}
+        className="mt-4 w-full rounded-lg bg-brand-600 px-5 py-3 text-sm font-semibold text-white hover:bg-brand-700"
+      >
+        Calculate Fee
+      </button>
+    </Card>
+  );
+}
+
+function NumberInput({ label, value, onChange, placeholder }: {
+  label?: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      {label && <label className="block text-xs text-gray-500 mb-0.5">{label}</label>}
+      <div className="relative">
+        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">$</span>
+        <input
+          type="number"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="w-full rounded-lg border border-gray-200 pl-6 pr-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+        />
+      </div>
+    </div>
+  );
+}
+
+function FieldGroup({ title, color, children }: { title: string; color: string; children: React.ReactNode }) {
+  const borderColor = color === 'green' ? 'border-green-200' : color === 'blue' ? 'border-blue-200' : 'border-purple-200';
+  const titleColor = color === 'green' ? 'text-green-700' : color === 'blue' ? 'text-blue-700' : 'text-purple-700';
+  return (
+    <div className={`mb-4 rounded-lg border ${borderColor} p-4`}>
+      <h4 className={`text-xs font-semibold uppercase tracking-wider ${titleColor} mb-3`}>{title}</h4>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function num(s: string): number {
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
 }
 
 // ─── Tier Calculator Component ────────────────────────────────────
@@ -148,12 +293,54 @@ function BillingHistoryRow({ record }: { record: ScorecardSummary }) {
   );
 }
 
+// ─── Fee Breakdown Card ─────────────────────────────────────────────
+
+function FeeBreakdownCard({ billing }: { billing: BillingResult }) {
+  return (
+    <Card title="Fee Breakdown">
+      <div className="space-y-4">
+        {[billing.recovery_fee, billing.lift_fee, billing.efficiency_fee].map((fee) => (
+          <div key={fee.category} className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-semibold text-gray-900 capitalize">{fee.category} Fee</h4>
+              <div className="flex items-center gap-3 text-sm">
+                <span className="text-gray-500">{fmtUsd(fee.base_amount)} x {fmtPct(fee.rate * 100)}</span>
+                <span className="font-bold text-gray-900">= {fmtUsd(fee.fee)}</span>
+              </div>
+            </div>
+            {fee.line_items.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {fee.line_items.map((item, i) => (
+                  <div key={i} className="flex justify-between text-xs text-gray-500">
+                    <span>{item.label}</span>
+                    <span>{fmtUsd(item.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+        <div className="flex items-center justify-between rounded-lg bg-gray-900 p-4 text-white">
+          <span className="font-semibold">Total Fee</span>
+          <div className="text-right">
+            <span className="text-xl font-bold">{fmtUsd(billing.total_fee)}</span>
+            <span className="ml-3 rounded-full bg-green-500/20 px-2.5 py-0.5 text-xs font-medium text-green-300">
+              {billing.roi_on_fee.toFixed(1)}x ROI on fee
+            </span>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 // ─── Main Page ──────────────────────────────────────────────────────
 
 export function BillingPage() {
   const [billing, setBilling] = useState<BillingResult | null>(null);
   const [history, setHistory] = useState<ScorecardSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [calcResult, setCalcResult] = useState<BillingResult | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -178,6 +365,9 @@ export function BillingPage() {
   const totalValue = history.filter(h => h.status === 'accepted').reduce((sum, h) => sum + h.value_delivered, 0);
   const avgRoi = totalFees > 0 ? totalValue / totalFees : 0;
 
+  // Active billing = from scorecard if available, otherwise from calculator
+  const activeBilling = billing ?? calcResult;
+
   if (loading) {
     return <div className="flex h-64 items-center justify-center"><Spinner /></div>;
   }
@@ -193,23 +383,23 @@ export function BillingPage() {
       </div>
 
       {/* Summary Metrics */}
-      {billing && (
+      {activeBilling && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <MetricCard
             label="Current Fee"
-            value={fmtUsd(billing.total_fee)}
-            sub={`${billing.tier.label} tier`}
+            value={fmtUsd(activeBilling.total_fee)}
+            sub={`${activeBilling.tier.label} tier`}
             color="blue"
           />
           <MetricCard
             label="Value Delivered"
-            value={fmtUsd(billing.value_delivered)}
-            sub={`${billing.roi_on_fee.toFixed(1)}x ROI`}
+            value={fmtUsd(activeBilling.value_delivered)}
+            sub={`${activeBilling.roi_on_fee.toFixed(1)}x ROI`}
             color="green"
           />
           <MetricCard
             label="Fee % of Spend"
-            value={fmtPct(billing.fee_as_pct_of_spend)}
+            value={fmtPct(activeBilling.fee_as_pct_of_spend)}
             sub="outcome-based"
             color="gray"
           />
@@ -272,12 +462,12 @@ export function BillingPage() {
               {TIERS.map((t) => (
                 <tr
                   key={t.tier}
-                  className={`border-b border-gray-50 ${billing?.tier.tier === t.tier ? 'bg-brand-50' : ''}`}
+                  className={`border-b border-gray-50 ${activeBilling?.tier.tier === t.tier ? 'bg-brand-50' : ''}`}
                 >
                   <td className="py-3">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-gray-900">{t.label}</span>
-                      {billing?.tier.tier === t.tier && (
+                      {activeBilling?.tier.tier === t.tier && (
                         <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-700">Current</span>
                       )}
                     </div>
@@ -296,37 +486,12 @@ export function BillingPage() {
       {/* Tier Calculator */}
       <TierCalculator />
 
-      {/* Current Fee Breakdown */}
-      {billing && (
-        <Card title="Current Fee Breakdown">
-          <div className="space-y-4">
-            {[billing.recovery_fee, billing.lift_fee, billing.efficiency_fee].map((fee) => (
-              <div key={fee.category} className="rounded-lg border border-gray-100 bg-gray-50 p-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-semibold text-gray-900 capitalize">{fee.category} Fee</h4>
-                  <div className="flex items-center gap-3 text-sm">
-                    <span className="text-gray-500">{fmtUsd(fee.base_amount)} x {fmtPct(fee.rate * 100)}</span>
-                    <span className="font-bold text-gray-900">= {fmtUsd(fee.fee)}</span>
-                  </div>
-                </div>
-                {fee.line_items.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    {fee.line_items.map((item, i) => (
-                      <div key={i} className="flex justify-between text-xs text-gray-500">
-                        <span>{item.label}</span>
-                        <span>{fmtUsd(item.amount)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-            <div className="flex items-center justify-between rounded-lg bg-gray-900 p-4 text-white">
-              <span className="font-semibold">Total Fee</span>
-              <span className="text-xl font-bold">{fmtUsd(billing.total_fee)}</span>
-            </div>
-          </div>
-        </Card>
+      {/* Fee Breakdown — from scorecard or calculator */}
+      {activeBilling && <FeeBreakdownCard billing={activeBilling} />}
+
+      {/* Billing Calculator Form — shown as empty state or always available */}
+      {!billing && (
+        <BillingCalculatorForm onResult={setCalcResult} />
       )}
 
       {/* Billing History */}
@@ -336,18 +501,6 @@ export function BillingPage() {
             {history.map((record) => (
               <BillingHistoryRow key={record.id} record={record} />
             ))}
-          </div>
-        </Card>
-      )}
-
-      {/* No data state */}
-      {!billing && history.length === 0 && (
-        <Card>
-          <div className="py-8 text-center">
-            <p className="text-sm text-gray-500">No billing data yet.</p>
-            <p className="mt-2 text-xs text-gray-400">
-              Run the demo from the Home page to generate your first scorecard and billing calculation.
-            </p>
           </div>
         </Card>
       )}
