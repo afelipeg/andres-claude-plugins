@@ -1,5 +1,6 @@
 // ─── Connector REST Routes ──────────────────────────────────────────
 // Dashboard endpoints for platform connector management.
+// Supports OAuth flow (auth-url → callback → connect) and sync operations.
 
 import { Hono } from 'hono';
 import type { EventBus, ConnectorPlatform, OAuthTokens } from '@openagency/types';
@@ -32,6 +33,154 @@ export function connectorRoutes(infra: ConnectorInfra, eventBus: EventBus) {
       last_sync: infra.syncResultCache.get(platform)?.synced_at ?? null,
     }));
     return c.json({ connectors: result });
+  });
+
+  // ─── Aggregate connector status (for dashboard) ────────────────
+  app.get('/v1/connectors/status', authMiddleware(), (c) => {
+    const connectedPlatforms = infra.credentialStore.platforms();
+    const activeSyncs = infra.syncScheduler.activePlatforms();
+
+    const allPlatforms = Array.from(VALID_PLATFORMS) as ConnectorPlatform[];
+    const platforms = allPlatforms.map((platform) => {
+      const connected = connectedPlatforms.includes(platform);
+      const credentials = connected ? infra.credentialStore.get(platform) : null;
+      const syncResult = infra.syncResultCache.get(platform);
+
+      return {
+        platform,
+        connected,
+        syncing: activeSyncs.includes(platform),
+        last_sync: syncResult?.synced_at ?? null,
+        sync_status: syncResult?.status ?? null,
+        sync_row_count: syncResult?.row_count ?? 0,
+        connected_at: credentials?.connected_at ?? null,
+        has_connector: hasConnector(platform),
+      };
+    });
+
+    return c.json({
+      total: allPlatforms.length,
+      connected: connectedPlatforms.length,
+      syncing: activeSyncs.length,
+      platforms,
+    });
+  });
+
+  // ─── Get OAuth URL for platform ────────────────────────────────
+  app.get('/v1/connectors/:platform/auth-url', authMiddleware(), (c) => {
+    const platform = c.req.param('platform');
+    if (!isValidPlatform(platform)) {
+      return c.json({ error: 'invalid_platform', message: `Invalid platform: ${platform}`, status: 400 }, 400);
+    }
+
+    if (!hasConnector(platform)) {
+      return c.json({
+        error: 'no_connector',
+        message: `No connector configured for ${platform}. Check environment variables.`,
+        status: 404,
+      }, 404);
+    }
+
+    const redirectUri = c.req.query('redirect_uri');
+    if (!redirectUri) {
+      return c.json(
+        { error: 'validation_error', message: 'redirect_uri query parameter is required', status: 400 },
+        400,
+      );
+    }
+
+    const state = c.req.query('state') ?? undefined;
+
+    try {
+      const connector = getConnector(platform);
+      const authUrl = connector.getAuthUrl(redirectUri, state);
+      return c.json({ platform, auth_url: authUrl, redirect_uri: redirectUri });
+    } catch (err) {
+      return c.json({
+        error: 'connector_error',
+        message: err instanceof Error ? err.message : String(err),
+        status: 500,
+      }, 500);
+    }
+  });
+
+  // ─── OAuth callback (exchange code → store credentials) ────────
+  app.post('/v1/connectors/:platform/callback', authMiddleware(), async (c) => {
+    const platform = c.req.param('platform');
+    if (!isValidPlatform(platform)) {
+      return c.json({ error: 'invalid_platform', message: `Invalid platform: ${platform}`, status: 400 }, 400);
+    }
+
+    if (!hasConnector(platform)) {
+      return c.json({ error: 'no_connector', message: `No connector for ${platform}`, status: 404 }, 404);
+    }
+
+    try {
+      const body = await c.req.json<{
+        code: string;
+        redirect_uri: string;
+        account_id?: string;
+        manager_id?: string;
+      }>();
+
+      if (!body.code || !body.redirect_uri) {
+        return c.json(
+          { error: 'validation_error', message: 'code and redirect_uri are required', status: 400 },
+          400,
+        );
+      }
+
+      const connector = getConnector(platform);
+      const tokens = await connector.exchangeCode(body.code, body.redirect_uri);
+
+      // Store credentials
+      infra.credentialStore.set({
+        platform,
+        tokens,
+        account_id: body.account_id,
+        manager_id: body.manager_id,
+        connected_at: new Date().toISOString(),
+      });
+
+      return c.json({
+        status: 'connected',
+        platform,
+        token_type: tokens.token_type,
+        expires_at: tokens.expires_at,
+      });
+    } catch (err) {
+      return c.json({
+        error: 'oauth_error',
+        message: err instanceof Error ? err.message : String(err),
+        status: 400,
+      }, 400);
+    }
+  });
+
+  // ─── Platform status (per-platform detail) ─────────────────────
+  app.get('/v1/connectors/:platform/status', authMiddleware(), (c) => {
+    const platform = c.req.param('platform');
+    if (!isValidPlatform(platform)) {
+      return c.json({ error: 'invalid_platform', message: `Invalid platform: ${platform}`, status: 400 }, 400);
+    }
+
+    const credentials = infra.credentialStore.get(platform);
+    const syncResult = infra.syncResultCache.get(platform);
+    const syncing = infra.syncScheduler.activePlatforms().includes(platform);
+
+    return c.json({
+      platform,
+      connected: !!credentials,
+      connected_at: credentials?.connected_at ?? null,
+      account_id: credentials?.account_id ?? null,
+      syncing,
+      last_sync: syncResult?.synced_at ?? null,
+      sync_status: syncResult?.status ?? null,
+      sync_row_count: syncResult?.row_count ?? 0,
+      sync_error: syncResult?.error ?? null,
+      has_connector: hasConnector(platform),
+      token_valid: credentials ? !isTokenExpired(credentials.tokens) : false,
+    });
   });
 
   // ─── Connect (store credentials) ──────────────────────────────
@@ -176,4 +325,11 @@ export function connectorRoutes(infra: ConnectorInfra, eventBus: EventBus) {
   });
 
   return app;
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────
+
+function isTokenExpired(tokens: OAuthTokens): boolean {
+  if (!tokens.expires_at) return false;
+  return Date.now() > tokens.expires_at;
 }

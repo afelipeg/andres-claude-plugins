@@ -46,6 +46,8 @@ import { mcpRoute } from './mcp/transport.js';
 import { a2aDiscoveryRoute } from './a2a/discovery.js';
 import { federationRoutes } from './routes/federation.js';
 import { marketplaceRoutes } from './routes/marketplace.js';
+import { HFLCoordinator } from '@openagency/hfl';
+import { hflRoutes } from './routes/hfl.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/logger.js';
 import { rateLimiter } from './middleware/rate-limiter.js';
@@ -136,6 +138,11 @@ export async function createApp() {
   mesh.registerPipeline(DEFAULT_PIPELINE);
   mesh.start();
 
+  // ─── Human Feedback Loop (agent-to-human escalation) ────────────
+  const hflCoordinator = new HFLCoordinator(eventBus, {
+    base_url: process.env['API_BASE_URL'] ?? 'http://localhost:3100',
+  });
+
   // ─── Federation (external agent consumption) ──────────────────
   const a2aClient = new A2AClient();
   const mcpClientRegistry = new McpClientRegistry();
@@ -169,14 +176,17 @@ export async function createApp() {
   app.route('/', agentRoutes(registry));
   app.route('/', goalRoutes({ goalRepo, decomposer: goalDecomposer, tracker: goalTracker }));
 
-  // ─── Mesh routes ────────────────────────────────────────────────
-  app.route('/', meshRoutes(mesh));
+  // ─── Mesh routes (with HFL integration) ────────────────────────
+  app.route('/', meshRoutes(mesh, hflCoordinator));
 
   // ─── Connector routes ──────────────────────────────────────────
   app.route('/', connectorRoutes(connectorInfra, eventBus));
 
   // ─── File upload route ──────────────────────────────────────────
   app.route('/', uploadRoutes());
+
+  // ─── Human Feedback Loop routes ────────────────────────────────
+  app.route('/', hflRoutes(hflCoordinator));
 
   // ─── Scorecard + Billing ──────────────────────────────────────
   app.route('/', scorecardRoutes(agency, mesh, connectorInfra));
@@ -194,7 +204,7 @@ export async function createApp() {
   app.route('/', marketplaceRoutes(dynamicSkillRegistry));
 
   // ─── MCP endpoint ───────────────────────────────────────────────
-  app.route('/', mcpRoute(agency, agentMap, mesh, connectorInfra, a2aClient, mcpClientRegistry, dynamicSkillRegistry));
+  app.route('/', mcpRoute(agency, agentMap, mesh, connectorInfra, a2aClient, mcpClientRegistry, dynamicSkillRegistry, hflCoordinator));
 
   // ─── Error handler ──────────────────────────────────────────────
   app.onError(errorHandler);

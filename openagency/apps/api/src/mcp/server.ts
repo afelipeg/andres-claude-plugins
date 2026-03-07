@@ -8,6 +8,7 @@ import { parseFile } from '@openagency/core/data/file-parser';
 import { detectPlatform } from '@openagency/core/data/platform-detect';
 import { SKILL_SCHEMAS, type DynamicSkillRegistry } from '@openagency/schemas';
 import type { OodaRuntime, MeshCoordinator, A2AClient, McpClientRegistry } from '@openagency/agent';
+import type { HFLCoordinator } from '@openagency/hfl';
 import type { ConnectorPlatform, OAuthTokens } from '@openagency/types';
 import { getConnector, hasConnector } from '@openagency/connectors';
 import type { ConnectorInfra } from '../connectors/setup.js';
@@ -28,6 +29,7 @@ export function createMcpServer(
   a2aClient?: A2AClient,
   mcpClientRegistry?: McpClientRegistry,
   dynamicSkillRegistry?: DynamicSkillRegistry,
+  hflCoordinator?: HFLCoordinator,
 ): McpServer {
   const server = new McpServer({
     name: 'openagency',
@@ -664,6 +666,76 @@ export function createMcpServer(
         const builtIn = SKILL_SCHEMAS.map((s) => ({ engine_id: s.engineId, skill_id: s.skillId, name: s.name, source: 'built-in' }));
         const dynamic = dynamicSkillRegistry.listAll().map((s) => ({ engine_id: s.engineId, skill_id: s.skillId, name: s.name, source: 'dynamic' }));
         return { content: [{ type: 'text' as const, text: JSON.stringify({ skills: [...builtIn, ...dynamic], total: builtIn.length + dynamic.length }, null, 2) }] };
+      },
+    );
+  }
+
+  // ─── HFL (Human Feedback Loop) MCP tools ───────────────────────
+  if (hflCoordinator) {
+    server.tool(
+      'hfl_config',
+      'View or modify the Human Feedback Loop configuration for a client. Controls auto-approve thresholds, channels, and escalation rules.',
+      {
+        client_id: { type: 'string', description: 'Client ID (default: "default")' },
+      } as Record<string, { type: string; description?: string }>,
+      async (args: Record<string, unknown>) => {
+        const clientId = (args['client_id'] as string) || 'default';
+        const config = hflCoordinator.getConfig(clientId);
+        if (!config) {
+          return { content: [{ type: 'text' as const, text: `No HFL config for client: ${clientId}` }], isError: true };
+        }
+        return { content: [{ type: 'text' as const, text: JSON.stringify(config, null, 2) }] };
+      },
+    );
+
+    server.tool(
+      'hfl_approve_run',
+      'Approve a pending mesh run that was escalated for human review.',
+      {
+        run_id: { type: 'string', description: 'The mesh run ID to approve' },
+        feedback: { type: 'string', description: 'Optional feedback message' },
+      } as Record<string, { type: string; description?: string }>,
+      async (args: Record<string, unknown>) => {
+        const decision = await hflCoordinator.approveRun(
+          args['run_id'] as string,
+          args['feedback'] as string | undefined,
+        );
+        if (!decision) {
+          return { content: [{ type: 'text' as const, text: 'No pending decision for this run' }], isError: true };
+        }
+        return { content: [{ type: 'text' as const, text: JSON.stringify(decision, null, 2) }] };
+      },
+    );
+
+    server.tool(
+      'hfl_reject_run',
+      'Reject a pending mesh run with optional feedback explaining why.',
+      {
+        run_id: { type: 'string', description: 'The mesh run ID to reject' },
+        feedback: { type: 'string', description: 'Feedback explaining the rejection reason' },
+      } as Record<string, { type: string; description?: string }>,
+      async (args: Record<string, unknown>) => {
+        const decision = await hflCoordinator.rejectRun(
+          args['run_id'] as string,
+          args['feedback'] as string | undefined,
+        );
+        if (!decision) {
+          return { content: [{ type: 'text' as const, text: 'No pending decision for this run' }], isError: true };
+        }
+        return { content: [{ type: 'text' as const, text: JSON.stringify(decision, null, 2) }] };
+      },
+    );
+
+    server.tool(
+      'hfl_decisions',
+      'List recent HFL decisions including auto-approved, escalated, and resolved runs.',
+      {
+        limit: { type: 'number', description: 'Max decisions to return (default: 50)' },
+      } as Record<string, { type: string; description?: string }>,
+      async (args: Record<string, unknown>) => {
+        const limit = (args['limit'] as number) || 50;
+        const decisions = hflCoordinator.listDecisions(limit);
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ decisions, count: decisions.length }, null, 2) }] };
       },
     );
   }

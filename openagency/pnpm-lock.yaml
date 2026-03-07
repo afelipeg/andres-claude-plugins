@@ -47,6 +47,9 @@ importers:
       '@openagency/events':
         specifier: workspace:*
         version: link:../../packages/events
+      '@openagency/hfl':
+        specifier: workspace:*
+        version: link:../../packages/hfl
       '@openagency/memory':
         specifier: workspace:*
         version: link:../../packages/memory
@@ -339,6 +342,31 @@ importers:
       ioredis:
         specifier: ^5.0.0
         version: 5.10.0
+
+  packages/hfl:
+    dependencies:
+      '@openagency/core':
+        specifier: workspace:*
+        version: link:../core
+      '@openagency/events':
+        specifier: workspace:*
+        version: link:../events
+      '@openagency/types':
+        specifier: workspace:*
+        version: link:../types
+      ulid:
+        specifier: ^2.3.0
+        version: 2.4.0
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.33
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.4(@types/node@20.19.33)(jiti@1.21.7)(tsx@4.21.0)
 
   packages/memory:
     dependencies:

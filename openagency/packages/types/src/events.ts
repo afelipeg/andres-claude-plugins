@@ -46,7 +46,14 @@ export type EngineEventType =
   | 'mesh.stage.started'
   | 'mesh.stage.completed'
   | 'mesh.stage.failed'
-  | 'mesh.stage.skipped';
+  | 'mesh.stage.skipped'
+  // Human Feedback Loop
+  | 'hfl.escalated'
+  | 'hfl.auto_approved'
+  | 'hfl.human_approved'
+  | 'hfl.human_rejected'
+  | 'hfl.dispatched'
+  | 'hfl.timeout';
 
 export interface EngineEvent<T = unknown> {
   id: string; // ULID

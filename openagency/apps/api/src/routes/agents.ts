@@ -32,6 +32,40 @@ export function agentRoutes(registry: AgentRegistry) {
     return c.json({ agents });
   });
 
+  // ─── Aggregate agent status (dashboard summary) ────────────────
+  // Must be before :id route to avoid matching "status" as an agent ID.
+  app.get('/v1/agents/status', (c) => {
+    const agents = [];
+    let active = 0;
+    let idle = 0;
+    let paused = 0;
+    let errored = 0;
+
+    for (const [id, runtime] of registry.agents) {
+      const state = runtime.getState();
+      agents.push({
+        id,
+        status: state.status,
+        last_cycle: state.last_cycle ?? null,
+        cycles_completed: state.cycles_completed ?? 0,
+      });
+
+      if (state.status === 'error') errored++;
+      else if (state.status === 'paused') paused++;
+      else if (state.status === 'idle') idle++;
+      else active++; // observing, orienting, deciding, acting
+    }
+
+    return c.json({
+      total: agents.length,
+      active,
+      idle,
+      paused,
+      errored,
+      agents,
+    });
+  });
+
   // ─── Agent detail ───────────────────────────────────────────────
   app.get('/v1/agents/:id', (c) => {
     const runtime = registry.agents.get(c.req.param('id'));

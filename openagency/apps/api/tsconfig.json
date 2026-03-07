@@ -14,7 +14,8 @@
     { "path": "../../packages/events" },
     { "path": "../../packages/connectors" },
     { "path": "../../packages/memory" },
-    { "path": "../../packages/agent" }
+    { "path": "../../packages/agent" },
+    { "path": "../../packages/hfl" }
   ],
   "include": ["src"]
 }
