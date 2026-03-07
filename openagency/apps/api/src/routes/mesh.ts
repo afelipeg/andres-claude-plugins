@@ -245,5 +245,57 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator) {
     });
   });
 
+  // ─── Recovery history (12-month trend) ─────────────────────────
+  app.get('/v1/recovery/history', (c) => {
+    const monthsParam = Math.min(24, Math.max(1, parseInt(c.req.query('months') ?? '12', 10)));
+    const completedRuns = mesh.listRuns().filter((r) => r.status === 'completed');
+
+    // Group recovery by month
+    const monthMap = new Map<string, number>();
+
+    for (const run of completedRuns) {
+      const serialized = mesh.serializeRun(run) as Record<string, unknown>;
+      const stageResults = serialized.stage_results as Record<string, Record<string, unknown>> | undefined;
+      if (!stageResults) continue;
+
+      const month = run.started_at
+        ? run.started_at.substring(0, 7)
+        : new Date().toISOString().substring(0, 7);
+
+      let runRecovery = 0;
+      for (const [agentId, result] of Object.entries(stageResults)) {
+        const output = (result.output_summary ?? {}) as Record<string, number>;
+        if (agentId === 'leak-detector') runRecovery += output.waste_total_usd ?? 0;
+        if (agentId === 'media-architect') runRecovery += output.projected_lift_usd ?? 0;
+        if (agentId === 'campaign-ops') runRecovery += output.efficiency_savings_usd ?? 0;
+      }
+
+      monthMap.set(month, (monthMap.get(month) ?? 0) + runRecovery);
+    }
+
+    // Build month array sorted chronologically
+    const months: Array<{ month: string; recovery: number; cumulative_recovery: number; delta_pct: number }> = [];
+    let cumulative = 0;
+    let prevRecovery = 0;
+
+    const sortedMonths = Array.from(monthMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    const recent = sortedMonths.slice(-monthsParam);
+
+    for (const [month, recovery] of recent) {
+      cumulative += recovery;
+      const deltaPct = prevRecovery > 0
+        ? Math.round(((recovery - prevRecovery) / prevRecovery) * 10000) / 100
+        : 0;
+      months.push({ month, recovery, cumulative_recovery: cumulative, delta_pct: deltaPct });
+      prevRecovery = recovery;
+    }
+
+    return c.json({
+      months,
+      total_recovery: cumulative,
+      period_months: monthsParam,
+    });
+  });
+
   return app;
 }

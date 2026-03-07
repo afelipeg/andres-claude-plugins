@@ -9,6 +9,10 @@ import { authMiddleware } from '@openagency/auth/middleware';
 import type { ConnectorInfra } from '../connectors/setup.js';
 import { rateLimiter } from '../middleware/rate-limiter.js';
 
+// In-memory connection type preferences (rest/mcp/both per platform)
+const connectionPrefs = new Map<string, 'rest' | 'mcp' | 'both'>();
+export { connectionPrefs };
+
 const VALID_PLATFORMS = new Set<string>([
   'google_ads', 'meta_ads', 'dv360', 'tiktok_ads', 'tiktok_shop', 'amazon_ads',
 ]);
@@ -181,6 +185,39 @@ export function connectorRoutes(infra: ConnectorInfra, eventBus: EventBus) {
       has_connector: hasConnector(platform),
       token_valid: credentials ? !isTokenExpired(credentials.tokens) : false,
     });
+  });
+
+  // ─── Configure connection type (REST / MCP / Both) ───────────
+  app.post('/v1/connectors/:platform/configure', authMiddleware(), async (c) => {
+    const platform = c.req.param('platform');
+    if (!isValidPlatform(platform)) {
+      return c.json({ error: 'invalid_platform', message: `Invalid platform: ${platform}`, status: 400 }, 400);
+    }
+
+    try {
+      const body = await c.req.json<{ connection_type: 'rest' | 'mcp' | 'both' }>();
+      const validTypes = ['rest', 'mcp', 'both'];
+      if (!validTypes.includes(body.connection_type)) {
+        return c.json(
+          { error: 'validation_error', message: 'connection_type must be "rest", "mcp", or "both"', status: 400 },
+          400,
+        );
+      }
+
+      connectionPrefs.set(platform, body.connection_type);
+
+      return c.json({
+        platform,
+        connection_type: body.connection_type,
+        message: `Connection type set to "${body.connection_type}" for ${platform}`,
+      });
+    } catch (err) {
+      return c.json({
+        error: 'bad_request',
+        message: err instanceof Error ? err.message : String(err),
+        status: 400,
+      }, 400);
+    }
   });
 
   // ─── Connect (store credentials) ──────────────────────────────

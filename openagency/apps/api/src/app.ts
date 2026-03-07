@@ -48,6 +48,10 @@ import { federationRoutes } from './routes/federation.js';
 import { marketplaceRoutes } from './routes/marketplace.js';
 import { HFLCoordinator } from '@openagency/hfl';
 import { hflRoutes } from './routes/hfl.js';
+import { dashboardRoutes } from './routes/dashboard.js';
+import { campaignRoutes } from './routes/campaigns.js';
+import { onboardingRoutes } from './routes/onboarding.js';
+import { consumptionRoutes } from './routes/consumption.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/logger.js';
 import { rateLimiter } from './middleware/rate-limiter.js';
@@ -202,6 +206,18 @@ export async function createApp() {
 
   // ─── Marketplace routes ──────────────────────────────────────
   app.route('/', marketplaceRoutes(dynamicSkillRegistry));
+
+  // ─── Dashboard (aggregated KPIs for Command Center) ──────────
+  app.route('/', dashboardRoutes({ mesh, connectorInfra, registry, hfl: hflCoordinator }));
+
+  // ─── Campaign routes ─────────────────────────────────────────
+  app.route('/', campaignRoutes(connectorInfra));
+
+  // ─── Onboarding routes ───────────────────────────────────────
+  app.route('/', onboardingRoutes(connectorInfra, mcpClientRegistry));
+
+  // ─── Consumption routes ──────────────────────────────────────
+  app.route('/', consumptionRoutes(connectorInfra, registry));
 
   // ─── MCP endpoint ───────────────────────────────────────────────
   app.route('/', mcpRoute(agency, agentMap, mesh, connectorInfra, a2aClient, mcpClientRegistry, dynamicSkillRegistry, hflCoordinator));
