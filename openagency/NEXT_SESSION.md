@@ -1,181 +1,173 @@
-# Próxima sesión: packages/hfl/ — Human Feedback Loop Agent (modelo Jarvis)
+# Next Session: Plinth Integration & Production Readiness
 
-## Estado Actual (v3.1.1 — 5 gaps cerrados)
+## Current State (v3.2 — HFL + Plinth API Audit complete)
 
-**Build:** 12/12 paquetes. **Tests:** 333 pasando en 31 archivos. **0 errores de tipo.**
-**Gaps cerrados:** Embeddings Voyage AI, Migration ordering, Rollback execution, Writer tests, Billing UI.
+**Build:** 13/13 packages (including `@openagency/hfl`). **Tests:** 380 passing in 36 files. **0 type errors.**
+**Branch:** `claude/vigorous-bose` at commit `582707e`
+**Remote:** `origin https://github.com/afelipeg/andres-claude-plugins.git`
 
 ---
 
-## Concepto
+## What Was Completed
 
-El HFL Agent es un módulo BACKEND que decide CUÁNDO escalar al humano, POR QUÉ canal, y QUÉ mostrarle. No es un frontend. Genera payloads que cualquier superficie consume (Slack, email, scorecard web, otro agente).
+### @openagency/hfl package (fully implemented)
+- **RiskScorer**: Evaluates mesh run risk (spend impact thresholds, stage failures, first-run escalation)
+- **RenderEngine**: 3 render levels — minimal (text), rich (markdown), full (JSON for Plinth/scorecard)
+- **ChannelDispatcher**: Webhook + MCP callback delivery with configurable retries
+- **HFLCoordinator**: Orchestrates evaluate -> score -> render -> dispatch flow
+- **scorecard_base_url**: Support for "Ver detalle" action links in all render levels
+- **34 tests** across 4 test files (risk-scorer, render-engine, channel-dispatcher, coordinator)
 
-El scorecard web (plinth.polanyi.tech) ya existe como app separada — es el "Nivel 3" del render engine. Claude Code NO construye el scorecard. Claude Code construye el motor que genera los datos que el scorecard y cualquier otro canal consumen.
+### Plinth API Audit (apps/api — all endpoints verified/created)
+- **Auth**: `POST /v1/auth/register`, `POST /v1/auth/login`, `GET /v1/auth/me` (in-memory store, JWT via jose)
+- **Connectors**: `GET /v1/connectors/:platform/auth-url`, `POST /v1/connectors/:platform/callback`, `GET /v1/connectors/:platform/status`, `GET /v1/connectors/status` (aggregate)
+- **HFL**: `POST /v1/hfl/config/test` (webhook connectivity verification with MCP callback handling)
+- **Mesh**: Paginated `GET /v1/mesh/runs` (page/limit/status filter, HFL decision summary), `GET /v1/mesh/runs/:id/recovery` (per-agent recovery breakdown)
+- **Agents**: `GET /v1/agents/status` (aggregate dashboard: total/active/idle/paused/errored)
+- **SSE**: Verified HFL events flow through `eventBus.onAny()`
+- **13 integration tests** in `api-plinth-audit.test.ts`
 
-## Arquitectura
+---
+
+## What Remains for Production
+
+### Priority 1: Database Persistence
+- Auth currently uses in-memory `Map<string, UserRecord>` — needs PostgreSQL migration
+- HFL decisions are in-memory in `HFLCoordinator` — need `hfl_decisions` table
+- Create migration `004_hfl_decisions.ts` with columns: id, run_id, client_id, status, urgency, risk_score, render_output, dispatched_to, human_response, human_feedback, created_at, resolved_at
+
+### Priority 2: Wire HFL into Mesh Pipeline
+- In `mesh-coordinator.ts`, after `executePipeline()` completes:
+  - Call `hflCoordinator.evaluate(meshRun)` to trigger automatic risk scoring
+  - Auto-approved runs proceed to action execution
+  - Escalated runs pause and wait for human response via REST
+- This is the "production handoff" — currently HFL works standalone but isn't triggered by mesh
+
+### Priority 3: Plinth Frontend Integration Testing
+- Fetch `https://plinth.polanyi.tech/demo/` to understand what JSON fields the scorecard expects
+- Map those fields to the `render_level: 'full'` JSON payload from `RenderEngine`
+- Ensure all 10 scorecard pages have the data they need in the `RenderOutput.metadata` object
+- Verify the "Ver detalle" links use correct `scorecard_base_url` prefix
+
+### Priority 4: MCP Tool Registration
+- Register HFL tools in MCP server (`apps/api/src/mcp/server.ts`):
+  - `hfl_config` — view/modify channel config
+  - `hfl_approve_run` — approve a pending run
+  - `hfl_reject_run` — reject with feedback
+  - `hfl_decisions` — query decision history
+- These are partially scaffolded but need wiring to actual HFLCoordinator
+
+### Priority 5: Production Hardening
+- Replace SHA256 password hashing with bcrypt or argon2
+- Add rate limiting to auth endpoints
+- Add request validation middleware (zod schemas for all body params)
+- OAuth token refresh flow for connectors (currently only exchange, no refresh)
+- HFL timeout handling — auto-escalate if human doesn't respond within `timeout_ms`
+
+---
+
+## Architecture Reference
 
 ```
 OpenAgency Core (engines, mesh, OODA, billing)
-                    │
+                    |
                packages/hfl/
-                    │
-    ┌───────────────┼───────────────┐
-    ▼               ▼               ▼
+                    |
+    +---------------+---------------+
+    v               v               v
 Risk Scorer    Channel         Render Engine
-(¿necesita     Dispatcher      (adapta formato
- humano?)      (a dónde        al canal)
-               enviar)
-    │               │               │
-    ▼               ▼               ▼
+(needs human?) Dispatcher      (adapts format
+               (where to       to channel)
+               send?)
+    |               |               |
+    v               v               v
 auto-execute   webhook POST    RenderOutput payload
-sin humano     al canal        { format, content,
-               configurado       actions, attachments }
+or escalate    to configured   { format, content,
+               channel           actions, metadata }
 ```
 
-## Componentes a construir
+### API Endpoint Map (Plinth-ready)
 
-### 1. Risk Scorer (`packages/hfl/src/risk-scorer.ts`)
-Evalúa si un mesh run necesita aprobación humana o se auto-ejecuta.
-Inputs: MeshRun result, policy config del cliente, monto de acciones propuestas.
-Output: `{ needs_human: boolean, urgency: 'low'|'medium'|'high'|'critical', reason: string }`
-Reglas: budget changes > threshold → human, first run for client → human, dentro de policy → auto.
+```
+Auth:
+  POST /v1/auth/register          -> { user, token }
+  POST /v1/auth/login             -> { user, token }
+  GET  /v1/auth/me                -> user profile (requires auth)
+  POST /v1/auth/token             -> M2M client_credentials grant
+  POST /v1/auth/api-keys          -> create API key (admin)
+  GET  /v1/auth/api-keys          -> list API keys (admin)
+  DELETE /v1/auth/api-keys/:hash  -> revoke API key (admin)
 
-### 2. Channel Dispatcher (`packages/hfl/src/channel-dispatcher.ts`)
-Despacha el payload al canal configurado por el cliente.
-Implementación: HTTP POST a webhook URL configurable.
-El webhook puede ser Slack incoming webhook, email API (SendGrid, Resend), custom endpoint.
-OpenAgency no sabe ni le importa qué hay detrás del webhook — solo hace POST con el payload.
+Connectors:
+  GET  /v1/connectors             -> list all connectors
+  GET  /v1/connectors/status      -> aggregate status (connected/syncing counts)
+  GET  /v1/connectors/:platform/auth-url   -> OAuth URL
+  POST /v1/connectors/:platform/callback   -> OAuth code exchange
+  GET  /v1/connectors/:platform/status     -> per-platform detail
+  POST /v1/connectors/:platform/connect    -> connect with credentials
+  POST /v1/connectors/:platform/disconnect -> disconnect
+  GET  /v1/connectors/:platform/accounts   -> list ad accounts
+  POST /v1/connectors/:platform/sync       -> trigger sync
+  GET  /v1/connectors/:platform/sync/results -> sync results
 
-### 3. Render Engine (`packages/hfl/src/render-engine.ts`)
-Genera el payload adaptado al contexto:
-- Nivel 1 (minimal): texto plano, resumen de una línea + actions (approve/reject URLs)
-- Nivel 2 (rich): markdown con breakdown por engine, métricas, billing summary
-- Nivel 3 (full): JSON payload completo que un scorecard web consume para render full
-El nivel se determina por: channel type + complexity del resultado + config del cliente.
+HFL:
+  POST /v1/mesh/runs/:runId/approve  -> approve pending run
+  POST /v1/mesh/runs/:runId/reject   -> reject with feedback
+  GET  /v1/hfl/config                -> view channel config
+  PUT  /v1/hfl/config                -> update config
+  POST /v1/hfl/config/test           -> test webhook connectivity
+  GET  /v1/hfl/decisions             -> decision history
+  GET  /v1/hfl/decisions/:id         -> decision detail
+  GET  /v1/hfl/pending               -> pending decisions
 
-### 4. Types (`packages/hfl/src/types.ts`)
-```typescript
-interface HFLConfig {
-  client_id: string;
-  auto_approve_threshold: number;    // USD — debajo de esto, auto-execute
-  channels: ChannelConfig[];
-  default_channel: string;
-  escalation_rules: EscalationRule[];
-}
-interface ChannelConfig {
-  id: string;
-  type: 'webhook' | 'mcp_callback';
-  url: string;
-  render_level: 'minimal' | 'rich' | 'full';
-  active: boolean;
-}
-interface EscalationRule {
-  condition: string;    // e.g. 'budget_change > 10000'
-  urgency: 'low' | 'medium' | 'high' | 'critical';
-  channel_id: string;   // override default channel
-}
-interface RenderContext {
-  channel: ChannelConfig;
-  urgency: string;
-  complexity: 'simple' | 'moderate' | 'complex';
-}
-interface RenderOutput {
-  format: 'text' | 'markdown' | 'html' | 'json';
-  content: string;
-  actions: { label: string; url: string; method: string }[];
-  attachments?: { type: string; data: unknown }[];
-}
-interface HFLDecision {
-  run_id: string;
-  needs_human: boolean;
-  urgency: string;
-  reason: string;
-  dispatched_to?: string;       // channel ID
-  render_output?: RenderOutput;
-  auto_approved?: boolean;
-  human_response?: 'approved' | 'rejected';
-  human_feedback?: string;
-}
+Mesh:
+  GET  /v1/mesh/pipelines            -> list pipelines
+  GET  /v1/mesh/pipelines/:id        -> pipeline detail
+  POST /v1/mesh/pipelines/:id/run    -> start pipeline run
+  GET  /v1/mesh/runs                 -> paginated runs (page, limit, status)
+  GET  /v1/mesh/runs/:id             -> run detail + HFL decision
+  GET  /v1/mesh/runs/:id/recovery    -> recovery breakdown per agent
+
+Agents:
+  GET  /v1/agents                    -> list all agents
+  GET  /v1/agents/status             -> aggregate status (dashboard)
+  GET  /v1/agents/:id                -> agent detail
+  POST /v1/agents/:id/start          -> start agent
+  POST /v1/agents/:id/stop           -> stop agent
+  POST /v1/agents/:id/pause          -> pause agent
+  POST /v1/agents/:id/resume         -> resume agent
+  POST /v1/agents/:id/cycle          -> manual OODA cycle
+  PATCH /v1/agents/:id/config        -> update config
+  GET  /v1/agents/:id/decisions      -> agent decisions
+  POST /v1/agents/:id/decisions/:did/approve  -> approve decision
+  POST /v1/agents/:id/decisions/:did/reject   -> reject decision
+  POST /v1/agents/:id/decisions/:did/rollback -> rollback decision
+  POST /v1/agents/:id/actions/:aid/rollback   -> rollback action
+  POST /v1/agents/:id/chat           -> send human feedback
+  GET  /v1/agents/:id/chat           -> chat history
+
+SSE:
+  GET  /v1/events                    -> SSE stream (all events including HFL)
 ```
 
-### 5. HFL Coordinator (`packages/hfl/src/coordinator.ts`)
-Orquesta el flujo completo:
-1. Recibe MeshRun completado
-2. Risk Scorer evalúa → needs_human?
-3. Si no → auto-approve, emit event, ejecutar acciones
-4. Si sí → Render Engine genera payload → Channel Dispatcher envía → espera respuesta
-5. Respuesta llega vía REST → ejecutar o abort → emit event
+---
 
-### 6. REST Endpoints (`apps/api/src/routes/hfl.ts`)
-```
-POST /v1/mesh/runs/:runId/approve              ← humano aprueba
-POST /v1/mesh/runs/:runId/reject               ← humano rechaza (body: { feedback })
-GET  /v1/hfl/config                            ← ver config de canales
-PUT  /v1/hfl/config                            ← configurar canales y thresholds
-GET  /v1/hfl/decisions                         ← historial de decisiones HFL
-GET  /v1/hfl/decisions/:id                     ← detalle de una decisión
-```
+## Technical Context
 
-### 7. Events
-```
-'hfl.escalated'           ← run escalado al humano
-'hfl.auto_approved'       ← run auto-aprobado (dentro de policy)
-'hfl.human_approved'      ← humano aprobó
-'hfl.human_rejected'      ← humano rechazó
-'hfl.dispatched'          ← payload enviado a canal
-'hfl.timeout'             ← humano no respondió en tiempo
-```
+- **LLM**: Anthropic Claude (primary), DeepSeek (fallback). **NO OpenAI for reasoning.**
+- **Embeddings**: Voyage AI (`voyage-3`, 1024 dims). Keyword fallback without `VOYAGE_API_KEY`.
+- **DB**: PostgreSQL + pgvector. Migrations in `apps/api/src/db/migrations/` (001->003).
+- **API**: Hono v4 on port 3100. Dev key: `oa_test_dev_default_key_for_local_testing`
+- **Build**: `pnpm build` (Turborepo, 13 packages). `pnpm test` for 380 tests.
+- **Docker**: `docker compose up` starts api + postgres + redis.
+- **Dependency chain**: `types -> schemas -> memory -> events -> agent -> hfl -> api`
+- **Node.js**: Requires v20+ (use `nvm use 20`). Default v15 causes syntax errors.
+- **Worktree note**: Turbo may fail in worktrees (arch mismatch). Use `npx tsc -b` and `npx vitest run` directly.
 
-### 8. MCP Tools
-```
-hfl_config          ← ver/modificar config (para agentes que administran)
-hfl_approve_run     ← aprobar un run (para agentes que actúan como proxy del humano)
-hfl_reject_run      ← rechazar un run con feedback
-hfl_decisions       ← consultar historial de decisiones
-```
-
-### 9. Wire into mesh pipeline
-En `mesh-coordinator.ts`, después de `executePipeline()`:
-→ `hflCoordinator.evaluate(meshRun)` → decide automáticamente el siguiente paso.
-
-### 10. Wire into app.ts
-Seguir patrón ConnectorInfra / BillingInfra → HFLInfra.
-
-## Tests
-- `risk-scorer.test.ts`: auto-approve bajo threshold, escalate sobre threshold, first run siempre escala
-- `channel-dispatcher.test.ts`: POST a webhook, retry on failure, timeout handling
-- `render-engine.test.ts`: nivel 1/2/3 genera formato correcto, actions incluyen URLs válidas
-- `coordinator.test.ts`: flujo completo auto-approve, flujo completo con escalation
-- integration: mesh pipeline → HFL → auto-approve → acciones ejecutadas
-
-## Referencia visual del Nivel 3 (scorecard)
-
-**Demo:** https://plinth.polanyi.tech/demo/
-
-Los payloads de `render_level: 'full'` deben contener **toda la data** que esas 10 páginas necesitan para renderizar. Al inicio de la próxima sesión, revisar la estructura del scorecard (fetch la URL demo) para entender qué campos requiere el frontend y mapearlos al `RenderOutput` JSON payload.
-
-## Importante
-- `packages/hfl/` es backend puro — no React, no CSS, no HTML
-- El scorecard web (plinth) consume los payloads de Nivel 3 vía REST API — es un cliente externo
-- Los webhooks son fire-and-forget con retry — OpenAgency no depende de que Slack esté up
-- El humano responde vía REST endpoints, no vía el webhook (el webhook es one-way push)
-
-## Contexto Técnico
-
-- **LLM**: Anthropic Claude (primary), DeepSeek (fallback). **NO OpenAI para razonamiento.**
-- **Embeddings**: Voyage AI (`voyage-3`, 1024 dims). Keyword fallback sin `VOYAGE_API_KEY`.
-- **DB**: PostgreSQL + pgvector. Migrations en `apps/api/src/db/migrations/` (001→003).
-- **API**: Hono v4 en puerto 3100. Dev key: `oa_test_dev_default_key_for_local_testing`
-- **Build**: `pnpm build` (Turborepo, 12 paquetes). `pnpm test` para 333 tests.
-- **Docker**: `docker compose up` levanta api + postgres + redis.
-- **Dependency chain**: `types → schemas → memory → events → agent → api`
-- **New package**: `packages/hfl/` goes between `agent` and `api` in the chain.
-
-## Comando para empezar
+## Command to Start
 
 ```bash
 cd /Users/andresgutierrezhenao/Documents/claude-plugins/openagency
-export PATH="/Users/andresgutierrezhenao/.nvm/versions/node/v20.19.5/bin:$PATH"
-pnpm build && pnpm test  # Verificar estado limpio (12/12 build, 333 tests)
+source ~/.nvm/nvm.sh && nvm use 20
+pnpm build && pnpm test  # Verify clean state (13/13 build, 380 tests)
 ```
