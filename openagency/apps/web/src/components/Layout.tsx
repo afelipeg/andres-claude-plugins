@@ -39,9 +39,9 @@ export function Layout() {
       >
         <div className="flex h-16 items-center gap-3 border-b border-gray-800 px-6">
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-brand-500 text-sm font-bold text-white">
-            OA
+            P
           </div>
-          <span className="text-lg font-semibold text-white">OpenAgency</span>
+          <span className="text-lg font-semibold text-white">Plinth</span>
         </div>
         <nav className="mt-4 space-y-1 px-3">
           {NAV_ITEMS.map((item) => (
@@ -66,7 +66,7 @@ export function Layout() {
           ))}
         </nav>
         <div className="absolute bottom-0 w-full border-t border-gray-800 p-4">
-          <p className="text-xs text-gray-500">OpenAgency v3.1.0</p>
+          <p className="text-xs text-gray-500">Plinth by Polanyi v3.2.0</p>
         </div>
       </aside>
 

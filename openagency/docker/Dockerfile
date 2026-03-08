@@ -17,6 +17,9 @@ COPY packages/connectors/package.json packages/connectors/
 COPY packages/schemas/package.json packages/schemas/
 COPY packages/auth/package.json packages/auth/
 COPY packages/events/package.json packages/events/
+COPY packages/memory/package.json packages/memory/
+COPY packages/agent/package.json packages/agent/
+COPY packages/hfl/package.json packages/hfl/
 COPY apps/api/package.json apps/api/
 
 RUN pnpm install --frozen-lockfile

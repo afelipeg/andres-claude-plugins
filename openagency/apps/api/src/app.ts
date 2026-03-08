@@ -158,6 +158,35 @@ export async function createApp() {
   // ─── Human Feedback Loop (agent-to-human escalation) ────────────
   const hflCoordinator = new HFLCoordinator(eventBus, {
     base_url: process.env['API_BASE_URL'] ?? 'http://localhost:3100',
+    delivery_file_store: fileRepo ?? undefined,
+  });
+
+  // ─── Auto-invoke HFL after every pipeline completes ──────────────
+  eventBus.subscribe('mesh.pipeline.completed', async (event) => {
+    const runId = (event.payload as { run_id: string }).run_id;
+    const meshRun = mesh.getRun(runId);
+    if (!meshRun) return;
+    const stageResults: Record<string, import('@openagency/hfl').StageResultSummary> = {};
+    for (const [stageId, result] of meshRun.context.stage_results.entries()) {
+      stageResults[stageId] = {
+        agent_id: result.agent_id,
+        status: result.status,
+        duration_ms: result.duration_ms,
+        skills_invoked: result.skills_invoked,
+        error: result.error,
+      };
+    }
+    const summary = {
+      id: runId,
+      pipeline_id: meshRun.pipeline_id,
+      status: meshRun.status,
+      total_duration_ms: meshRun.total_duration_ms ?? 0,
+      client_id: meshRun.usage?.agent_client_id,
+      stage_results: stageResults,
+    };
+    hflCoordinator.evaluate(summary).catch((err: unknown) => {
+      log.warn({ err, run_id: runId }, 'HFL evaluation error');
+    });
   });
 
   // ─── Federation (external agent consumption) ──────────────────

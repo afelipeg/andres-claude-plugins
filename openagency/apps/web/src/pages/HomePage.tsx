@@ -50,7 +50,7 @@ export function HomePage() {
     <div className="space-y-8">
       {/* Hero */}
       <div className="rounded-2xl bg-gradient-to-br from-gray-900 to-gray-800 p-8 text-white">
-        <h2 className="text-3xl font-bold">OpenAgency</h2>
+        <h2 className="text-3xl font-bold">Plinth by Polanyi</h2>
         <p className="mt-2 max-w-xl text-gray-300">
           A2A advertising intelligence infrastructure. Four autonomous engines analyze your ad spend,
           find waste, optimize channels, and deliver transparent outcome-based billing.
@@ -155,7 +155,7 @@ export function HomePage() {
 
       {/* Footer */}
       <p className="text-center text-xs text-gray-400">
-        OpenAgency v3.1.0 &mdash; 4 engines, 29 skills &mdash; MIT License
+        Plinth by Polanyi v3.2.0 &mdash; 5 engines, 39 skills
       </p>
     </div>
   );

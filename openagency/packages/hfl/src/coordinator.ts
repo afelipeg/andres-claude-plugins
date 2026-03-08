@@ -45,8 +45,22 @@ export interface MeshRunSummary {
   };
 }
 
+// Minimal duck-type interface so hfl package doesn't depend on @openagency/memory
+export interface DeliveryFileRef {
+  id: string;
+  file_type: string;
+  size_bytes?: number;
+}
+
+export interface DeliveryFileStore {
+  listByRun(runId: string): Promise<DeliveryFileRef[]>;
+}
+
 export interface HFLCoordinatorOptions {
   base_url: string;
+  /** Optional delivery file store — when set, generated files are included as
+   *  attachments in the webhook payload dispatched to the human reviewer. */
+  delivery_file_store?: DeliveryFileStore;
 }
 
 export class HFLCoordinator {
@@ -58,12 +72,14 @@ export class HFLCoordinator {
   private dispatcher = new ChannelDispatcher();
   private runCounter = new Map<string, number>(); // client_id → run count
   private baseUrl: string;
+  private deliveryFileStore?: DeliveryFileStore;
 
   constructor(
     private eventBus: EventBus,
     options?: Partial<HFLCoordinatorOptions>,
   ) {
     this.baseUrl = options?.base_url ?? process.env['API_BASE_URL'] ?? 'http://localhost:3100';
+    this.deliveryFileStore = options?.delivery_file_store;
   }
 
   // ─── Configuration ──────────────────────────────────────────────
@@ -171,6 +187,25 @@ export class HFLCoordinator {
         scorecard_base_url: config.scorecard_base_url,
       },
     );
+
+    // Attach delivery files if any were generated for this run
+    if (this.deliveryFileStore) {
+      const files = await this.deliveryFileStore.listByRun(run.id).catch(() => []);
+      if (files.length > 0) {
+        renderOutput.attachments = [
+          ...(renderOutput.attachments ?? []),
+          ...files.map((f) => ({
+            type: 'file' as const,
+            data: {
+              file_id: f.id,
+              file_type: f.file_type,
+              size_bytes: f.size_bytes,
+              url: `${this.baseUrl}/v1/delivery/files/${f.id}/download`,
+            },
+          })),
+        ];
+      }
+    }
 
     const decision: HFLDecision = {
       id: decisionId,
