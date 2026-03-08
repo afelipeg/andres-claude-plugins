@@ -7,11 +7,14 @@ import { LeakDetectorEngine } from '@openagency/engines';
 import { MediaArchitectEngine } from '@openagency/engines';
 import { CampaignOpsEngine } from '@openagency/engines';
 import { ExecutiveBridgeEngine } from '@openagency/engines';
+import { DeliveryEngine } from '@openagency/engines';
 import { createEventBus } from '@openagency/events';
 import {
   OodaRuntime,
   MeshCoordinator,
   DEFAULT_PIPELINE,
+  DELIVERY_PIPELINE,
+  PipelineScheduler,
   GoalDecomposer,
   GoalTracker,
   A2AClient,
@@ -27,6 +30,7 @@ import {
   OutcomeRepo,
   GoalRepo,
   MemoryRepo,
+  FileRepo,
 } from '@openagency/memory';
 import { setupConnectors } from './connectors/setup.js';
 import { getDb } from './db/client.js';
@@ -46,6 +50,7 @@ import { mcpRoute } from './mcp/transport.js';
 import { a2aDiscoveryRoute } from './a2a/discovery.js';
 import { federationRoutes } from './routes/federation.js';
 import { marketplaceRoutes } from './routes/marketplace.js';
+import { deliveryRoutes } from './routes/delivery.js';
 import { HFLCoordinator } from '@openagency/hfl';
 import { hflRoutes } from './routes/hfl.js';
 import { dashboardRoutes } from './routes/dashboard.js';
@@ -68,6 +73,7 @@ export async function createApp() {
   agency.engines.register(new MediaArchitectEngine());
   agency.engines.register(new CampaignOpsEngine());
   agency.engines.register(new ExecutiveBridgeEngine());
+  agency.engines.register(new DeliveryEngine());
 
   // ─── Event bus ──────────────────────────────────────────────────
   const eventBus = createEventBus();
@@ -84,6 +90,7 @@ export async function createApp() {
   let outcomeRepo: OutcomeRepo | null = null;
   let goalRepo: GoalRepo | null = null;
   let memoryRepo: MemoryRepo | null = null;
+  let fileRepo: FileRepo | null = null;
 
   if (db) {
     log.info('Database connected — repos active');
@@ -93,6 +100,7 @@ export async function createApp() {
     outcomeRepo = new OutcomeRepo(db);
     goalRepo = new GoalRepo(db);
     memoryRepo = new MemoryRepo(db);
+    fileRepo = new FileRepo(db);
   } else {
     log.warn('No DATABASE_URL — running without persistence');
   }
@@ -140,7 +148,12 @@ export async function createApp() {
   // ─── Mesh Coordinator (multi-agent orchestration) ───────────────
   const mesh = new MeshCoordinator(agentMap, eventBus);
   mesh.registerPipeline(DEFAULT_PIPELINE);
+  mesh.registerPipeline(DELIVERY_PIPELINE);
   mesh.start();
+
+  // ─── Pipeline Scheduler (cron-based pipeline runs) ───────────────
+  const scheduler = new PipelineScheduler(mesh, eventBus);
+  await scheduler.start();
 
   // ─── Human Feedback Loop (agent-to-human escalation) ────────────
   const hflCoordinator = new HFLCoordinator(eventBus, {
@@ -180,8 +193,8 @@ export async function createApp() {
   app.route('/', agentRoutes(registry));
   app.route('/', goalRoutes({ goalRepo, decomposer: goalDecomposer, tracker: goalTracker }));
 
-  // ─── Mesh routes (with HFL integration) ────────────────────────
-  app.route('/', meshRoutes(mesh, hflCoordinator));
+  // ─── Mesh routes (with HFL + Scheduler) ────────────────────────
+  app.route('/', meshRoutes(mesh, hflCoordinator, scheduler));
 
   // ─── Connector routes ──────────────────────────────────────────
   app.route('/', connectorRoutes(connectorInfra, eventBus));
@@ -219,8 +232,11 @@ export async function createApp() {
   // ─── Consumption routes ──────────────────────────────────────
   app.route('/', consumptionRoutes(connectorInfra, registry));
 
+  // ─── Delivery Engine routes ───────────────────────────────────
+  app.route('/', deliveryRoutes(agency, fileRepo));
+
   // ─── MCP endpoint ───────────────────────────────────────────────
-  app.route('/', mcpRoute(agency, agentMap, mesh, connectorInfra, a2aClient, mcpClientRegistry, dynamicSkillRegistry, hflCoordinator));
+  app.route('/', mcpRoute(agency, agentMap, mesh, connectorInfra, a2aClient, mcpClientRegistry, dynamicSkillRegistry, hflCoordinator, scheduler, fileRepo));
 
   // ─── Error handler ──────────────────────────────────────────────
   app.onError(errorHandler);

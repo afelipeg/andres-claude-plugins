@@ -21,6 +21,9 @@ export { GoalTracker } from './goals/goal-tracker.js';
 // Mesh orchestration
 export { MeshCoordinator } from './mesh/mesh-coordinator.js';
 export { DEFAULT_PIPELINE } from './mesh/default-pipeline.js';
+export { DELIVERY_PIPELINE } from './mesh/delivery-pipeline.js';
+export { PipelineScheduler, matchesCron, nextCronDate } from './mesh/scheduler.js';
+export type { ScheduleRepository } from './mesh/scheduler.js';
 export { createUsageMeter, recordStageUsage, recordOutcome } from './mesh/usage-meter.js';
 export type {
   MeshPipeline,

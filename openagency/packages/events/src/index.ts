@@ -82,6 +82,15 @@ export {
   syncFailed,
 } from './agent-events.js';
 
+export {
+  meshScheduleCreated,
+  meshScheduleTriggered,
+  meshScheduleDeleted,
+  type ScheduleCreatedPayload,
+  type ScheduleTriggeredPayload,
+  type ScheduleDeletedPayload,
+} from './schedule-events.js';
+
 import type { EventBus } from '@openagency/types';
 import { InMemoryEventBus } from './in-memory-bus.js';
 import { RedisEventBus } from './redis-bus.js';

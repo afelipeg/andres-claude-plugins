@@ -7,11 +7,12 @@ import type { OpenAgency } from '@openagency/core';
 import { parseFile } from '@openagency/core/data/file-parser';
 import { detectPlatform } from '@openagency/core/data/platform-detect';
 import { SKILL_SCHEMAS, type DynamicSkillRegistry } from '@openagency/schemas';
-import type { OodaRuntime, MeshCoordinator, A2AClient, McpClientRegistry } from '@openagency/agent';
+import type { OodaRuntime, MeshCoordinator, A2AClient, McpClientRegistry, PipelineScheduler } from '@openagency/agent';
 import type { HFLCoordinator } from '@openagency/hfl';
 import type { ConnectorPlatform, OAuthTokens } from '@openagency/types';
 import { getConnector, hasConnector } from '@openagency/connectors';
 import type { ConnectorInfra } from '../connectors/setup.js';
+import type { FileRepo } from '@openagency/memory';
 
 const VALID_PLATFORMS = new Set<string>([
   'google_ads', 'meta_ads', 'dv360', 'tiktok_ads', 'tiktok_shop', 'amazon_ads',
@@ -30,6 +31,8 @@ export function createMcpServer(
   mcpClientRegistry?: McpClientRegistry,
   dynamicSkillRegistry?: DynamicSkillRegistry,
   hflCoordinator?: HFLCoordinator,
+  scheduler?: PipelineScheduler,
+  fileRepo?: FileRepo | null,
 ): McpServer {
   const server = new McpServer({
     name: 'openagency',
@@ -739,6 +742,145 @@ export function createMcpServer(
       },
     );
   }
+
+  // ─── Pipeline Scheduler MCP tools ───────────────────────────────
+  if (scheduler && mesh) {
+    server.tool(
+      'schedule_pipeline',
+      'Create a recurring pipeline schedule using a cron expression. The pipeline will run automatically on the defined schedule. Use this to set up weekly optimization runs, monthly reports, or daily status checks.',
+      {
+        client_id: { type: 'string', description: 'Client identifier for this schedule' },
+        pipeline_id: { type: 'string', description: 'Pipeline ID to schedule (e.g. "full-optimization")' },
+        cron: { type: 'string', description: '5-part cron expression: "min hour dom month dow". Example: "0 6 * * 1" = Mondays at 6am' },
+        auto_approve: { type: 'boolean', description: 'If true, skip HFL escalation when risk is below threshold (default: false)' },
+        notify_on_complete: { type: 'boolean', description: 'Send notification when schedule fires and pipeline completes (default: true)' },
+      } as Record<string, { type: string; description?: string }>,
+      async (args: Record<string, unknown>) => {
+        const { client_id, pipeline_id, cron } = args;
+        if (!client_id || !pipeline_id || !cron) {
+          return { content: [{ type: 'text' as const, text: 'client_id, pipeline_id, and cron are required' }], isError: true };
+        }
+        const pipeline = mesh.getPipeline(pipeline_id as string);
+        if (!pipeline) {
+          return { content: [{ type: 'text' as const, text: `Pipeline not found: ${pipeline_id}` }], isError: true };
+        }
+        try {
+          const schedule = await scheduler.createSchedule({
+            client_id: client_id as string,
+            pipeline_id: pipeline_id as string,
+            cron: cron as string,
+            auto_approve: args['auto_approve'] as boolean | undefined,
+            notify_on_complete: args['notify_on_complete'] as boolean | undefined,
+          });
+          return { content: [{ type: 'text' as const, text: JSON.stringify(schedule, null, 2) }] };
+        } catch (err) {
+          return { content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+        }
+      },
+    );
+
+    server.tool(
+      'list_schedules',
+      'List all pipeline schedules. Optionally filter by client_id. Returns schedule details including cron expression, next run time, last run time, and enabled status.',
+      {
+        client_id: { type: 'string', description: 'Optional: filter schedules by client ID' },
+      } as Record<string, { type: string; description?: string }>,
+      async (args: Record<string, unknown>) => {
+        const schedules = scheduler.listSchedules(args['client_id'] as string | undefined);
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({ schedules, total: schedules.length }, null, 2) }],
+        };
+      },
+    );
+
+    server.tool(
+      'delete_schedule',
+      'Delete a pipeline schedule by ID. The pipeline will no longer run automatically after deletion.',
+      {
+        schedule_id: { type: 'string', description: 'Schedule ID to delete' },
+      } as Record<string, { type: string; description?: string }>,
+      async (args: Record<string, unknown>) => {
+        const id = args['schedule_id'] as string;
+        if (!id) {
+          return { content: [{ type: 'text' as const, text: 'schedule_id is required' }], isError: true };
+        }
+        const deleted = await scheduler.deleteSchedule(id);
+        if (!deleted) {
+          return { content: [{ type: 'text' as const, text: `Schedule not found: ${id}` }], isError: true };
+        }
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ deleted: true, id }, null, 2) }] };
+      },
+    );
+  }
+
+  // ─── Delivery Engine MCP tools ───────────────────────────────────
+  const DELIVERY_SKILLS: Array<{ id: string; name: string; description: string }> = [
+    { id: 'monthly-report', name: 'Monthly Report', description: 'Generate a monthly PDF/PPTX performance report from engine outputs' },
+    { id: 'competitive-analysis', name: 'Competitive Analysis', description: 'Fetch live competitor ads and generate competitive analysis deck' },
+    { id: 'industry-benchmarks', name: 'Industry Benchmarks', description: 'Search industry benchmarks and produce a PDF/XLSX comparison' },
+    { id: 'budget-proposal', name: 'Budget Proposal', description: 'Create a data-driven budget proposal PDF/DOCX' },
+    { id: 'campaign-brief', name: 'Campaign Brief', description: 'Generate a campaign brief DOCX/PDF from strategy inputs' },
+    { id: 'project-status', name: 'Project Status', description: 'Produce a KPI scorecard and milestone tracking report' },
+    { id: 'quarterly-review', name: 'Quarterly Review', description: 'Generate a QBR executive PPTX/PDF presentation' },
+    { id: 'media-plan-deck', name: 'Media Plan Deck', description: 'Create a media plan PPTX/PDF with channel allocation and flight calendar' },
+    { id: 'learnings-digest', name: 'Learnings Digest', description: 'Distil key learnings, patterns, and hypotheses into a PDF/DOCX' },
+    { id: 'client-scorecard-export', name: 'Client Scorecard Export', description: 'Export client scorecard as XLSX + PDF with grades and action priorities' },
+  ];
+
+  for (const skill of DELIVERY_SKILLS) {
+    const toolName = `delivery_${skill.id.replace(/-/g, '_')}`;
+    server.tool(
+      toolName,
+      `${skill.description}. Requires client_id, run_id, and layer_one_results from a prior engine run.`,
+      {
+        client_id: { type: 'string', description: 'Client identifier' },
+        run_id: { type: 'string', description: 'Run ID linking this to engine outputs' },
+        layer_one_results: { type: 'object', description: 'Outputs from Layer-1 engines (leak_detector, media_architect, etc.)' },
+        context: { type: 'object', description: 'Skill-specific context (period_start, period_end, competitors, etc.)' },
+      } as Record<string, { type: string; description?: string }>,
+      async (args: Record<string, unknown>) => {
+        try {
+          const input = {
+            client_id: args['client_id'],
+            run_id: args['run_id'],
+            layer_one_results: args['layer_one_results'] ?? {},
+            ...(args['context'] as Record<string, unknown> ?? {}),
+          };
+          const result = await agency.run('delivery', skill.id, input);
+          return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+        } catch (err) {
+          return { content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+        }
+      },
+    );
+  }
+
+  // delivery_list_files — list delivery files for a client or run
+  server.tool(
+    'delivery_list_files',
+    'List generated delivery files. Filter by client_id or run_id.',
+    {
+      client_id: { type: 'string', description: 'Client ID to filter files' },
+      run_id: { type: 'string', description: 'Run ID to filter files' },
+    } as Record<string, { type: string; description?: string }>,
+    async (args: Record<string, unknown>) => {
+      if (!fileRepo) {
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ files: [], note: 'No database connected' }) }] };
+      }
+      try {
+        const clientId = args['client_id'] as string | undefined;
+        const runId = args['run_id'] as string | undefined;
+        const records = runId
+          ? await fileRepo.listByRun(runId)
+          : clientId
+            ? await fileRepo.listByClient(clientId)
+            : [];
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ files: records, total: records.length }, null, 2) }] };
+      } catch (err) {
+        return { content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+      }
+    },
+  );
 
   return server;
 }

@@ -12,3 +12,4 @@ export { MemoryRepo } from './repositories/memory-repo.js';
 export type { MemoryEntry } from './repositories/memory-repo.js';
 export { generateEmbedding } from './vector/embeddings.js';
 export { buildKeywordQuery } from './vector/fallback.js';
+export { FileRepo } from './repositories/file-repo.js';

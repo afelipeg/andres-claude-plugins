@@ -32,6 +32,7 @@ export type EngineEventType =
   | 'domain.budget_reallocated'
   | 'domain.campaign_adjusted'
   | 'domain.executive_report'
+  | 'domain.deliverables_ready'
   // Goals
   | 'domain.goal.progress'
   | 'domain.goal.completed'
@@ -53,7 +54,15 @@ export type EngineEventType =
   | 'hfl.human_approved'
   | 'hfl.human_rejected'
   | 'hfl.dispatched'
-  | 'hfl.timeout';
+  | 'hfl.timeout'
+  // Pipeline Scheduler
+  | 'mesh.schedule.created'
+  | 'mesh.schedule.triggered'
+  | 'mesh.schedule.deleted'
+  // Delivery Engine
+  | 'delivery.file_generated'
+  | 'delivery.skill_completed'
+  | 'delivery.search_completed';
 
 export interface EngineEvent<T = unknown> {
   id: string; // ULID

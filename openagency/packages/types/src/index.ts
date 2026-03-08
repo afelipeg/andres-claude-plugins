@@ -14,3 +14,5 @@ export * from './api.js';
 export * from './agent.js';
 export * from './decision.js';
 export * from './goal.js';
+export * from './schedule.js';
+export * from './delivery.js';

@@ -4,12 +4,16 @@
 // GET  /v1/mesh/runs                  — list runs (paginated, filterable)
 // GET  /v1/mesh/runs/:id              — get run detail with HFL decision
 // GET  /v1/mesh/runs/:id/recovery     — recovery breakdown for scorecard
+// POST /v1/mesh/schedules             — create schedule
+// GET  /v1/mesh/schedules             — list schedules
+// DELETE /v1/mesh/schedules/:id       — delete schedule
 
 import { Hono } from 'hono';
 import type { MeshCoordinator } from '@openagency/agent';
+import type { PipelineScheduler } from '@openagency/agent';
 import type { HFLCoordinator } from '@openagency/hfl';
 
-export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator) {
+export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, scheduler?: PipelineScheduler) {
   const app = new Hono();
 
   // ─── List pipelines ──────────────────────────────────────────────
@@ -295,6 +299,69 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator) {
       total_recovery: cumulative,
       period_months: monthsParam,
     });
+  });
+
+  // ─── Schedule routes ─────────────────────────────────────────────
+
+  app.post('/v1/mesh/schedules', async (c) => {
+    if (!scheduler) {
+      return c.json({ error: 'not_available', message: 'Scheduler not initialized' }, 503);
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      body = await c.req.json<Record<string, unknown>>();
+    } catch {
+      return c.json({ error: 'invalid_body', message: 'JSON body required' }, 400);
+    }
+
+    const { client_id, pipeline_id, cron, auto_approve, notify_on_complete, enabled } = body;
+
+    if (!client_id || !pipeline_id || !cron) {
+      return c.json({ error: 'missing_fields', message: 'client_id, pipeline_id, and cron are required' }, 400);
+    }
+
+    // Validate pipeline exists
+    const pipeline = mesh.getPipeline(pipeline_id as string);
+    if (!pipeline) {
+      return c.json({ error: 'not_found', message: `Pipeline not found: ${pipeline_id}` }, 404);
+    }
+
+    try {
+      const schedule = await scheduler.createSchedule({
+        client_id: client_id as string,
+        pipeline_id: pipeline_id as string,
+        cron: cron as string,
+        auto_approve: auto_approve as boolean | undefined,
+        notify_on_complete: notify_on_complete as boolean | undefined,
+        enabled: enabled as boolean | undefined,
+      });
+      return c.json(schedule, 201);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: 'create_failed', message }, 500);
+    }
+  });
+
+  app.get('/v1/mesh/schedules', (c) => {
+    if (!scheduler) {
+      return c.json({ error: 'not_available', message: 'Scheduler not initialized' }, 503);
+    }
+    const clientId = c.req.query('client_id');
+    const schedules = scheduler.listSchedules(clientId);
+    return c.json({ schedules, total: schedules.length });
+  });
+
+  app.delete('/v1/mesh/schedules/:id', async (c) => {
+    if (!scheduler) {
+      return c.json({ error: 'not_available', message: 'Scheduler not initialized' }, 503);
+    }
+    const id = c.req.param('id');
+    const deleted = await scheduler.deleteSchedule(id);
+    if (!deleted) {
+      return c.json({ error: 'not_found', message: `Schedule not found: ${id}` }, 404);
+    }
+    return c.json({ deleted: true, id });
   });
 
   return app;
