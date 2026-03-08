@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Outlet, NavLink } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { SyncStatus } from './SyncStatus';
 
 const NAV_ITEMS = [
@@ -20,6 +20,7 @@ const isDemo = !import.meta.env.VITE_PLATFORM_CONNECTED;
 
 export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -88,7 +89,18 @@ export function Layout() {
               DEMO
             </span>
           )}
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-3">
+            {isDemo && (
+              <button
+                onClick={() => navigate('/app')}
+                className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-600 transition-colors"
+              >
+                Login
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                </svg>
+              </button>
+            )}
             <SyncStatus />
           </div>
         </header>
