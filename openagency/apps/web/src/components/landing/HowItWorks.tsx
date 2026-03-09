@@ -6,7 +6,7 @@
  */
 import { motion, useInView } from "framer-motion";
 import { useRef, useEffect, useState } from "react";
-import { User, Search, Cpu, FileJson } from "lucide-react";
+import { User, Search, Cpu, FileJson, Key, Plug, LayoutGrid } from "lucide-react";
 
 const steps = [
   {
@@ -232,6 +232,107 @@ export default function HowItWorks() {
           className="mb-16"
         >
           <FlowVisualization />
+        </motion.div>
+
+        {/* Integration teaser cards — visible to all, no sensitive data */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="mb-16"
+        >
+          <p className="text-xs font-medium text-zinc-600 tracking-widest uppercase mb-6 text-center">
+            What your agent gets access to
+          </p>
+          <div className="grid md:grid-cols-3 gap-6">
+            {/* API Credentials */}
+            <div
+              className="group relative rounded-xl border border-white/[0.06] p-6 transition-all duration-300 hover:border-white/[0.12]"
+              style={{ background: "rgba(255,255,255,0.015)" }}
+            >
+              <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                style={{ background: "radial-gradient(ellipse at top, rgba(255,255,255,0.02), transparent 70%)" }}
+              />
+              <div className="relative">
+                <div className="w-10 h-10 rounded-lg bg-white/[0.06] flex items-center justify-center mb-4">
+                  <Key size={18} className="text-white" />
+                </div>
+                <h3 className="text-base font-bold text-white mb-2">API Credentials</h3>
+                <p className="text-sm text-zinc-400 leading-relaxed mb-4">
+                  Generate your API key and authenticate any MCP client or custom agent.
+                </p>
+                <div className="flex items-center gap-2 rounded-lg border border-white/[0.06] px-3 py-2" style={{ background: "rgba(255,255,255,0.02)" }}>
+                  <code className="flex-1 font-mono text-[10px] text-zinc-600 truncate">oa_live_••••••••••••••••••••••••••••</code>
+                  <span className="text-[10px] text-zinc-700 rounded px-1.5 py-0.5 bg-white/[0.04] shrink-0">Reveal</span>
+                </div>
+              </div>
+            </div>
+
+            {/* MCP Server */}
+            <div
+              className="group relative rounded-xl border border-white/[0.06] p-6 transition-all duration-300 hover:border-white/[0.12]"
+              style={{ background: "rgba(255,255,255,0.015)" }}
+            >
+              <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                style={{ background: "radial-gradient(ellipse at top, rgba(255,255,255,0.02), transparent 70%)" }}
+              />
+              <div className="relative">
+                <div className="w-10 h-10 rounded-lg bg-white/[0.06] flex items-center justify-center mb-4">
+                  <Plug size={18} className="text-white" />
+                </div>
+                <h3 className="text-base font-bold text-white mb-2">MCP Server</h3>
+                <p className="text-sm text-zinc-400 leading-relaxed mb-4">
+                  Connect Claude Desktop, Cursor, or any MCP-compatible agent. 63 tools available.
+                </p>
+                <div className="space-y-2">
+                  {["Claude Desktop", "Cursor / VS Code", "Custom Agent (HTTP)"].map((client) => (
+                    <div key={client} className="flex items-center gap-2">
+                      <div className="h-1.5 w-1.5 rounded-full bg-white/20 shrink-0" />
+                      <span className="text-xs text-zinc-500">{client}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Ad Platform Connectors */}
+            <div
+              className="group relative rounded-xl border border-white/[0.06] p-6 transition-all duration-300 hover:border-white/[0.12]"
+              style={{ background: "rgba(255,255,255,0.015)" }}
+            >
+              <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                style={{ background: "radial-gradient(ellipse at top, rgba(255,255,255,0.02), transparent 70%)" }}
+              />
+              <div className="relative">
+                <div className="w-10 h-10 rounded-lg bg-white/[0.06] flex items-center justify-center mb-4">
+                  <LayoutGrid size={18} className="text-white" />
+                </div>
+                <h3 className="text-base font-bold text-white mb-2">Ad Platform Connectors</h3>
+                <p className="text-sm text-zinc-400 leading-relaxed mb-4">
+                  Pull live campaign data from every major platform directly into the engines.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: "G", title: "Google Ads" },
+                    { label: "M", title: "Meta Ads" },
+                    { label: "T", title: "TikTok Ads" },
+                    { label: "D", title: "DV360" },
+                    { label: "A", title: "Amazon Ads" },
+                  ].map(({ label, title }) => (
+                    <span
+                      key={label}
+                      title={title}
+                      className="flex h-7 w-7 items-center justify-center rounded-md border border-white/[0.08] text-xs font-bold text-zinc-500"
+                      style={{ background: "rgba(255,255,255,0.04)" }}
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </motion.div>
 
         {/* Steps */}

@@ -12,8 +12,6 @@ import {
   disconnectPlatform,
   syncPlatform,
 } from '../api/connectors';
-import HowItWorks from '../components/landing/HowItWorks';
-
 // ─── Config ──────────────────────────────────────────────────────────
 
 const API_URL =
@@ -568,10 +566,6 @@ export function IntegrationsPage() {
         </p>
       </div>
 
-      {/* How It Works — dark section wrapper */}
-      <div className="rounded-2xl overflow-hidden bg-[#09090B]">
-        <HowItWorks />
-      </div>
     </div>
   );
 }
