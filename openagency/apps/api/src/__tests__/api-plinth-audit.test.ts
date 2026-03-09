@@ -22,8 +22,7 @@ describe('Auth Routes (register/login/me)', () => {
     delete process.env['JWT_SECRET'];
   });
 
-  it('registers a new user and returns token', async () => {
-    // Dynamic import to avoid module-level side effects
+  it('register endpoint is closed (single-tenant)', async () => {
     const { authRoutes } = await import('../routes/auth.js');
     const app = new Hono();
     app.route('/', authRoutes());
@@ -31,49 +30,15 @@ describe('Auth Routes (register/login/me)', () => {
     const res = await app.request('/v1/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: 'test@plinth.io',
-        password: 'securepass123',
-        name: 'Test User',
-      }),
+      body: JSON.stringify({ email: 'test@plinth.io', password: 'securepass123', name: 'Test User' }),
     });
 
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(403);
     const data = await res.json();
-    expect(data.user.email).toBe('test@plinth.io');
-    expect(data.user.name).toBe('Test User');
-    expect(data.user.role).toBe('engine_user');
-    expect(data.token).toBeDefined();
-    expect(typeof data.token).toBe('string');
+    expect(data.message).toContain('Registration is closed');
   });
 
-  it('rejects duplicate registration', async () => {
-    const { authRoutes } = await import('../routes/auth.js');
-    const app = new Hono();
-    app.route('/', authRoutes());
-
-    const body = JSON.stringify({
-      email: 'dupe@plinth.io',
-      password: 'securepass123',
-      name: 'Dupe User',
-    });
-
-    await app.request('/v1/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body,
-    });
-
-    const res2 = await app.request('/v1/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body,
-    });
-
-    expect(res2.status).toBe(409);
-  });
-
-  it('rejects short password', async () => {
+  it('register always returns 403 regardless of payload', async () => {
     const { authRoutes } = await import('../routes/auth.js');
     const app = new Hono();
     app.route('/', authRoutes());
@@ -81,48 +46,48 @@ describe('Auth Routes (register/login/me)', () => {
     const res = await app.request('/v1/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: 'short@plinth.io',
-        password: '1234',
-        name: 'Short Pass',
-      }),
+      body: JSON.stringify({ email: 'dupe@plinth.io', password: 'securepass123', name: 'Dupe' }),
     });
-
-    expect(res.status).toBe(400);
-    const data = await res.json();
-    expect(data.message).toContain('8 characters');
+    expect(res.status).toBe(403);
   });
 
-  it('logs in with valid credentials', async () => {
+  it('register rejects short password with 403 (closed)', async () => {
     const { authRoutes } = await import('../routes/auth.js');
     const app = new Hono();
     app.route('/', authRoutes());
 
-    // Register first
-    await app.request('/v1/auth/register', {
+    const res = await app.request('/v1/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: 'login@plinth.io',
-        password: 'mypassword123',
-        name: 'Login User',
-      }),
+      body: JSON.stringify({ email: 'short@plinth.io', password: '1234', name: 'Short' }),
     });
+    expect(res.status).toBe(403);
+  });
 
-    // Login
+  it('logs in with seeded admin credentials', async () => {
+    // Reset module cache so the seed IIFE re-runs with new env vars
+    vi.resetModules();
+    process.env['ADMIN_EMAIL'] = 'admin-test@plinth.io';
+    process.env['ADMIN_PASSWORD'] = 'adminpass999';
+
+    const { authRoutes } = await import('../routes/auth.js');
+    const app = new Hono();
+    app.route('/', authRoutes());
+
     const res = await app.request('/v1/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: 'login@plinth.io',
-        password: 'mypassword123',
-      }),
+      body: JSON.stringify({ email: 'admin-test@plinth.io', password: 'adminpass999' }),
     });
 
     expect(res.status).toBe(200);
     const data = await res.json();
-    expect(data.user.email).toBe('login@plinth.io');
+    expect(data.user.email).toBe('admin-test@plinth.io');
+    expect(data.user.role).toBe('admin');
     expect(data.token).toBeDefined();
+
+    delete process.env['ADMIN_EMAIL'];
+    delete process.env['ADMIN_PASSWORD'];
   });
 
   it('rejects invalid login', async () => {

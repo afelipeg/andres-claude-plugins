@@ -5,10 +5,8 @@ const API_URL = import.meta.env.VITE_API_URL ?? '';
 
 export function LoginPage() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -17,12 +15,10 @@ export function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      const endpoint = tab === 'login' ? '/v1/auth/login' : '/v1/auth/register';
-      const body = tab === 'login' ? { email, password } : { email, password, name };
-      const res = await fetch(`${API_URL}${endpoint}`, {
+      const res = await fetch(`${API_URL}/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ email, password }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -66,44 +62,11 @@ export function LoginPage() {
       <div className="flex flex-1 items-center justify-center px-4">
         <div className="w-full max-w-sm">
           <div className="mb-8 text-center">
-            <h1 className="text-2xl font-bold text-white">
-              {tab === 'login' ? 'Sign in to Plinth' : 'Create your account'}
-            </h1>
-            <p className="mt-2 text-sm text-zinc-400">
-              {tab === 'login' ? 'Access your agency dashboard' : 'Start recovering media spend'}
-            </p>
-          </div>
-
-          {/* Tabs */}
-          <div className="flex mb-6 rounded-lg border border-white/[0.08] p-1 bg-white/[0.03]">
-            <button
-              onClick={() => setTab('login')}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${tab === 'login' ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'}`}
-            >
-              Sign In
-            </button>
-            <button
-              onClick={() => setTab('register')}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${tab === 'register' ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'}`}
-            >
-              Register
-            </button>
+            <h1 className="text-2xl font-bold text-white">Sign in to Plinth</h1>
+            <p className="mt-2 text-sm text-zinc-400">Access your agency dashboard</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {tab === 'register' && (
-              <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-1.5">Name</label>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="Your name"
-                  className="w-full rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-[#00e5a0]/50"
-                />
-              </div>
-            )}
             <div>
               <label className="block text-sm font-medium text-zinc-400 mb-1.5">Email</label>
               <input
@@ -136,7 +99,7 @@ export function LoginPage() {
               disabled={loading}
               className="w-full py-2.5 text-sm font-semibold rounded-lg bg-[#00e5a0] text-black hover:bg-[#00c98d] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Please wait…' : tab === 'login' ? 'Sign In' : 'Create Account'}
+              {loading ? 'Please wait…' : 'Sign In'}
             </button>
           </form>
 

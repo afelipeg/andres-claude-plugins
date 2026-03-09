@@ -27,77 +27,35 @@ function hashPassword(password: string): string {
   return createHash('sha256').update(password).digest('hex');
 }
 
+// ─── Seed admin user from environment on startup ─────────────────────
+// Set ADMIN_EMAIL + ADMIN_PASSWORD in Railway (never committed to git).
+(function seedAdminUser() {
+  const email = (process.env.ADMIN_EMAIL ?? '').trim().toLowerCase();
+  const password = (process.env.ADMIN_PASSWORD ?? '').trim();
+  if (!email || !password) return;
+  if (userStore.has(email)) return;
+  const user: UserRecord = {
+    id: randomUUID(),
+    email,
+    password_hash: hashPassword(password),
+    name: 'Admin',
+    role: 'admin',
+    scopes: ['admin:*', 'engine:*'],
+    created_at: new Date().toISOString(),
+  };
+  userStore.set(email, user);
+  userById.set(user.id, user);
+})();
+
 export function authRoutes() {
   const app = new Hono();
 
-  // ─── Register ─────────────────────────────────────────────────────
-  app.post('/v1/auth/register', async (c) => {
-    try {
-      const body = await c.req.json<{
-        email: string;
-        password: string;
-        name: string;
-      }>();
-
-      if (!body.email?.trim() || !body.password || !body.name?.trim()) {
-        return c.json(
-          { error: 'validation_error', message: 'email, password, and name are required', status: 400 },
-          400,
-        );
-      }
-
-      const email = body.email.trim().toLowerCase();
-
-      if (userStore.has(email)) {
-        return c.json(
-          { error: 'conflict', message: 'Email already registered', status: 409 },
-          409,
-        );
-      }
-
-      if (body.password.length < 8) {
-        return c.json(
-          { error: 'validation_error', message: 'Password must be at least 8 characters', status: 400 },
-          400,
-        );
-      }
-
-      const user: UserRecord = {
-        id: randomUUID(),
-        email,
-        password_hash: hashPassword(body.password),
-        name: body.name.trim(),
-        role: 'engine_user',
-        scopes: ['engine:*'],
-        created_at: new Date().toISOString(),
-      };
-
-      userStore.set(email, user);
-      userById.set(user.id, user);
-
-      // Issue JWT immediately
-      const token = await signToken({
-        sub: user.id,
-        role: user.role,
-        scopes: user.scopes,
-      });
-
-      return c.json(
-        {
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            role: user.role,
-          },
-          token,
-        },
-        201,
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return c.json({ error: 'bad_request', message, status: 400 }, 400);
-    }
+  // ─── Register — closed (single-tenant, admin seeded via env) ────────
+  app.post('/v1/auth/register', (c) => {
+    return c.json(
+      { error: 'forbidden', message: 'Registration is closed. Contact the administrator.', status: 403 },
+      403,
+    );
   });
 
   // ─── Login ────────────────────────────────────────────────────────
