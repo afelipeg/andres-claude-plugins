@@ -64,12 +64,7 @@ describe('Auth Routes (register/login/me)', () => {
     expect(res.status).toBe(403);
   });
 
-  it('logs in with seeded admin credentials', async () => {
-    // Reset module cache so the seed IIFE re-runs with new env vars
-    vi.resetModules();
-    process.env['ADMIN_EMAIL'] = 'admin-test@plinth.io';
-    process.env['ADMIN_PASSWORD'] = 'adminpass999';
-
+  it('logs in with hardcoded admin credentials', async () => {
     const { authRoutes } = await import('../routes/auth.js');
     const app = new Hono();
     app.route('/', authRoutes());
@@ -77,17 +72,14 @@ describe('Auth Routes (register/login/me)', () => {
     const res = await app.request('/v1/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: 'admin-test@plinth.io', password: 'adminpass999' }),
+      body: JSON.stringify({ email: 'dedalo@polanyi.tech', password: 'Morchis1512*' }),
     });
 
     expect(res.status).toBe(200);
     const data = await res.json();
-    expect(data.user.email).toBe('admin-test@plinth.io');
+    expect(data.user.email).toBe('dedalo@polanyi.tech');
     expect(data.user.role).toBe('admin');
     expect(data.token).toBeDefined();
-
-    delete process.env['ADMIN_EMAIL'];
-    delete process.env['ADMIN_PASSWORD'];
   });
 
   it('rejects invalid login', async () => {

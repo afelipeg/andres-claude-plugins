@@ -27,23 +27,19 @@ function hashPassword(password: string): string {
   return createHash('sha256').update(password).digest('hex');
 }
 
-// ─── Seed admin user from environment on startup ─────────────────────
-// Set ADMIN_EMAIL + ADMIN_PASSWORD in Railway (never committed to git).
+// ─── Seed admin user (single-tenant) ────────────────────────────────
+// Only one authorized user. Password hash = SHA-256("Morchis1512*").
 (function seedAdminUser() {
-  const email = (process.env.ADMIN_EMAIL ?? '').trim().toLowerCase();
-  const password = (process.env.ADMIN_PASSWORD ?? '').trim();
-  if (!email || !password) return;
-  if (userStore.has(email)) return;
   const user: UserRecord = {
-    id: randomUUID(),
-    email,
-    password_hash: hashPassword(password),
-    name: 'Admin',
+    id: 'c1a2b3d4-0000-0000-0000-dedalo000001',
+    email: 'dedalo@polanyi.tech',
+    password_hash: '300759c8039cf1fca0823a2461ffae9cbcc56490547439ede784855943e5ce5e',
+    name: 'Andrés',
     role: 'admin',
     scopes: ['admin:*', 'engine:*'],
-    created_at: new Date().toISOString(),
+    created_at: '2026-01-01T00:00:00.000Z',
   };
-  userStore.set(email, user);
+  userStore.set(user.email, user);
   userById.set(user.id, user);
 })();
 

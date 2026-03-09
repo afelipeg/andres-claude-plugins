@@ -3,18 +3,14 @@
 
 ---
 
-## 0. Pre-flight (do first, ~5 min)
+## 0. Pre-flight (do first, ~2 min)
 
-Set Railway env vars for the admin user (if not already done):
-```
-ADMIN_EMAIL=dedalo@polanyi.tech
-ADMIN_PASSWORD=Morchis1512*
-```
-Without these, `/app` login will always return 401. Verify via:
+No Railway env vars needed. Admin user is hardcoded in `apps/api/src/routes/auth.ts`.
+Verify login works after Railway redeploys:
 ```bash
 curl -X POST https://polanyi-plinth-production.up.railway.app/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"dedalo@polanyi.tech","password":"Morchis1512*"}'
+  -d '{"email":"dedalo@polanyi.tech","password":"[your password]"}'
 # Expect: {"user":{"email":"dedalo@polanyi.tech","role":"admin",...},"token":"..."}
 ```
 
