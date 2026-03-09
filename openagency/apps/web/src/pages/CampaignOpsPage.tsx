@@ -61,7 +61,7 @@ const DEMO_OPT = {
 
 const STATUS_COLORS: Record<string, string> = {
   PENDING: 'bg-gray-100 text-gray-700',
-  IN_PROGRESS: 'bg-blue-100 text-blue-700',
+  IN_PROGRESS: 'bg-zinc-100 text-zinc-700',
   DONE: 'bg-green-100 text-green-700',
   BLOCKED: 'bg-red-100 text-red-700',
   REVIEW: 'bg-yellow-100 text-yellow-700',
@@ -71,7 +71,7 @@ const STATUS_COLORS: Record<string, string> = {
 const SEVERITY_COLORS: Record<string, string> = {
   critical: 'border-red-200 bg-red-50 text-red-700',
   warning: 'border-yellow-200 bg-yellow-50 text-yellow-700',
-  info: 'border-blue-200 bg-blue-50 text-blue-700',
+  info: 'border-zinc-200 bg-zinc-50 text-zinc-700',
 };
 
 function fmt(n: number): string {
@@ -103,14 +103,14 @@ export function CampaignOpsPage() {
             <button
               onClick={() => { campaignEngine.run(DEMO_CAMPAIGN); setActiveTab('campaign'); }}
               disabled={loading}
-              className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100 disabled:opacity-50"
+              className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50"
             >
               Demo: Create Campaign DAG
             </button>
             <button
               onClick={() => { optEngine.run(DEMO_OPT); setActiveTab('optimization'); }}
               disabled={loading}
-              className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100 disabled:opacity-50"
+              className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50"
             >
               Demo: Optimization Alerts
             </button>

@@ -149,7 +149,7 @@ export function Layout() {
       {/* ── Sidebar ───────────────────────────────────── */}
       <aside
         className={cn(
-          'relative flex flex-col shrink-0 bg-zinc-950 transition-all duration-300 ease-in-out overflow-hidden',
+          'relative flex flex-col shrink-0 bg-zinc-950 transition-[width] duration-300 ease-in-out',
           collapsed ? 'w-[68px]' : 'w-60'
         )}
       >
@@ -158,19 +158,15 @@ export function Layout() {
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-zinc-950">
             <PlinthLogo />
           </div>
-          {/* Label: kept in DOM, fades out on collapse */}
-          <div
-            className={cn(
-              'ml-3 flex flex-col leading-none min-w-0 transition-all duration-300 overflow-hidden',
-              collapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
-            )}
-          >
-            <span className="text-[15px] font-bold text-white tracking-tight whitespace-nowrap">Plinth</span>
-            <span className="text-[10px] text-zinc-500 font-medium tracking-widest uppercase whitespace-nowrap">by Polanyi</span>
-          </div>
+          {!collapsed && (
+            <div className="ml-3 flex flex-col leading-none min-w-0">
+              <span className="text-[15px] font-bold text-white tracking-tight whitespace-nowrap">Plinth</span>
+              <span className="text-[10px] text-zinc-500 font-medium tracking-widest uppercase whitespace-nowrap">by Polanyi</span>
+            </div>
+          )}
         </div>
 
-        {/* Collapse toggle */}
+        {/* Collapse toggle — outside overflow so it's always visible */}
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="absolute -right-3 top-[72px] z-10 flex h-6 w-6 items-center justify-center rounded-full border border-zinc-700 bg-zinc-950 text-zinc-400 hover:text-white shadow-md transition-colors"
@@ -190,7 +186,8 @@ export function Layout() {
                     end={item.path === ''}
                     className={({ isActive }) =>
                       cn(
-                        'flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 overflow-hidden',
+                        'flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                        collapsed ? 'justify-center' : '',
                         isActive
                           ? 'bg-white text-zinc-950'
                           : 'text-zinc-300 hover:bg-white/[0.08] hover:text-white'
@@ -198,15 +195,7 @@ export function Layout() {
                     }
                   >
                     <item.Icon className="h-5 w-5 shrink-0" />
-                    {/* Label stays in DOM — CSS transition hides it on collapse */}
-                    <span
-                      className={cn(
-                        'whitespace-nowrap overflow-hidden transition-all duration-300',
-                        collapsed ? 'w-0 opacity-0 ml-0' : 'w-auto opacity-100 ml-3'
-                      )}
-                    >
-                      {item.label}
-                    </span>
+                    {!collapsed && <span className="ml-3 whitespace-nowrap">{item.label}</span>}
                   </NavLink>
                 </TooltipTrigger>
                 {collapsed && (

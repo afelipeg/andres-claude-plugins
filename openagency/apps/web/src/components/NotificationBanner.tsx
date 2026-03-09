@@ -11,14 +11,14 @@ interface NotificationBannerProps {
 }
 
 const URGENCY_STYLES: Record<NotificationUrgency, string> = {
-  low: 'bg-blue-50 border-blue-200 text-blue-800',
+  low: 'bg-zinc-50 border-zinc-200 text-zinc-800',
   medium: 'bg-amber-50 border-amber-200 text-amber-800',
   high: 'bg-orange-50 border-orange-300 text-orange-900',
   critical: 'bg-red-50 border-red-300 text-red-900',
 };
 
 const URGENCY_ICON_BG: Record<NotificationUrgency, string> = {
-  low: 'bg-blue-100 text-blue-600',
+  low: 'bg-zinc-100 text-zinc-600',
   medium: 'bg-amber-100 text-amber-600',
   high: 'bg-orange-100 text-orange-600',
   critical: 'bg-red-100 text-red-600',

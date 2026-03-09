@@ -13,7 +13,7 @@ const ENGINE_ICONS: Record<string, string> = {
 
 const ENGINE_COLORS: Record<string, string> = {
   'leak-detector': 'bg-red-100 text-red-700',
-  'media-architect': 'bg-blue-100 text-blue-700',
+  'media-architect': 'bg-zinc-100 text-zinc-700',
   'campaign-ops': 'bg-amber-100 text-amber-700',
   'executive-bridge': 'bg-green-100 text-green-700',
 };
@@ -70,7 +70,7 @@ export function ReportHistory() {
         {reports.slice(0, 20).map((report) => (
           <div
             key={report.id}
-            className="group flex items-center gap-3 rounded-lg border border-gray-100 bg-white p-3 transition-colors hover:border-brand-200 hover:bg-brand-50/30"
+            className="group flex items-center gap-3 rounded-lg border border-gray-100 bg-white p-3 transition-colors hover:border-zinc-200 hover:bg-zinc-50"
           >
             {/* Engine badge */}
             <span
@@ -108,7 +108,7 @@ export function ReportHistory() {
                   setResult(key, engineResult);
                 }}
                 title="Load"
-                className="rounded p-1 text-gray-400 hover:bg-brand-100 hover:text-brand-600"
+                className="rounded p-1 text-gray-400 hover:bg-zinc-100 hover:text-zinc-700"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -127,7 +127,7 @@ export function ReportHistory() {
                   });
                 }}
                 title="Export PDF"
-                className="rounded p-1 text-gray-400 hover:bg-brand-100 hover:text-brand-600"
+                className="rounded p-1 text-gray-400 hover:bg-zinc-100 hover:text-zinc-700"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />

@@ -36,7 +36,7 @@ export function AuthCallbackPage() {
       <div className="rounded-xl bg-white p-8 shadow-lg text-center max-w-sm">
         {status === 'processing' && (
           <>
-            <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" />
+            <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-zinc-200 border-t-zinc-900" />
             <p className="text-sm text-gray-600">Processing authorization...</p>
           </>
         )}

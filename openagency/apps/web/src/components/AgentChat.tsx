@@ -199,12 +199,12 @@ export function AgentChat({ agentId, onCycleTriggered }: AgentChatProps) {
               <div
                 className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
                   msg.role === 'human'
-                    ? 'bg-brand-600 text-white'
+                    ? 'bg-zinc-900 text-white'
                     : 'bg-gray-100 text-gray-700'
                 }`}
               >
                 <p>{msg.content}</p>
-                <p className={`mt-1 text-xs ${msg.role === 'human' ? 'text-brand-200' : 'text-gray-400'}`}>
+                <p className={`mt-1 text-xs ${msg.role === 'human' ? 'text-zinc-400' : 'text-gray-400'}`}>
                   {new Date(msg.timestamp).toLocaleTimeString()}
                 </p>
               </div>
@@ -235,13 +235,13 @@ export function AgentChat({ agentId, onCycleTriggered }: AgentChatProps) {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Provide feedback or request re-analysis..."
-            className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400"
             disabled={sending}
           />
           <button
             onClick={() => void handleSend()}
             disabled={!input.trim() || sending}
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
+            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:opacity-50"
           >
             {sending ? '...' : 'Send'}
           </button>

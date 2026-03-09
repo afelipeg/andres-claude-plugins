@@ -19,7 +19,7 @@ const STAGE_LABELS: Record<string, string> = {
 
 const STATUS_ICON: Record<string, string> = {
   pending: 'text-gray-300',
-  running: 'text-blue-500 animate-pulse',
+  running: 'text-zinc-400 animate-pulse',
   completed: 'text-green-500',
   failed: 'text-red-500',
   skipped: 'text-gray-400',
@@ -37,7 +37,7 @@ export function PipelineViz({ stages }: PipelineVizProps) {
                 stage.status === 'completed'
                   ? 'border-green-500 bg-green-50 text-green-700'
                   : stage.status === 'running'
-                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                    ? 'border-zinc-400 bg-zinc-50 text-zinc-700'
                     : stage.status === 'failed' || stage.status === 'timed_out'
                       ? 'border-red-500 bg-red-50 text-red-700'
                       : 'border-gray-200 bg-gray-50 text-gray-500'
@@ -71,7 +71,7 @@ export function MiniPipelineViz({ stages }: PipelineVizProps) {
               stage.status === 'completed'
                 ? 'bg-green-500'
                 : stage.status === 'running'
-                  ? 'bg-blue-500 animate-pulse'
+                  ? 'bg-zinc-400 animate-pulse'
                   : stage.status === 'failed'
                     ? 'bg-red-500'
                     : 'bg-gray-200'

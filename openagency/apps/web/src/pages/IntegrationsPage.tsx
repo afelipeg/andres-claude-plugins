@@ -37,8 +37,8 @@ const PLATFORMS: PlatformCardConfig[] = [
     platform: 'google_ads',
     name: 'Google Ads',
     description: 'Search, Display, Shopping, YouTube campaigns',
-    color: 'text-blue-700',
-    bgColor: 'bg-blue-100',
+    color: 'text-zinc-700',
+    bgColor: 'bg-zinc-100',
     icon: 'G',
     envVars: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN'],
   },
@@ -492,7 +492,7 @@ function PlatformCard({ config, apiMode }: { config: PlatformCardConfig; apiMode
             <button
               onClick={() => void handleSync()}
               disabled={syncing}
-              className="flex-1 rounded-lg bg-brand-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
+              className="flex-1 rounded-lg bg-zinc-900 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-zinc-800 disabled:opacity-50"
             >
               {syncing ? 'Syncing...' : 'Sync Now'}
             </button>

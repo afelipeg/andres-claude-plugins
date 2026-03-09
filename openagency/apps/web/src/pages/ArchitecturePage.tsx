@@ -98,14 +98,14 @@ export function ArchitecturePage() {
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {DATA_FLOW.map((step) => (
             <div key={step.step} className="flex items-start gap-3 rounded-lg border border-gray-100 bg-gray-50 p-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-900 text-white">
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d={step.icon} />
                 </svg>
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="rounded-full bg-brand-100 px-1.5 py-0.5 text-[10px] font-bold text-brand-700">{step.step}</span>
+                  <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] font-bold text-zinc-700">{step.step}</span>
                   <h4 className="text-sm font-semibold text-gray-900">{step.label}</h4>
                 </div>
                 <p className="mt-1 text-xs text-gray-500">{step.desc}</p>
@@ -149,7 +149,7 @@ export function ArchitecturePage() {
       <Card title="OODA Loop (Autonomous Agent Cycle)">
         <div className="grid gap-4 md:grid-cols-4">
           {[
-            { phase: 'Observe', desc: 'Collect observations from events, platform sync data, human feedback. Observer pipeline filters and enriches.', color: 'border-blue-200 bg-blue-50 text-blue-700' },
+            { phase: 'Observe', desc: 'Collect observations from events, platform sync data, human feedback. Observer pipeline filters and enriches.', color: 'border-zinc-200 bg-zinc-50 text-zinc-700' },
             { phase: 'Orient', desc: 'LLM analyzes observations: finds anomalies, opportunities, risks. Context-aware with agent memory and goal progress.', color: 'border-green-200 bg-green-50 text-green-700' },
             { phase: 'Decide', desc: 'LLM produces action plan with confidence and risk level. High-risk decisions require human approval.', color: 'border-yellow-200 bg-yellow-50 text-yellow-700' },
             { phase: 'Act', desc: 'Execute actions through safety pipeline. Connector writes to platforms. Outcomes measured for next cycle.', color: 'border-red-200 bg-red-50 text-red-700' },
@@ -219,9 +219,9 @@ export function ArchitecturePage() {
       {/* Protocols */}
       <Card title="Communication Protocols">
         <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-            <h4 className="font-semibold text-blue-700">REST API</h4>
-            <p className="mt-1 text-xs text-blue-600">12 route modules, 40+ endpoints. Hono framework with JWT/API key auth.</p>
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+            <h4 className="font-semibold text-zinc-700">REST API</h4>
+            <p className="mt-1 text-xs text-zinc-600">12 route modules, 40+ endpoints. Hono framework with JWT/API key auth.</p>
           </div>
           <div className="rounded-lg border border-green-200 bg-green-50 p-4">
             <h4 className="font-semibold text-green-700">MCP (Model Context Protocol)</h4>

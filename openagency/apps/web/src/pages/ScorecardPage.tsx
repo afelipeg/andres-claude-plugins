@@ -33,7 +33,7 @@ function fmtRate(n: number): string {
 function FeeBreakdownCard({ fee, color }: { fee: FeeBreakdown; color: string }) {
   const colorMap: Record<string, string> = {
     green: 'border-green-200 bg-green-50',
-    blue: 'border-blue-200 bg-blue-50',
+    blue: 'border-zinc-200 bg-zinc-50',
     purple: 'border-purple-200 bg-purple-50',
   };
 
@@ -275,7 +275,7 @@ export function ScorecardPage() {
                   value={feedback}
                   onChange={(e) => setFeedback(e.target.value)}
                   placeholder="Optional feedback (required for rejection)..."
-                  className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 placeholder:text-gray-400 focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400"
                   rows={3}
                 />
                 <div className="flex gap-3">

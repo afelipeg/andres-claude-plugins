@@ -113,14 +113,14 @@ export function MediaArchitectPage() {
             <button
               onClick={() => { channelEngine.run(inputData); setActiveTab('channel'); }}
               disabled={loading}
-              className="rounded-lg border border-brand-200 bg-brand-50 px-4 py-2 text-sm font-medium text-brand-700 transition-colors hover:bg-brand-100 disabled:opacity-50"
+              className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50"
             >
               Demo: Channel Optimize
             </button>
             <button
               onClick={() => { mmmEngine.run(DEMO_MMM); setActiveTab('mmm'); }}
               disabled={loading}
-              className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:opacity-50"
+              className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50"
             >
               Demo: MMM Model
             </button>

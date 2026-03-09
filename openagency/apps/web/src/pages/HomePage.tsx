@@ -20,10 +20,10 @@ const ENGINE_ROUTES: Record<string, string> = {
 };
 
 const ENGINE_COLORS: Record<string, string> = {
-  'leak-detector': 'from-red-500 to-orange-500',
-  'media-architect': 'from-blue-500 to-cyan-500',
-  'campaign-ops': 'from-green-500 to-emerald-500',
-  'executive-bridge': 'from-purple-500 to-pink-500',
+  'leak-detector': 'from-zinc-800 to-zinc-700',
+  'media-architect': 'from-zinc-700 to-zinc-600',
+  'campaign-ops': 'from-zinc-700 to-zinc-600',
+  'executive-bridge': 'from-zinc-800 to-zinc-700',
 };
 
 export function HomePage() {
@@ -59,7 +59,7 @@ export function HomePage() {
           <button
             onClick={() => void handleRunDemo()}
             disabled={demoRunning}
-            className="rounded-lg bg-brand-500 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
+            className="rounded-lg bg-[#00e5a0] px-6 py-2.5 text-sm font-semibold text-[#09090B] transition-colors hover:bg-[#00c98d] disabled:opacity-60"
           >
             {demoRunning ? (
               <span className="flex items-center gap-2">
@@ -110,7 +110,7 @@ export function HomePage() {
                     </svg>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h4 className="font-semibold text-gray-900 group-hover:text-brand-600">
+                    <h4 className="font-semibold text-gray-900 group-hover:text-zinc-700">
                       {engine.name}
                     </h4>
                     <p className="mt-1 text-sm text-gray-500">{engine.description}</p>

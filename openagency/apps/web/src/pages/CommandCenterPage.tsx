@@ -96,7 +96,7 @@ function GoalPanel({ goals }: { goals: GoalSummary[] }) {
   }
 
   const statusColor: Record<string, string> = {
-    active: 'bg-blue-100 text-blue-700',
+    active: 'bg-zinc-100 text-zinc-700',
     completed: 'bg-green-100 text-green-700',
     failed: 'bg-red-100 text-red-700',
   };
@@ -118,7 +118,7 @@ function GoalPanel({ goals }: { goals: GoalSummary[] }) {
             </div>
             <div className="mt-1 h-1.5 rounded-full bg-gray-200">
               <div
-                className="h-full rounded-full bg-brand-500 transition-all"
+                className="h-full rounded-full bg-[#00e5a0] transition-all"
                 style={{ width: `${Math.min(100, g.progress_pct)}%` }}
               />
             </div>
@@ -140,7 +140,7 @@ function StageOutputPanel({ run }: { run: MeshRunDetail }) {
 
   const stageColors: Record<string, string> = {
     'leak-detector': 'border-red-200 bg-red-50',
-    'media-architect': 'border-blue-200 bg-blue-50',
+    'media-architect': 'border-zinc-200 bg-zinc-50',
     'campaign-ops': 'border-green-200 bg-green-50',
     'executive-bridge': 'border-purple-200 bg-purple-50',
   };
@@ -314,7 +314,7 @@ export function CommandCenterPage() {
           <button
             onClick={() => void handleExecute()}
             disabled={executing}
-            className="mt-3 w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+            className="mt-3 w-full rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50"
           >
             {executing ? 'Executing...' : 'Execute Full Pipeline'}
           </button>
@@ -385,7 +385,7 @@ export function CommandCenterPage() {
                   key={r.id}
                   onClick={() => void handleSelectRun(r.id)}
                   className={`flex items-center justify-between text-xs cursor-pointer rounded px-1.5 py-1 transition-colors hover:bg-gray-50 ${
-                    selectedRunDetail?.id === r.id ? 'bg-brand-50' : ''
+                    selectedRunDetail?.id === r.id ? 'bg-zinc-100' : ''
                   }`}
                 >
                   <span className="font-mono text-gray-500">{r.id.slice(0, 8)}</span>
