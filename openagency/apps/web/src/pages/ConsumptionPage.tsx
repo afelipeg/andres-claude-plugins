@@ -184,7 +184,7 @@ export function ConsumptionPage() {
                         key={run.id}
                         onClick={() => void handleSelectRun(run.id)}
                         className={`cursor-pointer border-b border-gray-50 transition-colors hover:bg-gray-50 ${
-                          selectedRun?.id === run.id ? 'bg-brand-50' : ''
+                          selectedRun?.id === run.id ? 'bg-zinc-100' : ''
                         }`}
                       >
                         <td className="py-2.5 font-mono text-xs text-gray-600">{run.id.slice(0, 10)}</td>

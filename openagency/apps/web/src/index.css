@@ -3,11 +3,9 @@
 @tailwind utilities;
 
 @layer base {
-  * {
-    @apply border-zinc-200;
-  }
   body {
     @apply min-h-screen bg-zinc-50 text-zinc-900;
+    font-family: 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }

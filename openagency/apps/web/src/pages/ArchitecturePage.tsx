@@ -6,21 +6,21 @@ import { Card } from '../components/Card';
 // ─── Package Dependency Graph ────────────────────────────────────
 
 const PACKAGES = [
-  { name: 'types', desc: 'Shared TypeScript interfaces', deps: [], color: 'bg-gray-100 text-gray-700' },
-  { name: 'schemas', desc: 'Zod validation for 29 skills', deps: ['types'], color: 'bg-indigo-100 text-indigo-700' },
-  { name: 'core', desc: 'Orchestration, LLM, file parser, billing', deps: ['types'], color: 'bg-blue-100 text-blue-700' },
-  { name: 'auth', desc: 'JWT, API keys, RBAC, Hono middleware', deps: ['types'], color: 'bg-yellow-100 text-yellow-700' },
-  { name: 'events', desc: 'Event bus (InMemory + Redis), 37 event types', deps: ['types'], color: 'bg-green-100 text-green-700' },
-  { name: 'memory', desc: 'PostgreSQL repos, pgvector episodic memory', deps: ['types'], color: 'bg-purple-100 text-purple-700' },
-  { name: 'engines', desc: '4 engines, 29 skills across ad intelligence', deps: ['types', 'schemas', 'core'], color: 'bg-red-100 text-red-700' },
-  { name: 'connectors', desc: '6 platform connectors, OAuth2, safety pipeline', deps: ['types', 'events'], color: 'bg-orange-100 text-orange-700' },
-  { name: 'agent', desc: 'OODA runtime, mesh coordinator, goal tracker', deps: ['types', 'core', 'events', 'connectors', 'memory'], color: 'bg-brand-100 text-brand-700' },
+  { name: 'types', desc: 'Shared TypeScript interfaces', deps: [], color: 'bg-zinc-100 text-zinc-600' },
+  { name: 'schemas', desc: 'Zod validation for 29 skills', deps: ['types'], color: 'bg-zinc-100 text-zinc-600' },
+  { name: 'core', desc: 'Orchestration, LLM, file parser, billing', deps: ['types'], color: 'bg-zinc-100 text-zinc-600' },
+  { name: 'auth', desc: 'JWT, API keys, RBAC, Hono middleware', deps: ['types'], color: 'bg-zinc-100 text-zinc-600' },
+  { name: 'events', desc: 'Event bus (InMemory + Redis), 37 event types', deps: ['types'], color: 'bg-zinc-100 text-zinc-600' },
+  { name: 'memory', desc: 'PostgreSQL repos, pgvector episodic memory', deps: ['types'], color: 'bg-zinc-100 text-zinc-600' },
+  { name: 'engines', desc: '4 engines, 29 skills across ad intelligence', deps: ['types', 'schemas', 'core'], color: 'bg-zinc-900 text-white' },
+  { name: 'connectors', desc: '6 platform connectors, OAuth2, safety pipeline', deps: ['types', 'events'], color: 'bg-zinc-100 text-zinc-600' },
+  { name: 'agent', desc: 'OODA runtime, mesh coordinator, goal tracker', deps: ['types', 'core', 'events', 'connectors', 'memory'], color: 'bg-zinc-900 text-white' },
 ];
 
 const APPS = [
-  { name: 'api', desc: 'Hono REST + MCP + A2A + SSE', deps: ['all packages'], color: 'bg-emerald-100 text-emerald-700' },
-  { name: 'web', desc: 'Vite + React dashboard', deps: ['api (HTTP)'], color: 'bg-cyan-100 text-cyan-700' },
-  { name: 'cli', desc: 'CLI tool + serve command', deps: ['api'], color: 'bg-pink-100 text-pink-700' },
+  { name: 'api', desc: 'Hono REST + MCP + A2A + SSE', deps: ['all packages'], color: 'bg-zinc-900 text-white' },
+  { name: 'web', desc: 'Vite + React dashboard', deps: ['api (HTTP)'], color: 'bg-zinc-100 text-zinc-600' },
+  { name: 'cli', desc: 'CLI tool + serve command', deps: ['api'], color: 'bg-zinc-100 text-zinc-600' },
 ];
 
 // ─── Tech Stack Badges ────────────────────────────────────────────
@@ -49,8 +49,8 @@ const PIPELINE_STAGES = [
   },
   {
     engine: 'Media Architect',
-    color: 'border-blue-300 bg-blue-50',
-    textColor: 'text-blue-700',
+    color: 'border-zinc-300 bg-zinc-50',
+    textColor: 'text-zinc-700',
     skills: ['mmm-optimize', 'mmm-model', 'channel-mix', 'saturation-curve', 'response-curve', 'marginal-roi', 'budget-optimizer'],
     output: 'KPI lift, ROAS improvement, channel reallocation',
   },

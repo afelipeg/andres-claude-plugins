@@ -135,7 +135,7 @@ function BillingCalculatorForm({ onResult }: { onResult: (r: BillingResult) => v
 
       <button
         onClick={handleCalculate}
-        className="mt-4 w-full rounded-lg bg-brand-600 px-5 py-3 text-sm font-semibold text-white hover:bg-brand-700"
+        className="mt-4 w-full rounded-lg bg-[#00e5a0] px-5 py-3 text-sm font-semibold text-black hover:bg-[#00c98d]"
       >
         Calculate Fee
       </button>
@@ -159,16 +159,16 @@ function NumberInput({ label, value, onChange, placeholder }: {
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="w-full rounded-lg border border-gray-200 pl-6 pr-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          className="w-full rounded-lg border border-gray-200 pl-6 pr-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
         />
       </div>
     </div>
   );
 }
 
-function FieldGroup({ title, color, children }: { title: string; color: string; children: React.ReactNode }) {
-  const borderColor = color === 'green' ? 'border-green-200' : color === 'blue' ? 'border-blue-200' : 'border-purple-200';
-  const titleColor = color === 'green' ? 'text-green-700' : color === 'blue' ? 'text-blue-700' : 'text-purple-700';
+function FieldGroup({ title, children }: { title: string; color?: string; children: React.ReactNode }) {
+  const borderColor = 'border-zinc-200';
+  const titleColor = 'text-zinc-600';
   return (
     <div className={`mb-4 rounded-lg border ${borderColor} p-4`}>
       <h4 className={`text-xs font-semibold uppercase tracking-wider ${titleColor} mb-3`}>{title}</h4>
@@ -224,23 +224,23 @@ function TierCalculator() {
             onChange={(e) => setSpend(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handlePreview()}
             placeholder="2,500,000"
-            className="w-full rounded-lg border border-gray-200 pl-7 pr-3 py-2.5 text-sm text-gray-700 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            className="w-full rounded-lg border border-gray-200 pl-7 pr-3 py-2.5 text-sm text-gray-700 placeholder:text-gray-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
           />
         </div>
         <button
           onClick={() => void handlePreview()}
           disabled={loading || !spend}
-          className="rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+          className="rounded-lg bg-[#00e5a0] px-5 py-2.5 text-sm font-semibold text-black hover:bg-[#00c98d] disabled:opacity-50"
         >
           {loading ? '...' : 'Calculate'}
         </button>
       </div>
 
       {preview && (
-        <div className="mt-4 rounded-lg border border-brand-100 bg-brand-50 p-4">
+        <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-brand-700">{preview.label} Tier</span>
-            <span className="rounded-full bg-brand-100 px-2.5 py-0.5 text-xs font-medium text-brand-700">
+            <span className="text-sm font-semibold text-zinc-900">{preview.label} Tier</span>
+            <span className="rounded-full bg-zinc-200 px-2.5 py-0.5 text-xs font-medium text-zinc-700">
               {fmtUsd(parseFloat(spend))} spend
             </span>
           </div>
@@ -251,7 +251,7 @@ function TierCalculator() {
             </div>
             <div>
               <p className="text-xs text-gray-500">Lift</p>
-              <p className="text-lg font-bold text-blue-600">{fmtPct(preview.lift_rate * 100)}</p>
+              <p className="text-lg font-bold text-zinc-900">{fmtPct(preview.lift_rate * 100)}</p>
             </div>
             <div>
               <p className="text-xs text-gray-500">Efficiency</p>
@@ -426,9 +426,9 @@ export function BillingPage() {
                 % of waste eliminated: budget waste, quality waste, supply chain savings, CPA overshoot, measurement waste.
               </p>
             </div>
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-              <h4 className="font-semibold text-blue-700">Lift Fee</h4>
-              <p className="mt-1 text-xs text-blue-600">
+            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+              <h4 className="font-semibold text-zinc-700">Lift Fee</h4>
+              <p className="mt-1 text-xs text-zinc-500">
                 % of performance improvement: KPI lift, ROAS improvement, ROI improvement, Media-Driven Sales.
               </p>
             </div>
@@ -454,7 +454,7 @@ export function BillingPage() {
                 <th className="pb-3 text-left font-semibold text-gray-900">Tier</th>
                 <th className="pb-3 text-left font-semibold text-gray-900">Monthly Spend</th>
                 <th className="pb-3 text-center font-semibold text-green-700">Recovery</th>
-                <th className="pb-3 text-center font-semibold text-blue-700">Lift</th>
+                <th className="pb-3 text-center font-semibold text-zinc-700">Lift</th>
                 <th className="pb-3 text-center font-semibold text-purple-700">Efficiency</th>
               </tr>
             </thead>
@@ -462,19 +462,19 @@ export function BillingPage() {
               {TIERS.map((t) => (
                 <tr
                   key={t.tier}
-                  className={`border-b border-gray-50 ${activeBilling?.tier.tier === t.tier ? 'bg-brand-50' : ''}`}
+                  className={`border-b border-gray-50 ${activeBilling?.tier.tier === t.tier ? 'bg-zinc-50' : ''}`}
                 >
                   <td className="py-3">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-gray-900">{t.label}</span>
                       {activeBilling?.tier.tier === t.tier && (
-                        <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-700">Current</span>
+                        <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-medium text-zinc-700">Current</span>
                       )}
                     </div>
                   </td>
                   <td className="py-3 text-gray-600">{t.spend}</td>
                   <td className="py-3 text-center font-medium text-green-600">{t.recovery}</td>
-                  <td className="py-3 text-center font-medium text-blue-600">{t.lift}</td>
+                  <td className="py-3 text-center font-medium text-zinc-700">{t.lift}</td>
                   <td className="py-3 text-center font-medium text-purple-600">{t.efficiency}</td>
                 </tr>
               ))}
