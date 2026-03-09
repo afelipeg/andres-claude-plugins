@@ -1,5 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
+import { LandingPage } from './pages/LandingPage';
+import { LoginPage } from './pages/LoginPage';
 import { HomePage } from './pages/HomePage';
 import { LeakDetectorPage } from './pages/LeakDetectorPage';
 import { MediaArchitectPage } from './pages/MediaArchitectPage';
@@ -38,8 +40,11 @@ function AppRoutes() {
 export function App() {
   return (
     <Routes>
-      {/* Root — redirect to demo room */}
-      <Route index element={<Navigate to="/demo" replace />} />
+      {/* Root — landing page */}
+      <Route index element={<LandingPage />} />
+
+      {/* /login — authentication screen */}
+      <Route path="login" element={<LoginPage />} />
 
       {/* /demo/* — investor demo room, hardcoded data, no backend required */}
       <Route path="demo">{AppRoutes()}</Route>
@@ -51,7 +56,7 @@ export function App() {
       <Route path="auth/callback" element={<AuthCallbackPage />} />
 
       {/* Catch-all */}
-      <Route path="*" element={<Navigate to="/demo" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

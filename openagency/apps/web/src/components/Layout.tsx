@@ -93,7 +93,7 @@ export function Layout() {
           <div className="ml-auto flex items-center gap-3">
             {isDemo && (
               <button
-                onClick={() => navigate('/app')}
+                onClick={() => navigate('/login')}
                 className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-600 transition-colors"
               >
                 Login
