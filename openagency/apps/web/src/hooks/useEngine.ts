@@ -12,8 +12,15 @@ const ENGINE_LABELS: Record<string, string> = {
 };
 
 export function useEngine<T = unknown>(engineId: string, skillId: string) {
-  const { loading, error, results, setLoading, setError, setResult } =
-    useEngineStore();
+  // Use individual selectors — Zustand 5 + React 19 returns a new object
+  // reference when called without a selector, causing maximum update depth
+  // exceeded (React error #185) due to infinite re-render loops.
+  const loading = useEngineStore((s) => s.loading);
+  const error = useEngineStore((s) => s.error);
+  const results = useEngineStore((s) => s.results);
+  const setLoading = useEngineStore((s) => s.setLoading);
+  const setError = useEngineStore((s) => s.setError);
+  const setResult = useEngineStore((s) => s.setResult);
   const saveHistory = useHistoryStore((s) => s.save);
 
   const key = `${engineId}:${skillId}`;
