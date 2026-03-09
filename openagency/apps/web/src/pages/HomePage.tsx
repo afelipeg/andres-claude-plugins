@@ -13,10 +13,10 @@ const ENGINE_ICONS: Record<string, string> = {
 };
 
 const ENGINE_ROUTES: Record<string, string> = {
-  'leak-detector': '/leak-detector',
-  'media-architect': '/media-architect',
-  'campaign-ops': '/campaign-ops',
-  'executive-bridge': '/executive-bridge',
+  'leak-detector': '/app/leak-detector',
+  'media-architect': '/app/media-architect',
+  'campaign-ops': '/app/campaign-ops',
+  'executive-bridge': '/app/executive-bridge',
 };
 
 const ENGINE_COLORS: Record<string, string> = {
@@ -38,7 +38,7 @@ export function HomePage() {
     setDemoError(null);
     try {
       await runFullDemo();
-      navigate('/scorecard');
+      navigate('/app/scorecard');
     } catch (err) {
       setDemoError(err instanceof Error ? err.message : 'Demo failed. Is the API server running?');
     } finally {
@@ -74,13 +74,13 @@ export function HomePage() {
             )}
           </button>
           <Link
-            to="/leak-detector"
+            to="/app/leak-detector"
             className="rounded-lg bg-white/10 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/20"
           >
             Run Waste Analysis
           </Link>
           <Link
-            to="/command-center"
+            to="/app/command-center"
             className="rounded-lg bg-white/10 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/20"
           >
             Command Center

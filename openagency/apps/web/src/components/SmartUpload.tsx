@@ -339,14 +339,14 @@ export function SmartUpload({
         {connectedPlatforms.length > 0 ? (
           <span className="text-xs text-gray-400">
             or use data from{' '}
-            <button onClick={() => navigate('/integrations')} className="font-medium text-brand-600 hover:text-brand-700">
+            <button onClick={() => navigate('/app/integrations')} className="font-medium text-brand-600 hover:text-brand-700">
               {connectedPlatforms.length} connected platform{connectedPlatforms.length > 1 ? 's' : ''}
             </button>
           </span>
         ) : (
           <span className="text-xs text-gray-400">
             or{' '}
-            <button onClick={() => navigate('/integrations')} className="font-medium text-brand-600 hover:text-brand-700">
+            <button onClick={() => navigate('/app/integrations')} className="font-medium text-brand-600 hover:text-brand-700">
               connect a platform
             </button>
           </span>
