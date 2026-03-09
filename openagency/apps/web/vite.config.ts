@@ -3,19 +3,14 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 
 // Replace Node.js-only modules with browser-compatible stubs.
-// @openagency/core's config.ts uses node:fs/path/os; engines import
-// from the core barrel which transitively pulls in config.
+// Intercepts ALL node:* imports so pino and other server-only deps don't
+// crash the browser bundle (these are never called in-browser).
 function browserStubs(): Plugin {
   return {
     name: 'browser-stubs',
     enforce: 'pre',
     resolveId(source) {
-      if (
-        source === 'node:fs' ||
-        source === 'node:path' ||
-        source === 'node:os' ||
-        source === 'node:crypto'
-      ) {
+      if (source.startsWith('node:') || source === 'pino' || source === 'pino-pretty' || source === 'sonic-boom' || source === 'thread-stream') {
         return `\0browser-stub:${source}`;
       }
       return null;
@@ -23,8 +18,6 @@ function browserStubs(): Plugin {
     load(id) {
       if (!id.startsWith('\0browser-stub:')) return null;
       if (id.includes('node:fs')) {
-        // Delivery engine tools import fs — stub both named and default exports
-        // so the browser build does not crash (these are never called in-browser).
         const namedExports = [
           'export function readFileSync() { return "{}"; }',
           'export function existsSync() { return false; }',
@@ -62,7 +55,58 @@ function browserStubs(): Plugin {
           'export default { homedir: () => "/tmp", tmpdir: () => "/tmp" };',
         ].join('\n');
       }
-      return 'export default {};';
+      if (id.includes('node:stream')) {
+        return [
+          'export class Writable { write() {} end() {} on() { return this; } once() { return this; } emit() {} }',
+          'export class Readable { pipe() {} on() { return this; } once() { return this; } emit() {} }',
+          'export class Transform extends Writable {}',
+          'export class PassThrough extends Transform {}',
+          'export function pipeline(...args) { const cb = args[args.length-1]; if (typeof cb === "function") cb(null); }',
+          'export default { Writable, Readable, Transform, PassThrough, pipeline };',
+        ].join('\n');
+      }
+      if (id.includes('node:events')) {
+        return [
+          'export class EventEmitter { on() { return this; } once() { return this; } off() { return this; } emit() {} removeListener() { return this; } removeAllListeners() { return this; } }',
+          'export default EventEmitter;',
+        ].join('\n');
+      }
+      if (id.includes('node:util')) {
+        return [
+          'export function promisify(fn) { return (...args) => new Promise((res, rej) => fn(...args, (e, v) => e ? rej(e) : res(v))); }',
+          'export function inherits(ctor, superCtor) { ctor.super_ = superCtor; Object.setPrototypeOf(ctor.prototype, superCtor.prototype); }',
+          'export function format(...a) { return a.join(" "); }',
+          'export function inspect(v) { return String(v); }',
+          'export default { promisify, inherits, format, inspect };',
+        ].join('\n');
+      }
+      if (id.includes('node:url')) {
+        return [
+          'export class URL { constructor(u) { const o = new globalThis.URL(u); Object.assign(this, o); } toString() { return this.href; } }',
+          'export function pathToFileURL(p) { return new URL("file://" + p); }',
+          'export function fileURLToPath(u) { return String(u).replace("file://", ""); }',
+          'export default { URL, pathToFileURL, fileURLToPath };',
+        ].join('\n');
+      }
+      if (id.includes('node:buffer')) {
+        return [
+          'export const Buffer = globalThis.Buffer ?? { from: (d) => new Uint8Array(typeof d === "string" ? new TextEncoder().encode(d) : d), alloc: (n) => new Uint8Array(n), isBuffer: (v) => v instanceof Uint8Array };',
+          'export default { Buffer };',
+        ].join('\n');
+      }
+      if (id.includes('node:http') || id.includes('node:https') || id.includes('node:net') || id.includes('node:tls') || id.includes('node:dns') || id.includes('node:assert') || id.includes('node:worker_threads') || id.includes('node:child_process') || id.includes('node:cluster')) {
+        return 'export default {}; export const createServer = () => ({}); export const request = () => ({});';
+      }
+      if (id.includes('pino') || id.includes('sonic-boom') || id.includes('thread-stream')) {
+        return [
+          'const noop = () => {};',
+          'const logger = { trace: noop, debug: noop, info: noop, warn: noop, error: noop, fatal: noop, child: () => logger };',
+          'export default function pino() { return logger; }',
+          'export { logger };',
+        ].join('\n');
+      }
+      // Generic fallback for any other node: module
+      return 'export default {};\nexport const __stub = true;';
     },
   };
 }
@@ -77,6 +121,7 @@ export default defineConfig({
   build: {
     rollupOptions: {
       // Delivery engine packages are Node.js-only — exclude from browser bundle.
+      // node:* modules are now handled by browserStubs() plugin above.
       external: [
         'pdfkit',
         'pptxgenjs',
@@ -86,17 +131,6 @@ export default defineConfig({
         '@aws-sdk/client-s3',
         'fontkit',
         'restructure',
-        'node:net',
-        'node:tls',
-        'node:dns',
-        'node:assert',
-        'node:stream',
-        'node:buffer',
-        'node:events',
-        'node:util',
-        'node:url',
-        'node:http',
-        'node:https',
       ],
       output: {
         manualChunks: {
