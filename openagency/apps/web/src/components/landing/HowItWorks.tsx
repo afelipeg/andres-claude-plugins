@@ -245,7 +245,9 @@ export default function HowItWorks() {
           <p className="text-xs font-medium text-zinc-600 tracking-widest uppercase mb-6 text-center">
             What your agent gets access to
           </p>
-          <div className="grid md:grid-cols-3 gap-6">
+
+          {/* Row 1: API Credentials + MCP Server */}
+          <div className="grid md:grid-cols-2 gap-6 mb-6">
             {/* API Credentials */}
             <div
               className="group relative rounded-xl border border-white/[0.06] p-6 transition-all duration-300 hover:border-white/[0.12]"
@@ -295,41 +297,49 @@ export default function HowItWorks() {
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Ad Platform Connectors */}
-            <div
-              className="group relative rounded-xl border border-white/[0.06] p-6 transition-all duration-300 hover:border-white/[0.12]"
-              style={{ background: "rgba(255,255,255,0.015)" }}
-            >
-              <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-                style={{ background: "radial-gradient(ellipse at top, rgba(255,255,255,0.02), transparent 70%)" }}
-              />
-              <div className="relative">
-                <div className="w-10 h-10 rounded-lg bg-white/[0.06] flex items-center justify-center mb-4">
+          {/* Row 2: Ad Platform Connectors — full width */}
+          <div
+            className="group relative rounded-xl border border-white/[0.06] p-6 transition-all duration-300 hover:border-white/[0.12]"
+            style={{ background: "rgba(255,255,255,0.015)" }}
+          >
+            <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+              style={{ background: "radial-gradient(ellipse at top, rgba(255,255,255,0.02), transparent 70%)" }}
+            />
+            <div className="relative">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-10 h-10 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0">
                   <LayoutGrid size={18} className="text-white" />
                 </div>
-                <h3 className="text-base font-bold text-white mb-2">Ad Platform Connectors</h3>
-                <p className="text-sm text-zinc-400 leading-relaxed mb-4">
-                  Pull live campaign data from every major platform directly into the engines.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { label: "G", title: "Google Ads" },
-                    { label: "M", title: "Meta Ads" },
-                    { label: "T", title: "TikTok Ads" },
-                    { label: "D", title: "DV360" },
-                    { label: "A", title: "Amazon Ads" },
-                  ].map(({ label, title }) => (
-                    <span
-                      key={label}
-                      title={title}
-                      className="flex h-7 w-7 items-center justify-center rounded-md border border-white/[0.08] text-xs font-bold text-zinc-500"
-                      style={{ background: "rgba(255,255,255,0.04)" }}
-                    >
+                <div>
+                  <h3 className="text-base font-bold text-white">Ad Platform Connectors</h3>
+                  <p className="text-sm text-zinc-400">Connect your advertising platforms to pull live campaign data into the engines.</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {[
+                  { label: "G", name: "Google Ads", description: "Search, Display, Shopping, YouTube campaigns", color: "text-blue-400", border: "border-blue-500/20" },
+                  { label: "D", name: "Display & Video 360", description: "Programmatic display, video, and audio campaigns", color: "text-emerald-400", border: "border-emerald-500/20" },
+                  { label: "M", name: "Meta Ads", description: "Facebook + Instagram campaigns, ad sets, and insights", color: "text-indigo-400", border: "border-indigo-500/20" },
+                  { label: "T", name: "TikTok Ads", description: "In-feed, TopView, and Spark Ads campaigns", color: "text-pink-400", border: "border-pink-500/20" },
+                  { label: "S", name: "TikTok Shop", description: "Shop orders, product performance, and sales data", color: "text-rose-400", border: "border-rose-500/20" },
+                  { label: "A", name: "Amazon Ads", description: "Sponsored Products, Brands, and Display campaigns", color: "text-orange-400", border: "border-orange-500/20" },
+                ].map(({ label, name, description, color, border }) => (
+                  <div
+                    key={label}
+                    className={`flex items-start gap-3 rounded-lg border p-3 transition-all duration-200 hover:border-white/[0.12] hover:bg-white/[0.02] ${border}`}
+                    style={{ background: "rgba(255,255,255,0.01)" }}
+                  >
+                    <span className={`flex h-8 w-8 items-center justify-center rounded-md border border-white/[0.08] text-xs font-bold shrink-0 bg-white/[0.03] ${color}`}>
                       {label}
                     </span>
-                  ))}
-                </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-white leading-tight">{name}</p>
+                      <p className="text-[11px] text-zinc-500 leading-relaxed mt-0.5">{description}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
