@@ -15,10 +15,20 @@ import { ArchitecturePage } from './pages/ArchitecturePage';
 import { ConsumptionPage } from './pages/ConsumptionPage';
 import { AuthCallbackPage } from './pages/AuthCallbackPage';
 
-// ─── Shared route subtree ────────────────────────────────────────────
-// Rendered under both /demo/* and /app/*.
-// /demo/* — hardcoded investor demo room (in-browser engines, no API key needed).
-// /app/*  — real backend, requires VITE_API_URL + VITE_API_KEY in the environment.
+// ─── Demo pages (from landing-scorecard_Plinth, hardcoded investor data) ─────
+import DemoCommandCenter from './pages/demo/CommandCenter';
+import DemoWasteWaterfall from './pages/demo/WasteWaterfall';
+import DemoMediaArchitect from './pages/demo/MediaArchitect';
+import DemoCampaignOps from './pages/demo/CampaignOps';
+import DemoExecutiveBridge from './pages/demo/ExecutiveBridge';
+import DemoRecoveryScorecard from './pages/demo/RecoveryScorecard';
+import DemoPlatforms from './pages/demo/Platforms';
+import DemoArchitecture from './pages/demo/Architecture';
+import DemoConsumption from './pages/demo/Consumption';
+import DemoBilling from './pages/demo/Billing';
+
+// ─── /app/* route subtree ─────────────────────────────────────────────────────
+// Real backend, requires VITE_API_URL. Uses the openagency Layout sidebar.
 function AppRoutes() {
   return (
     <Route element={<Layout />}>
@@ -46,10 +56,19 @@ export function App() {
       {/* /login — authentication screen */}
       <Route path="login" element={<LoginPage />} />
 
-      {/* /demo/* — investor demo room, hardcoded data, no backend required */}
-      <Route path="demo">{AppRoutes()}</Route>
+      {/* /demo/* — investor demo room (landing-scorecard_Plinth pages, hardcoded) */}
+      <Route path="demo" element={<DemoCommandCenter />} />
+      <Route path="demo/waste" element={<DemoWasteWaterfall />} />
+      <Route path="demo/media-architect" element={<DemoMediaArchitect />} />
+      <Route path="demo/campaign-ops" element={<DemoCampaignOps />} />
+      <Route path="demo/executive-bridge" element={<DemoExecutiveBridge />} />
+      <Route path="demo/recovery" element={<DemoRecoveryScorecard />} />
+      <Route path="demo/platforms" element={<DemoPlatforms />} />
+      <Route path="demo/architecture" element={<DemoArchitecture />} />
+      <Route path="demo/consumption" element={<DemoConsumption />} />
+      <Route path="demo/billing" element={<DemoBilling />} />
 
-      {/* /app/* — real backend connected dashboard (requires VITE_API_URL) */}
+      {/* /app/* — real backend connected dashboard */}
       <Route path="app">{AppRoutes()}</Route>
 
       {/* OAuth callback — outside layout */}
