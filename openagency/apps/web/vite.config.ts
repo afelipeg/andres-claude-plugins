@@ -83,7 +83,6 @@ export default defineConfig({
         'exceljs',
         'docx',
         'ioredis',
-        'ulid',
         '@aws-sdk/client-s3',
         'fontkit',
         'restructure',
