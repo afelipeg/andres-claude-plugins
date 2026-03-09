@@ -17,13 +17,14 @@ interface CacheEntry<T> {
 const memCache = new Map<string, CacheEntry<unknown>>();
 
 // Hourly cleanup to avoid unbounded growth.
-// `.unref()` so this timer never prevents Node from exiting.
-setInterval(() => {
+// `.unref()` is Node.js-only; optional chaining makes this browser-safe.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of memCache) {
     if (entry.expires_at < now) memCache.delete(key);
   }
-}, 60 * 60 * 1000).unref();
+}, 60 * 60 * 1000) as any).unref?.();
 
 // ─── Redis backend ────────────────────────────────────────────────────
 
