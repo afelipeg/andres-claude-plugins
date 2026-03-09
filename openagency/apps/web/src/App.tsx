@@ -14,6 +14,11 @@ import { BillingPage } from './pages/BillingPage';
 import { ArchitecturePage } from './pages/ArchitecturePage';
 import { ConsumptionPage } from './pages/ConsumptionPage';
 import { AuthCallbackPage } from './pages/AuthCallbackPage';
+import { SettingsLayout } from './pages/settings/SettingsLayout';
+import { ProfilePage } from './pages/settings/ProfilePage';
+import { UsersPage } from './pages/settings/UsersPage';
+import { BillingSettingsPage } from './pages/settings/BillingSettingsPage';
+import { NotificationsPage } from './pages/settings/NotificationsPage';
 
 // ─── Demo pages (from landing-scorecard_Plinth, hardcoded investor data) ─────
 import DemoCommandCenter from './pages/demo/CommandCenter';
@@ -43,6 +48,13 @@ function AppRoutes() {
       <Route path="integrations" element={<IntegrationsPage />} />
       <Route path="architecture" element={<ArchitecturePage />} />
       <Route path="consumption" element={<ConsumptionPage />} />
+      <Route path="settings" element={<SettingsLayout />}>
+        <Route index element={<Navigate to="profile" replace />} />
+        <Route path="profile" element={<ProfilePage />} />
+        <Route path="users" element={<UsersPage />} />
+        <Route path="billing" element={<BillingSettingsPage />} />
+        <Route path="notifications" element={<NotificationsPage />} />
+      </Route>
     </Route>
   );
 }

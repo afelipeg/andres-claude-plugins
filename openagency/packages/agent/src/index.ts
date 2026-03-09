@@ -25,6 +25,8 @@ export { DELIVERY_PIPELINE } from './mesh/delivery-pipeline.js';
 export { PipelineScheduler, matchesCron, nextCronDate } from './mesh/scheduler.js';
 export type { ScheduleRepository } from './mesh/scheduler.js';
 export { createUsageMeter, recordStageUsage, recordOutcome } from './mesh/usage-meter.js';
+export { computePipelineScore, HFL_SCORE_THRESHOLD } from './mesh/pipeline-score.js';
+export type { PipelineScoreBreakdown } from './mesh/pipeline-score.js';
 export type {
   MeshPipeline,
   MeshStage,

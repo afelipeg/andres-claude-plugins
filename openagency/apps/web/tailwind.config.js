@@ -4,6 +4,13 @@ export default {
   theme: {
     extend: {
       colors: {
+        // App accent (matches login page green CTA)
+        accent: {
+          DEFAULT: '#00e5a0',
+          hover: '#00c98d',
+          foreground: '#09090B',
+        },
+        // Legacy brand (blue) — kept for chart colors & demo pages
         brand: {
           50: '#f0f7ff',
           100: '#e0efff',

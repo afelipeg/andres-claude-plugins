@@ -95,7 +95,7 @@ export class HFLCoordinator {
 
   // ─── Core evaluation flow ────────────────────────────────────────
 
-  async evaluate(run: MeshRunSummary): Promise<HFLDecision> {
+  async evaluate(run: MeshRunSummary, forceEscalate = false): Promise<HFLDecision> {
     const clientId = run.client_id ?? 'default';
     const config = this.configs.get(clientId) ?? createDefaultConfig(clientId);
 
@@ -133,7 +133,7 @@ export class HFLCoordinator {
     const decisionId = ulid();
     const now = new Date().toISOString();
 
-    if (!riskScore.needs_human) {
+    if (!riskScore.needs_human && !forceEscalate) {
       // ─── Auto-approve ─────────────────────────────────────────
       const decision: HFLDecision = {
         id: decisionId,
@@ -165,6 +165,16 @@ export class HFLCoordinator {
     }
 
     // ─── Needs human → render + dispatch ──────────────────────────
+
+    // Enrich reason when force-escalated due to low pipeline score
+    if (forceEscalate && !riskScore.needs_human) {
+      const pipelineScore = (run as unknown as Record<string, unknown>)['pipeline_score'] as
+        | { composite: number } | undefined;
+      riskScore.needs_human = true;
+      riskScore.urgency = 'high';
+      riskScore.reason = `Pipeline quality score ${pipelineScore?.composite ?? '?'}/100 is below threshold (40). ${riskScore.reason}`;
+      riskScore.risk_factors.push('pipeline_score_below_threshold');
+    }
 
     // Resolve channel
     const channel = this.resolveChannel(config, riskScore.urgency);

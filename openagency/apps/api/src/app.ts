@@ -20,6 +20,8 @@ import {
   A2AClient,
   McpClientRegistry,
   ActionExecutor,
+  computePipelineScore,
+  HFL_SCORE_THRESHOLD,
 } from '@openagency/agent';
 import { listAgentEngineIds } from '@openagency/agent';
 import { SKILL_SCHEMAS, DynamicSkillRegistry } from '@openagency/schemas';
@@ -31,13 +33,14 @@ import {
   GoalRepo,
   MemoryRepo,
   FileRepo,
+  UserRepo,
 } from '@openagency/memory';
 import { setupConnectors } from './connectors/setup.js';
 import { getDb } from './db/client.js';
 import { healthRoutes } from './routes/health.js';
 import { engineRoutes } from './routes/engines.js';
 import { schemaRoutes } from './routes/schemas.js';
-import { authRoutes } from './routes/auth.js';
+import { authRoutes, seedAdminUser } from './routes/auth.js';
 import { agentRoutes, type AgentRegistry } from './routes/agents.js';
 import { goalRoutes } from './routes/goals.js';
 import { meshRoutes } from './routes/mesh.js';
@@ -91,6 +94,7 @@ export async function createApp() {
   let goalRepo: GoalRepo | null = null;
   let memoryRepo: MemoryRepo | null = null;
   let fileRepo: FileRepo | null = null;
+  let userRepo: UserRepo | null = null;
 
   if (db) {
     log.info('Database connected — repos active');
@@ -101,6 +105,8 @@ export async function createApp() {
     goalRepo = new GoalRepo(db);
     memoryRepo = new MemoryRepo(db);
     fileRepo = new FileRepo(db);
+    userRepo = new UserRepo(db);
+    await seedAdminUser(userRepo);
   } else {
     log.warn('No DATABASE_URL — running without persistence');
   }
@@ -176,6 +182,10 @@ export async function createApp() {
         error: result.error,
       };
     }
+    // Compute composite pipeline score and force escalation if below threshold
+    const pipelineScore = computePipelineScore(meshRun.context.stage_results);
+    const forceEscalate = pipelineScore.composite < HFL_SCORE_THRESHOLD;
+
     const summary = {
       id: runId,
       pipeline_id: meshRun.pipeline_id,
@@ -183,8 +193,17 @@ export async function createApp() {
       total_duration_ms: meshRun.total_duration_ms ?? 0,
       client_id: meshRun.usage?.agent_client_id,
       stage_results: stageResults,
+      pipeline_score: pipelineScore,
     };
-    hflCoordinator.evaluate(summary).catch((err: unknown) => {
+
+    if (forceEscalate) {
+      log.warn(
+        { run_id: runId, score: pipelineScore.composite, threshold: HFL_SCORE_THRESHOLD },
+        'Pipeline score below threshold — forcing HFL escalation',
+      );
+    }
+
+    hflCoordinator.evaluate(summary, forceEscalate).catch((err: unknown) => {
       log.warn({ err, run_id: runId }, 'HFL evaluation error');
     });
   });
@@ -213,7 +232,7 @@ export async function createApp() {
   app.route('/', a2aDiscoveryRoute());
 
   // ─── Auth routes ────────────────────────────────────────────────
-  app.route('/', authRoutes());
+  app.route('/', authRoutes(userRepo));
 
   // ─── Protected routes ───────────────────────────────────────────
   app.route('/', engineRoutes(agency, eventBus));

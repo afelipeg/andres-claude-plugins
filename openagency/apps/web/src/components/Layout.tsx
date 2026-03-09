@@ -1,114 +1,292 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
+import {
+  ChevronLeft,
+  ChevronRight,
+  LogOut,
+  User,
+  Settings,
+  Home,
+  BarChart3,
+  CreditCard,
+  Monitor,
+  Search,
+  TrendingUp,
+  Megaphone,
+  Layers,
+  Link,
+  FileText,
+  Activity,
+} from 'lucide-react';
 import { SyncStatus } from './SyncStatus';
 import { ErrorBoundary } from './ErrorBoundary';
+import { NotificationBanner } from './NotificationBanner';
+import { useEventStream } from '../hooks/useEventStream';
+import { useNotifications } from '../hooks/useNotifications';
+import { cn } from '../lib/utils';
+import { Avatar, AvatarFallback } from './ui/avatar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
-const NAV_ITEMS = [
-  { path: '', label: 'Home', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1' },
-  { path: '/scorecard', label: 'Scorecard', icon: 'M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z' },
-  { path: '/billing', label: 'Billing', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
-  { path: '/command-center', label: 'Command Center', icon: 'M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5' },
-  { path: '/leak-detector', label: 'Leak Detector', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' },
-  { path: '/media-architect', label: 'Media Architect', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
-  { path: '/campaign-ops', label: 'Campaign Ops', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01' },
-  { path: '/executive-bridge', label: 'Executive Bridge', icon: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6' },
-  { path: '/integrations', label: 'Integrations', icon: 'M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1' },
-  { path: '/architecture', label: 'Architecture', icon: 'M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z' },
-  { path: '/consumption', label: 'Consumption', icon: 'M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z' },
+const API_URL = import.meta.env.VITE_API_URL ?? '';
+
+interface NavItem {
+  path: string;
+  label: string;
+  Icon: React.ComponentType<{ className?: string }>;
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { path: '', label: 'Home', Icon: Home },
+  { path: '/scorecard', label: 'Scorecard', Icon: BarChart3 },
+  { path: '/command-center', label: 'Command Center', Icon: Monitor },
+  { path: '/leak-detector', label: 'Leak Detector', Icon: Search },
+  { path: '/media-architect', label: 'Media Architect', Icon: TrendingUp },
+  { path: '/campaign-ops', label: 'Campaign Ops', Icon: Megaphone },
+  { path: '/executive-bridge', label: 'Executive Bridge', Icon: Layers },
+  { path: '/integrations', label: 'Integrations', Icon: Link },
+  { path: '/architecture', label: 'Architecture', Icon: FileText },
+  { path: '/consumption', label: 'Consumption', Icon: Activity },
+  { path: '/billing', label: 'Billing', Icon: CreditCard },
+  { path: '/settings', label: 'Settings', Icon: Settings },
 ];
 
+function getPageTitle(pathname: string): string {
+  const segment = pathname.replace('/app', '').replace(/^\//, '').split('/')[0];
+  const titles: Record<string, string> = {
+    '': 'Home',
+    scorecard: 'Scorecard',
+    billing: 'Billing',
+    'command-center': 'Command Center',
+    'leak-detector': 'Leak Detector',
+    'media-architect': 'Media Architect',
+    'campaign-ops': 'Campaign Ops',
+    'executive-bridge': 'Executive Bridge',
+    integrations: 'Integrations',
+    architecture: 'Architecture',
+    consumption: 'Consumption',
+    settings: 'Settings',
+  };
+  return (segment !== undefined ? titles[segment] : undefined) ?? 'Dashboard';
+}
+
+function PlinthLogo() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 7l4 4-4 4" />
+      <path d="M12 7l4 4-4 4" />
+      <line x1="20" y1="7" x2="20" y2="15" />
+    </svg>
+  );
+}
+
 export function Layout() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [user, setUser] = useState<{ name?: string; email?: string; role?: string } | null>(null);
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const isDemo = pathname.startsWith('/demo');
-  // Base prefix for nav links — always /app for this Layout (demo uses DemoLayout now)
   const base = '/app';
 
-  return (
-    <div className="flex h-screen overflow-hidden">
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-20 bg-black/50 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
+  // Load current user for sidebar footer
+  useEffect(() => {
+    const token = localStorage.getItem('plinth_token');
+    if (!token) return;
+    fetch(`${API_URL}/v1/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data) setUser(data.user ?? data); })
+      .catch(() => {});
+  }, []);
 
-      {/* Sidebar */}
+  // SSE event stream for HFL notifications
+  const { events } = useEventStream({ types: ['hfl.escalated', 'mesh.pipeline.failed'] });
+  const { active, push, dismiss, dismissAll } = useNotifications();
+
+  useEffect(() => {
+    if (events.length === 0) return;
+    const latest = events[0];
+    if (!latest) return;
+    const payload = latest.payload as Record<string, unknown> | null;
+    if (!payload) return;
+
+    if (latest.type === 'hfl.escalated') {
+      push({
+        id: latest.id,
+        type: 'hfl_escalation',
+        urgency: (payload['urgency'] as 'low' | 'medium' | 'high' | 'critical') ?? 'high',
+        title: 'HFL Escalation Required',
+        message: (payload['reason'] as string) ?? 'Pipeline run requires human review.',
+        timestamp: latest.timestamp,
+        meta: payload,
+      });
+    } else if (latest.type === 'mesh.pipeline.failed') {
+      push({
+        id: latest.id,
+        type: 'pipeline_failed',
+        urgency: 'critical',
+        title: 'Pipeline Failed',
+        message: `Pipeline ${payload['pipeline_id'] ?? 'unknown'} failed for run ${payload['run_id'] ?? '?'}.`,
+        timestamp: latest.timestamp,
+        meta: payload,
+      });
+    }
+  }, [events.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleSignOut() {
+    localStorage.removeItem('plinth_token');
+    navigate('/login');
+  }
+
+  const initials = user?.name
+    ? user.name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
+    : 'A';
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-zinc-50">
+      {/* ── Sidebar ───────────────────────────────────── */}
       <aside
-        className={`fixed inset-y-0 left-0 z-30 w-64 transform bg-gray-900 transition-transform duration-200 lg:static lg:translate-x-0 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={cn(
+          'relative flex flex-col shrink-0 bg-[#09090B] transition-all duration-300 ease-in-out',
+          collapsed ? 'w-[68px]' : 'w-60'
+        )}
       >
-        <div className="flex h-16 items-center gap-3 border-b border-gray-800 px-6">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-brand-500 text-sm font-bold text-white">
-            P
+        {/* Logo */}
+        <div
+          className={cn(
+            'flex h-16 items-center border-b border-white/[0.06]',
+            collapsed ? 'justify-center px-3' : 'px-5 gap-3'
+          )}
+        >
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-[#09090B]">
+            <PlinthLogo />
           </div>
-          <span className="text-lg font-semibold text-white">Plinth</span>
+          {!collapsed && (
+            <div className="flex flex-col leading-none min-w-0">
+              <span className="text-[15px] font-bold text-white tracking-tight">Plinth</span>
+              <span className="text-[10px] text-zinc-500 font-medium tracking-widest uppercase">by Polanyi</span>
+            </div>
+          )}
         </div>
-        <nav className="mt-4 space-y-1 px-3">
-          {NAV_ITEMS.map((item) => (
-            <NavLink
-              key={item.path}
-              to={`${base}${item.path}`}
-              end={item.path === ''}
-              onClick={() => setSidebarOpen(false)}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-brand-600 text-white'
-                    : 'text-gray-400 hover:bg-gray-800 hover:text-white'
-                }`
-              }
-            >
-              <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-              </svg>
-              {item.label}
-            </NavLink>
-          ))}
+
+        {/* Collapse toggle */}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="absolute -right-3 top-[72px] z-10 flex h-6 w-6 items-center justify-center rounded-full border border-zinc-700 bg-[#09090B] text-zinc-500 hover:text-white shadow-md transition-colors"
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+        </button>
+
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-2 space-y-0.5">
+          <TooltipProvider delayDuration={0}>
+            {NAV_ITEMS.map((item) => (
+              <Tooltip key={item.path}>
+                <TooltipTrigger asChild>
+                  <NavLink
+                    to={`${base}${item.path}`}
+                    end={item.path === ''}
+                    className={({ isActive }) =>
+                      cn(
+                        'flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
+                        collapsed ? 'justify-center' : 'gap-3',
+                        isActive
+                          ? 'bg-white text-[#09090B]'
+                          : 'text-zinc-400 hover:bg-white/[0.06] hover:text-white'
+                      )
+                    }
+                  >
+                    <item.Icon className="h-5 w-5 shrink-0" />
+                    {!collapsed && <span className="truncate">{item.label}</span>}
+                  </NavLink>
+                </TooltipTrigger>
+                {collapsed && (
+                  <TooltipContent side="right">{item.label}</TooltipContent>
+                )}
+              </Tooltip>
+            ))}
+          </TooltipProvider>
         </nav>
-        <div className="absolute bottom-0 w-full border-t border-gray-800 p-4">
-          <p className="text-xs text-gray-500">Plinth by Polanyi v3.2.0</p>
+
+        {/* User footer / Sign out */}
+        <div className="border-t border-white/[0.06] p-2">
+          {collapsed ? (
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleSignOut}
+                    className="flex w-full items-center justify-center rounded-lg p-2.5 text-zinc-500 hover:bg-white/[0.06] hover:text-red-400 transition-colors"
+                  >
+                    <LogOut className="h-5 w-5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Sign out</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex w-full items-center gap-2.5 rounded-lg p-2 hover:bg-white/[0.06] transition-colors outline-none">
+                  <Avatar className="h-8 w-8 shrink-0">
+                    <AvatarFallback>{initials}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 text-left min-w-0">
+                    <p className="text-sm font-medium text-white truncate leading-none">
+                      {user?.name || 'Admin'}
+                    </p>
+                    <p className="mt-0.5 text-xs text-zinc-500 truncate leading-none">
+                      {user?.email || '—'}
+                    </p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-zinc-600 shrink-0" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="right" align="end" className="w-56">
+                <DropdownMenuLabel>
+                  {user?.role ? user.role.replace('_', ' ') : 'admin'}
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate('/app/settings/profile')}>
+                  <User className="mr-2 h-4 w-4" />
+                  Profile Settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={handleSignOut}
+                  className="text-red-400 focus:text-red-400 focus:bg-red-400/10"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </aside>
 
-      {/* Main content */}
+      {/* ── Main content ─────────────────────────────── */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="flex h-16 items-center gap-4 border-b border-gray-200 bg-white px-6">
-          <button
-            className="rounded-md p-2 text-gray-600 hover:bg-gray-100 lg:hidden"
-            onClick={() => setSidebarOpen(true)}
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-          <h1 className="text-lg font-semibold text-gray-900">Dashboard</h1>
-          {isDemo && (
-            <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700 border border-amber-200">
-              DEMO
-            </span>
-          )}
-          <div className="ml-auto flex items-center gap-3">
-            {isDemo && (
-              <button
-                onClick={() => navigate('/login')}
-                className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-600 transition-colors"
-              >
-                Login
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                </svg>
-              </button>
-            )}
+        <header className="flex h-16 shrink-0 items-center gap-4 border-b border-zinc-200 bg-white px-6">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-base font-semibold text-zinc-900 truncate">
+              {getPageTitle(pathname)}
+            </h1>
+          </div>
+          <div className="flex items-center gap-3">
             <SyncStatus />
           </div>
         </header>
 
-        {/* Page content */}
+        <NotificationBanner notifications={active} onDismiss={dismiss} onDismissAll={dismissAll} />
+
         <main className="flex-1 overflow-y-auto p-6">
           <ErrorBoundary key={pathname}>
             <Outlet />

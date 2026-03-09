@@ -166,6 +166,27 @@ describe('HFLCoordinator', () => {
     expect(pending.every((d) => d.status === 'escalated')).toBe(true);
   });
 
+  it('force-escalates when forceEscalate=true even if risk is low', async () => {
+    const hfl = new HFLCoordinator(eventBus, { base_url: 'http://test:3100' });
+    hfl.setConfig(makeConfig({ auto_approve_threshold: 999999 }));
+
+    // Skip first-run escalation
+    await hfl.evaluate(makeRun({ id: 'run-0' }));
+
+    // Second run would auto-approve, but forceEscalate overrides
+    const decision = await hfl.evaluate(
+      {
+        ...makeRun({ id: 'run-force' }),
+        pipeline_score: { composite: 25, stage_health: 50, action_success: 0, risk_signal: 0 },
+      } as MeshRunSummary,
+      true,
+    );
+
+    expect(decision.status).toBe('escalated');
+    expect(decision.needs_human).toBe(true);
+    expect(decision.risk_score.risk_factors).toContain('pipeline_score_below_threshold');
+  });
+
   it('config management', () => {
     const hfl = new HFLCoordinator(eventBus);
     const config = makeConfig();
