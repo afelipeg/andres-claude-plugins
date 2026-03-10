@@ -1,6 +1,6 @@
 [build]
 dockerfilePath = "docker/Dockerfile"
-watchPatterns = ["packages/**", "apps/api/**", "docker/Dockerfile"]
+watchPatterns = ["packages/**", "apps/api/**", "docker/**", "railway.toml"]
 
 [deploy]
 startCommand = "node apps/api/dist/index.js"
