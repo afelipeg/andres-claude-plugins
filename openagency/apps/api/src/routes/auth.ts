@@ -82,6 +82,7 @@ function roleScopesMap(role: string): string[] {
 
 // ─── Seed admin to DB on startup ────────────────────────────────────
 export async function seedAdminUser(repo: UserRepo): Promise<void> {
+  // Upsert by email (ON CONFLICT email) to handle any existing row
   await repo.upsert({
     id: ADMIN_USER.id,
     email: ADMIN_USER.email,
@@ -92,6 +93,11 @@ export async function seedAdminUser(repo: UserRepo): Promise<void> {
     status: 'active',
     invite_token: null,
   });
+  // Ensure role is admin regardless of what was in DB before
+  const existing = await repo.getByEmail(ADMIN_USER.email);
+  if (existing && existing.role !== 'admin') {
+    await repo.updateRole(existing.id, 'admin', ADMIN_USER.scopes);
+  }
 }
 
 // ─── Routes ─────────────────────────────────────────────────────────
