@@ -135,7 +135,7 @@ function BillingCalculatorForm({ onResult }: { onResult: (r: BillingResult) => v
 
       <button
         onClick={handleCalculate}
-        className="mt-4 w-full rounded-lg bg-[#00e5a0] px-5 py-3 text-sm font-semibold text-black hover:bg-[#00c98d]"
+        className="mt-4 w-full rounded-lg bg-zinc-900 px-5 py-3 text-sm font-semibold text-white hover:bg-zinc-800"
       >
         Calculate Fee
       </button>
@@ -230,7 +230,7 @@ function TierCalculator() {
         <button
           onClick={() => void handlePreview()}
           disabled={loading || !spend}
-          className="rounded-lg bg-[#00e5a0] px-5 py-2.5 text-sm font-semibold text-black hover:bg-[#00c98d] disabled:opacity-50"
+          className="rounded-lg bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50"
         >
           {loading ? '...' : 'Calculate'}
         </button>

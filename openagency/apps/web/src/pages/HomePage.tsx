@@ -59,7 +59,7 @@ export function HomePage() {
           <button
             onClick={() => void handleRunDemo()}
             disabled={demoRunning}
-            className="rounded-lg bg-[#00e5a0] px-6 py-2.5 text-sm font-semibold text-[#09090B] transition-colors hover:bg-[#00c98d] disabled:opacity-60"
+            className="rounded-lg bg-[#02c98d] px-6 py-2.5 text-sm font-semibold text-[#09090B] transition-colors hover:bg-[#00c98d] disabled:opacity-60"
           >
             {demoRunning ? (
               <span className="flex items-center gap-2">

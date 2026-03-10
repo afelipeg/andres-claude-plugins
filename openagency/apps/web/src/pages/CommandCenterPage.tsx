@@ -118,7 +118,7 @@ function GoalPanel({ goals }: { goals: GoalSummary[] }) {
             </div>
             <div className="mt-1 h-1.5 rounded-full bg-gray-200">
               <div
-                className="h-full rounded-full bg-[#00e5a0] transition-all"
+                className="h-full rounded-full bg-[#02c98d] transition-all"
                 style={{ width: `${Math.min(100, g.progress_pct)}%` }}
               />
             </div>
