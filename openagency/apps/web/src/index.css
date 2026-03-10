@@ -10,3 +10,35 @@
     -moz-osx-font-smoothing: grayscale;
   }
 }
+
+/* ── Sidebar navigation ───────────────────────────────────────────── */
+/* Uses pure CSS so it never gets purged by Tailwind JIT              */
+
+.plinth-nav-item {
+  display: flex;
+  align-items: center;
+  border-radius: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 150ms ease, background-color 150ms ease;
+  color: rgb(212 212 216); /* zinc-300 — clearly visible on zinc-950 */
+  white-space: nowrap;
+}
+
+.plinth-nav-item:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #02c98d;
+}
+
+/* NavLink sets aria-current="page" on the active route */
+.plinth-nav-item[aria-current="page"] {
+  background-color: rgba(2, 201, 141, 0.12);
+  color: #02c98d;
+}
+
+.plinth-nav-collapsed {
+  justify-content: center;
+}

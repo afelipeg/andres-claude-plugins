@@ -184,18 +184,10 @@ export function Layout() {
                   <NavLink
                     to={`${base}${item.path}`}
                     end={item.path === ''}
-                    className={({ isActive }) =>
-                      cn(
-                        'flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                        collapsed ? 'justify-center' : '',
-                        isActive
-                          ? 'bg-[#02c98d]/15 text-[#02c98d]'
-                          : 'text-zinc-400 hover:bg-white/[0.08] hover:text-[#02c98d]'
-                      )
-                    }
+                    className={cn('plinth-nav-item', collapsed ? 'plinth-nav-collapsed' : '')}
                   >
                     <item.Icon className="h-5 w-5 shrink-0" />
-                    {!collapsed && <span className="ml-3 whitespace-nowrap">{item.label}</span>}
+                    {!collapsed && <span className="ml-3">{item.label}</span>}
                   </NavLink>
                 </TooltipTrigger>
                 {collapsed && (
