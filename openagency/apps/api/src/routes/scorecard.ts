@@ -153,6 +153,21 @@ export function scorecardRoutes(
     }
   });
 
+  // ─── Preview tier rates for a given spend ─────────────────────────
+  // Must be before /:id wildcard to avoid being captured as id="tier-preview"
+  app.get('/v1/scorecard/tier-preview', (c) => {
+    const spendParam = c.req.query('ad_spend');
+    const spend = spendParam ? parseFloat(spendParam) : 0;
+    if (!spend || spend <= 0) {
+      return c.json(
+        { error: 'validation_error', message: 'Query param ad_spend is required and must be > 0', status: 400 },
+        400,
+      );
+    }
+    const tier = resolveTier(spend);
+    return c.json(tier);
+  });
+
   // ─── Get scorecard by ID ──────────────────────────────────────────
   app.get('/v1/scorecard/:id', (c) => {
     const id = c.req.param('id');
@@ -216,20 +231,6 @@ export function scorecardRoutes(
         status: r.status,
       }));
     return c.json({ scorecards: records });
-  });
-
-  // ─── Preview tier rates for a given spend ─────────────────────────
-  app.get('/v1/scorecard/tier-preview', (c) => {
-    const spendParam = c.req.query('ad_spend');
-    const spend = spendParam ? parseFloat(spendParam) : 0;
-    if (!spend || spend <= 0) {
-      return c.json(
-        { error: 'validation_error', message: 'Query param ad_spend is required and must be > 0', status: 400 },
-        400,
-      );
-    }
-    const tier = resolveTier(spend);
-    return c.json(tier);
   });
 
   return app;
