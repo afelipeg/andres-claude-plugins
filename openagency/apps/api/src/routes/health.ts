@@ -3,6 +3,12 @@
 import { Hono } from 'hono';
 import type { OpenAgency } from '@openagency/core';
 
+let _seedStatus: { seeded: boolean; hash_prefix?: string; role?: string; error?: string } = { seeded: false };
+
+export function setSeedStatus(status: typeof _seedStatus) {
+  _seedStatus = status;
+}
+
 export function healthRoutes(startTime: number, agency: OpenAgency) {
   const app = new Hono();
 
@@ -11,6 +17,7 @@ export function healthRoutes(startTime: number, agency: OpenAgency) {
       status: 'ok',
       version: '1.0.0',
       uptime_s: Math.floor((Date.now() - startTime) / 1000),
+      seed: _seedStatus,
     }),
   );
 

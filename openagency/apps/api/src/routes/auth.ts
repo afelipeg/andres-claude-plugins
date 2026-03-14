@@ -82,21 +82,36 @@ function roleScopesMap(role: string): string[] {
 
 // ─── Seed admin to DB on startup ────────────────────────────────────
 export async function seedAdminUser(repo: UserRepo): Promise<void> {
-  // Upsert by email (ON CONFLICT email) to handle any existing row
-  await repo.upsert({
-    id: ADMIN_USER.id,
-    email: ADMIN_USER.email,
-    password_hash: ADMIN_USER.password_hash,
-    name: ADMIN_USER.name,
-    role: ADMIN_USER.role,
-    scopes: ADMIN_USER.scopes,
-    status: 'active',
-    invite_token: null,
-  });
-  // Ensure role is admin regardless of what was in DB before
-  const existing = await repo.getByEmail(ADMIN_USER.email);
-  if (existing && existing.role !== 'admin') {
-    await repo.updateRole(existing.id, 'admin', ADMIN_USER.scopes);
+  const { setSeedStatus } = await import('./health.js');
+  try {
+    // Upsert by email (ON CONFLICT email) to handle any existing row
+    await repo.upsert({
+      id: ADMIN_USER.id,
+      email: ADMIN_USER.email,
+      password_hash: ADMIN_USER.password_hash,
+      name: ADMIN_USER.name,
+      role: ADMIN_USER.role,
+      scopes: ADMIN_USER.scopes,
+      status: 'active',
+      invite_token: null,
+    });
+    // Ensure role is admin regardless of what was in DB before
+    const existing = await repo.getByEmail(ADMIN_USER.email);
+    if (existing && existing.role !== 'admin') {
+      await repo.updateRole(existing.id, 'admin', ADMIN_USER.scopes);
+    }
+    // Report seed status for debugging
+    const user = await repo.getByEmail(ADMIN_USER.email);
+    setSeedStatus({
+      seeded: true,
+      hash_prefix: user?.password_hash?.slice(0, 8),
+      role: user?.role,
+    });
+  } catch (err) {
+    setSeedStatus({
+      seeded: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
