@@ -1,0 +1,58 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/main/schema/mcp-config.json",
+  "_comment": "OpenAgency MCP Configuration for Claude Code — enables multi-platform ad intelligence development",
+  "mcpServers": {
+    "openagency-dev": {
+      "command": "npx",
+      "args": ["tsx", "apps/api/src/mcp/stdio.ts"],
+      "cwd": ".",
+      "env": {
+        "NODE_ENV": "development",
+        "LOG_LEVEL": "debug",
+        "PORT": "0"
+      },
+      "_description": "OpenAgency's own MCP server — 29 skills, 4 engines, mesh orchestration, billing tools"
+    },
+
+    "google-ads-official": {
+      "command": "pipx",
+      "args": [
+        "run",
+        "--spec", "git+https://github.com/google-marketing-solutions/google_ads_mcp.git",
+        "run-mcp-server"
+      ],
+      "env": {
+        "GOOGLE_ADS_CREDENTIALS": "${GOOGLE_ADS_YAML_PATH:-~/.google-ads.yaml}"
+      },
+      "timeout": 30000,
+      "_description": "Google official MCP — read-only GAQL queries. Requires google-ads.yaml with OAuth2 credentials."
+    },
+
+    "meta-ads-pipeboard": {
+      "command": "npx",
+      "args": ["mcp-remote", "https://mcp.pipeboard.co/meta-ads-mcp"],
+      "_description": "Pipeboard Meta Ads — read+write, 25+ tools. Remote MCP, requires OAuth login on first use."
+    },
+
+    "tiktok-ads-adsmcp": {
+      "command": "python",
+      "args": ["-m", "tiktok_ads_mcp"],
+      "env": {
+        "TIKTOK_APP_ID": "${TIKTOK_APP_ID}",
+        "TIKTOK_SECRET": "${TIKTOK_APP_SECRET}",
+        "TIKTOK_ACCESS_TOKEN": "${TIKTOK_ACCESS_TOKEN}"
+      },
+      "_description": "AdsMCP TikTok Ads — campaigns, performance, OAuth flow. Install: pip install tiktok-ads-mcp"
+    },
+
+    "amazon-ads-kuudoai": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "--env-file", ".env.amazon-ads",
+        "ghcr.io/netzsicht/amazon_ads_mcp:latest"
+      ],
+      "_description": "KuudoAI Amazon Ads — full SDK, multi-region (NA/EU/FE), Docker. Create .env.amazon-ads with API credentials."
+    }
+  }
+}
