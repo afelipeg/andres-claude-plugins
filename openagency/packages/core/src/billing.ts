@@ -72,12 +72,21 @@ export interface EfficiencyInput {
   brand_safety_savings: number;
 }
 
+/** Default client rate for lift and efficiency fees */
+export const DEFAULT_CLIENT_RATE = 0.01; // 1.0%
+export const MIN_CLIENT_RATE = 0.005;    // 0.5%
+export const MAX_CLIENT_RATE = 0.015;    // 1.5%
+
 export interface BillingInput {
   /** Total monthly advertising investment across all platforms */
   ad_spend: number;
   recovery: RecoveryInput;
   lift: LiftInput;
   efficiency: EfficiencyInput;
+  /** Client-selected lift fee rate (0.005-0.015). Default: 0.01 (1%) */
+  client_lift_rate?: number;
+  /** Client-selected efficiency fee rate (0.005-0.015). Default: 0.01 (1%) */
+  client_efficiency_rate?: number;
 }
 
 export interface FeeBreakdown {
@@ -343,10 +352,14 @@ function computeEfficiency(input: EfficiencyInput): {
 export function calculateBilling(input: BillingInput): BillingResult {
   const tier = resolveTier(input.ad_spend);
 
+  // ─── Client-selected rates for Lift & Efficiency (clamped to 0.5%-1.5%)
+  const liftRate = clampRate(input.client_lift_rate ?? DEFAULT_CLIENT_RATE);
+  const efficiencyRate = clampRate(input.client_efficiency_rate ?? DEFAULT_CLIENT_RATE);
+
   // ─── Media-Driven Sales triangulation
   const mds = triangulateMediaDrivenSales(input.lift.media_driven_sales);
 
-  // ─── Recovery stream
+  // ─── Recovery stream (tiered by spend, 3-5%)
   const recovery = computeRecovery(input.recovery);
   const recoveryFee: FeeBreakdown = {
     category: 'recovery',
@@ -356,23 +369,23 @@ export function calculateBilling(input: BillingInput): BillingResult {
     line_items: recovery.items,
   };
 
-  // ─── Lift stream
+  // ─── Lift stream (client-selected rate, 0.5-1.5%)
   const lift = computeLift(input.lift, mds);
   const liftFee: FeeBreakdown = {
     category: 'lift',
     base_amount: lift.total,
-    rate: tier.lift_rate,
-    fee: round(lift.total * tier.lift_rate),
+    rate: liftRate,
+    fee: round(lift.total * liftRate),
     line_items: lift.items,
   };
 
-  // ─── Efficiency stream
+  // ─── Efficiency stream (client-selected rate, 0.5-1.5%)
   const efficiency = computeEfficiency(input.efficiency);
   const efficiencyFee: FeeBreakdown = {
     category: 'efficiency',
     base_amount: efficiency.total,
-    rate: tier.efficiency_rate,
-    fee: round(efficiency.total * tier.efficiency_rate),
+    rate: efficiencyRate,
+    fee: round(efficiency.total * efficiencyRate),
     line_items: efficiency.items,
   };
 
@@ -619,6 +632,10 @@ export function extractEfficiencySavings(
 
 export interface EngineOutputs {
   ad_spend: number;
+  /** Client-selected lift fee rate (0.005-0.015). Default: 0.01 (1%) */
+  client_lift_rate?: number;
+  /** Client-selected efficiency fee rate (0.005-0.015). Default: 0.01 (1%) */
+  client_efficiency_rate?: number;
   leak_detector?: {
     waste_waterfall?: Record<string, unknown>;
     media_quality_score?: Record<string, unknown>;
@@ -695,6 +712,8 @@ export function calculateBillingFromEngines(outputs: EngineOutputs): BillingResu
       },
     },
     efficiency,
+    client_lift_rate: outputs.client_lift_rate,
+    client_efficiency_rate: outputs.client_efficiency_rate,
   });
 }
 
@@ -702,4 +721,9 @@ export function calculateBillingFromEngines(outputs: EngineOutputs): BillingResu
 
 function round(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/** Clamp client rate to valid range (0.5%-1.5%) */
+function clampRate(rate: number): number {
+  return Math.min(MAX_CLIENT_RATE, Math.max(MIN_CLIENT_RATE, rate));
 }

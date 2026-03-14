@@ -137,23 +137,37 @@ describe('calculateBilling', () => {
     expect(result.recovery_fee.fee).toBe(280_000 * 0.04); // $11,200
   });
 
-  it('calculates lift fee at 14% (Scale tier) with MDS as max media signal', () => {
+  it('calculates lift fee at default 1% with MDS as max media signal', () => {
     const result = calculateBilling(baseInput);
     // MDS triangulates to average of 500K and 550K = 525K (within 30%)
     // Lift = KPI lift (200K) + max(ROAS 150K, ROI 100K, MDS 525K) = 725K
     // ROAS/ROI/MDS are overlapping views of same value — take max, not sum
     const expectedLift = 200_000 + 525_000; // $725,000
     expect(result.total_lift).toBe(expectedLift);
-    expect(result.lift_fee.rate).toBe(0.14);
-    expect(result.lift_fee.fee).toBe(101500); // 725,000 × 14%
+    expect(result.lift_fee.rate).toBe(0.01); // default 1%
+    expect(result.lift_fee.fee).toBe(7250); // 725,000 × 1%
   });
 
-  it('calculates efficiency fee at 7% (Scale tier)', () => {
+  it('uses client-selected lift rate when provided', () => {
+    const result = calculateBilling({ ...baseInput, client_lift_rate: 0.015 });
+    expect(result.lift_fee.rate).toBe(0.015); // 1.5%
+    expect(result.lift_fee.fee).toBe(10875); // 725,000 × 1.5%
+  });
+
+  it('clamps client rate to 0.5%-1.5% range', () => {
+    const tooLow = calculateBilling({ ...baseInput, client_lift_rate: 0.001 });
+    expect(tooLow.lift_fee.rate).toBe(0.005); // clamped to min 0.5%
+
+    const tooHigh = calculateBilling({ ...baseInput, client_lift_rate: 0.05 });
+    expect(tooHigh.lift_fee.rate).toBe(0.015); // clamped to max 1.5%
+  });
+
+  it('calculates efficiency fee at default 1%', () => {
     const result = calculateBilling(baseInput);
     const expectedEfficiency = 10_000 + 8_000 + 5_000 + 12_000 + 7_000; // $42,000
     expect(result.total_efficiency_savings).toBe(expectedEfficiency);
-    expect(result.efficiency_fee.rate).toBe(0.07);
-    expect(result.efficiency_fee.fee).toBe(2940); // 42,000 × 7%
+    expect(result.efficiency_fee.rate).toBe(0.01); // default 1%
+    expect(result.efficiency_fee.fee).toBe(420); // 42,000 × 1%
   });
 
   it('total fee is sum of three streams', () => {
@@ -181,20 +195,20 @@ describe('calculateBilling', () => {
     expect(result.efficiency_fee.line_items.length).toBe(5);
   });
 
-  it('uses Starter rates for small spend', () => {
+  it('uses Starter recovery rate for small spend, client rate for lift/efficiency', () => {
     const result = calculateBilling({ ...baseInput, ad_spend: 100_000 });
     expect(result.tier.tier).toBe('starter');
-    expect(result.recovery_fee.rate).toBe(0.05);
-    expect(result.lift_fee.rate).toBe(0.20);
-    expect(result.efficiency_fee.rate).toBe(0.10);
+    expect(result.recovery_fee.rate).toBe(0.05); // tiered by spend
+    expect(result.lift_fee.rate).toBe(0.01);      // client-selected (default)
+    expect(result.efficiency_fee.rate).toBe(0.01); // client-selected (default)
   });
 
-  it('uses Enterprise rates for large spend', () => {
+  it('uses Enterprise recovery rate for large spend, client rate for lift/efficiency', () => {
     const result = calculateBilling({ ...baseInput, ad_spend: 10_000_000 });
     expect(result.tier.tier).toBe('enterprise');
-    expect(result.recovery_fee.rate).toBe(0.03);
-    expect(result.lift_fee.rate).toBe(0.10);
-    expect(result.efficiency_fee.rate).toBe(0.05);
+    expect(result.recovery_fee.rate).toBe(0.03);   // tiered by spend
+    expect(result.lift_fee.rate).toBe(0.01);        // client-selected (default)
+    expect(result.efficiency_fee.rate).toBe(0.01);  // client-selected (default)
   });
 
   it('handles zero values gracefully', () => {
@@ -339,10 +353,10 @@ describe('calculateBillingFromEngines', () => {
     expect(result.fee_as_pct_of_spend).toBeGreaterThan(0);
     expect(result.roi_on_fee).toBeGreaterThan(1);
 
-    // Enterprise rates
+    // Enterprise recovery rate, client default for lift/efficiency
     expect(result.recovery_fee.rate).toBe(0.03);
-    expect(result.lift_fee.rate).toBe(0.10);
-    expect(result.efficiency_fee.rate).toBe(0.05);
+    expect(result.lift_fee.rate).toBe(0.01);      // client default 1%
+    expect(result.efficiency_fee.rate).toBe(0.01); // client default 1%
   });
 
   it('handles missing engine outputs gracefully', () => {

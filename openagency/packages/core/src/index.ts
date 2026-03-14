@@ -23,6 +23,9 @@ export {
   extractExecutiveBridgeLift,
   extractEfficiencySavings,
   BILLING_TIERS,
+  DEFAULT_CLIENT_RATE,
+  MIN_CLIENT_RATE,
+  MAX_CLIENT_RATE,
 } from './billing.js';
 export type {
   BillingTier,
