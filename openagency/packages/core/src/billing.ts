@@ -138,8 +138,8 @@ export const BILLING_TIERS: TierRates[] = [
     min_spend: 0,
     max_spend: 500_000,
     recovery_rate: 0.05,
-    lift_rate: 0.20,
-    efficiency_rate: 0.10,
+    lift_rate: DEFAULT_CLIENT_RATE,
+    efficiency_rate: DEFAULT_CLIENT_RATE,
   },
   {
     tier: 'growth',
@@ -147,8 +147,8 @@ export const BILLING_TIERS: TierRates[] = [
     min_spend: 500_000,
     max_spend: 2_000_000,
     recovery_rate: 0.045,
-    lift_rate: 0.17,
-    efficiency_rate: 0.085,
+    lift_rate: DEFAULT_CLIENT_RATE,
+    efficiency_rate: DEFAULT_CLIENT_RATE,
   },
   {
     tier: 'scale',
@@ -156,8 +156,8 @@ export const BILLING_TIERS: TierRates[] = [
     min_spend: 2_000_000,
     max_spend: 5_000_000,
     recovery_rate: 0.04,
-    lift_rate: 0.14,
-    efficiency_rate: 0.07,
+    lift_rate: DEFAULT_CLIENT_RATE,
+    efficiency_rate: DEFAULT_CLIENT_RATE,
   },
   {
     tier: 'enterprise',
@@ -165,8 +165,8 @@ export const BILLING_TIERS: TierRates[] = [
     min_spend: 5_000_000,
     max_spend: null,
     recovery_rate: 0.03,
-    lift_rate: 0.10,
-    efficiency_rate: 0.05,
+    lift_rate: DEFAULT_CLIENT_RATE,
+    efficiency_rate: DEFAULT_CLIENT_RATE,
   },
 ];
 

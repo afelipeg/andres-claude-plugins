@@ -23,10 +23,10 @@ const TIERS: Array<{
   lift: string;
   efficiency: string;
 }> = [
-  { tier: 'starter', label: 'Starter', spend: '< $500K', recovery: '5%', lift: '20%', efficiency: '10%' },
-  { tier: 'growth', label: 'Growth', spend: '$500K - $2M', recovery: '4.5%', lift: '17%', efficiency: '8.5%' },
-  { tier: 'scale', label: 'Scale', spend: '$2M - $5M', recovery: '4%', lift: '14%', efficiency: '7%' },
-  { tier: 'enterprise', label: 'Enterprise', spend: '> $5M', recovery: '3%', lift: '10%', efficiency: '5%' },
+  { tier: 'starter', label: 'Starter', spend: '< $500K', recovery: '5%', lift: '0.5% – 1.5%', efficiency: '0.5% – 1.5%' },
+  { tier: 'growth', label: 'Growth', spend: '$500K - $2M', recovery: '4.5%', lift: '0.5% – 1.5%', efficiency: '0.5% – 1.5%' },
+  { tier: 'scale', label: 'Scale', spend: '$2M - $5M', recovery: '4%', lift: '0.5% – 1.5%', efficiency: '0.5% – 1.5%' },
+  { tier: 'enterprise', label: 'Enterprise', spend: '> $5M', recovery: '3%', lift: '0.5% – 1.5%', efficiency: '0.5% – 1.5%' },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -201,10 +201,10 @@ function TierCalculator() {
     } catch {
       // Fallback: calculate locally
       const numSpend = val;
-      if (numSpend >= 5_000_000) setPreview({ tier: 'enterprise', label: 'Enterprise', min_spend: 5_000_000, max_spend: null, recovery_rate: 0.03, lift_rate: 0.10, efficiency_rate: 0.05 });
-      else if (numSpend >= 2_000_000) setPreview({ tier: 'scale', label: 'Scale', min_spend: 2_000_000, max_spend: 5_000_000, recovery_rate: 0.04, lift_rate: 0.14, efficiency_rate: 0.07 });
-      else if (numSpend >= 500_000) setPreview({ tier: 'growth', label: 'Growth', min_spend: 500_000, max_spend: 2_000_000, recovery_rate: 0.045, lift_rate: 0.17, efficiency_rate: 0.085 });
-      else setPreview({ tier: 'starter', label: 'Starter', min_spend: 0, max_spend: 500_000, recovery_rate: 0.05, lift_rate: 0.20, efficiency_rate: 0.10 });
+      if (numSpend >= 5_000_000) setPreview({ tier: 'enterprise', label: 'Enterprise', min_spend: 5_000_000, max_spend: null, recovery_rate: 0.03, lift_rate: 0.01, efficiency_rate: 0.01 });
+      else if (numSpend >= 2_000_000) setPreview({ tier: 'scale', label: 'Scale', min_spend: 2_000_000, max_spend: 5_000_000, recovery_rate: 0.04, lift_rate: 0.01, efficiency_rate: 0.01 });
+      else if (numSpend >= 500_000) setPreview({ tier: 'growth', label: 'Growth', min_spend: 500_000, max_spend: 2_000_000, recovery_rate: 0.045, lift_rate: 0.01, efficiency_rate: 0.01 });
+      else setPreview({ tier: 'starter', label: 'Starter', min_spend: 0, max_spend: 500_000, recovery_rate: 0.05, lift_rate: 0.01, efficiency_rate: 0.01 });
     } finally {
       setLoading(false);
     }
@@ -445,7 +445,7 @@ export function BillingPage() {
       {/* Tier Structure */}
       <Card title="Tier Structure">
         <p className="mb-4 text-sm text-gray-500">
-          Rates decrease as your ad spend increases — rewarding scale with better economics.
+          Recovery rates decrease as your ad spend increases. Lift and Efficiency rates are client-selectable between 0.5% and 1.5% (default 1.0%).
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

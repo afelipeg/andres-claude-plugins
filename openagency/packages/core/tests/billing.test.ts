@@ -40,16 +40,16 @@ describe('resolveTier', () => {
     expect(resolveTier(0).tier).toBe('starter');
   });
 
-  it('tier rates match spec', () => {
+  it('tier rates match spec — recovery tiered, lift/efficiency client-selectable default 1%', () => {
     const starter = BILLING_TIERS[0]!;
     expect(starter.recovery_rate).toBe(0.05);
-    expect(starter.lift_rate).toBe(0.20);
-    expect(starter.efficiency_rate).toBe(0.10);
+    expect(starter.lift_rate).toBe(0.01);
+    expect(starter.efficiency_rate).toBe(0.01);
 
     const enterprise = BILLING_TIERS[3]!;
     expect(enterprise.recovery_rate).toBe(0.03);
-    expect(enterprise.lift_rate).toBe(0.10);
-    expect(enterprise.efficiency_rate).toBe(0.05);
+    expect(enterprise.lift_rate).toBe(0.01);
+    expect(enterprise.efficiency_rate).toBe(0.01);
   });
 });
 

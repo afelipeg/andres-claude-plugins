@@ -27,7 +27,7 @@ export function BillingSettingsPage() {
           <span className="text-2xl font-bold text-gray-900">Starter</span>
           <span className="text-sm text-gray-500">Waste-recovery pricing</span>
         </div>
-        <p className="mt-1 text-xs text-gray-500">Recovery: 3-5% | Lift: 10-20% | Efficiency: 5-10%</p>
+        <p className="mt-1 text-xs text-gray-500">Recovery: 3-5% (tiered) | Lift: 0.5-1.5% (selectable) | Efficiency: 0.5-1.5% (selectable)</p>
       </div>
     </div>
   );
