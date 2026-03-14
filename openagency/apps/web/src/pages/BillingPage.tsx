@@ -43,8 +43,18 @@ function fmtPct(n: number): string {
 
 // ─── Billing Calculator Form ─────────────────────────────────────
 
+const RATE_OPTIONS = [
+  { value: '0.005', label: '0.5%' },
+  { value: '0.0075', label: '0.75%' },
+  { value: '0.01', label: '1.0%' },
+  { value: '0.0125', label: '1.25%' },
+  { value: '0.015', label: '1.5%' },
+];
+
 function BillingCalculatorForm({ onResult }: { onResult: (r: BillingResult) => void }) {
   const [adSpend, setAdSpend] = useState('1000000');
+  const [liftRate, setLiftRate] = useState('0.01');
+  const [efficiencyRate, setEfficiencyRate] = useState('0.01');
   const [wasteTotal, setWasteTotal] = useState('150000');
   const [qualityWaste, setQualityWaste] = useState('25000');
   const [supplyChainSavings, setSupplyChainSavings] = useState('10000');
@@ -65,6 +75,8 @@ function BillingCalculatorForm({ onResult }: { onResult: (r: BillingResult) => v
   const handleCalculate = () => {
     const input: BillingInput = {
       ad_spend: num(adSpend),
+      client_lift_rate: parseFloat(liftRate),
+      client_efficiency_rate: parseFloat(efficiencyRate),
       recovery: {
         waste_total: num(wasteTotal),
         quality_waste: num(qualityWaste),
@@ -103,6 +115,34 @@ function BillingCalculatorForm({ onResult }: { onResult: (r: BillingResult) => v
       <div className="mb-5">
         <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Monthly Ad Spend</label>
         <NumberInput value={adSpend} onChange={setAdSpend} placeholder="1000000" />
+      </div>
+
+      {/* Client Rate Selection */}
+      <div className="mb-5 grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Lift Fee Rate</label>
+          <select
+            value={liftRate}
+            onChange={(e) => setLiftRate(e.target.value)}
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+          >
+            {RATE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Efficiency Fee Rate</label>
+          <select
+            value={efficiencyRate}
+            onChange={(e) => setEfficiencyRate(e.target.value)}
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+          >
+            {RATE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Recovery */}

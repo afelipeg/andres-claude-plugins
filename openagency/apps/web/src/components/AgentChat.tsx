@@ -28,7 +28,7 @@ function DecisionCard({
   onReject: () => void;
   processing: boolean;
 }) {
-  const riskColor: Record<string, string> = {
+  const urgencyColor: Record<string, string> = {
     low: 'bg-green-100 text-green-700',
     medium: 'bg-yellow-100 text-yellow-700',
     high: 'bg-red-100 text-red-700',
@@ -38,22 +38,12 @@ function DecisionCard({
     <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
       <div className="flex items-center gap-2 text-xs">
         <span className="font-semibold text-amber-700">Pending Decision</span>
-        <span className={`rounded-full px-1.5 py-0.5 text-xs font-medium ${riskColor[decision.risk_level] ?? 'bg-gray-100 text-gray-600'}`}>
-          {decision.risk_level} risk
+        <span className={`rounded-full px-1.5 py-0.5 text-xs font-medium ${urgencyColor[decision.urgency] ?? 'bg-gray-100 text-gray-600'}`}>
+          {decision.urgency}
         </span>
-        <span className="text-gray-400">{Math.round(decision.confidence * 100)}% confidence</span>
+        <span className="text-gray-400 font-mono">run {decision.run_id.slice(0, 8)}</span>
       </div>
-      <p className="mt-1.5 text-xs text-gray-700">{decision.reasoning}</p>
-      {decision.actions.length > 0 && (
-        <div className="mt-2 space-y-1">
-          {decision.actions.slice(0, 3).map((a, i) => (
-            <div key={i} className="flex items-center gap-1.5 text-xs text-gray-500">
-              <span className="rounded bg-gray-200 px-1 py-0.5 font-mono text-[10px]">{a.type}</span>
-              <span>{a.estimated_impact}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      <p className="mt-1.5 text-xs text-gray-700">{decision.reason}</p>
       <div className="mt-3 flex gap-2">
         <button
           onClick={onApprove}
@@ -85,7 +75,7 @@ export function AgentChat({ agentId, onCycleTriggered }: AgentChatProps) {
   useEffect(() => {
     void getChatHistory(agentId).then(setMessages).catch(() => {});
     void listPendingDecisions()
-      .then((all) => setDecisions(all.filter((d) => d.agent_id === agentId)))
+      .then((all) => setDecisions(all.filter((d) => d.pipeline_id === agentId)))
       .catch(() => {});
   }, [agentId]);
 
@@ -104,7 +94,7 @@ export function AgentChat({ agentId, onCycleTriggered }: AgentChatProps) {
         onCycleTriggered?.();
         // Refresh decisions after cycle
         void listPendingDecisions()
-          .then((all) => setDecisions(all.filter((d) => d.agent_id === agentId)))
+          .then((all) => setDecisions(all.filter((d) => d.pipeline_id === agentId)))
           .catch(() => {});
       }
     } catch {
@@ -117,14 +107,13 @@ export function AgentChat({ agentId, onCycleTriggered }: AgentChatProps) {
   const handleApprove = async (decision: PendingDecision) => {
     setProcessingDecision(true);
     try {
-      await approveDecision(agentId, decision.id);
+      await approveDecision(decision.pipeline_id, decision.run_id);
       setDecisions((prev) => prev.filter((d) => d.id !== decision.id));
-      // Add system message
       setMessages((prev) => [
         ...prev,
         {
           role: 'system',
-          content: `Decision approved: ${decision.reasoning.slice(0, 100)}`,
+          content: `Decision approved: ${decision.reason.slice(0, 100)}`,
           timestamp: new Date().toISOString(),
         },
       ]);
@@ -139,13 +128,13 @@ export function AgentChat({ agentId, onCycleTriggered }: AgentChatProps) {
   const handleReject = async (decision: PendingDecision) => {
     setProcessingDecision(true);
     try {
-      await rejectDecision(agentId, decision.id);
+      await rejectDecision(decision.pipeline_id, decision.run_id);
       setDecisions((prev) => prev.filter((d) => d.id !== decision.id));
       setMessages((prev) => [
         ...prev,
         {
           role: 'system',
-          content: `Decision rejected: ${decision.reasoning.slice(0, 100)}`,
+          content: `Decision rejected: ${decision.reason.slice(0, 100)}`,
           timestamp: new Date().toISOString(),
         },
       ]);

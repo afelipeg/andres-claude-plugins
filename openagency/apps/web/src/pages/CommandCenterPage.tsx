@@ -41,7 +41,7 @@ function DecisionQueue({
     return <p className="py-4 text-center text-xs text-gray-400">No pending decisions</p>;
   }
 
-  const riskColor: Record<string, string> = {
+  const urgencyColor: Record<string, string> = {
     low: 'bg-green-100 text-green-700',
     medium: 'bg-yellow-100 text-yellow-700',
     high: 'bg-red-100 text-red-700',
@@ -52,22 +52,16 @@ function DecisionQueue({
       {decisions.map((d) => (
         <div key={d.id} className="rounded-lg border border-amber-200 bg-amber-50 p-3">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-amber-700">{d.agent_id}</span>
-            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${riskColor[d.risk_level] ?? 'bg-gray-100'}`}>
-              {d.risk_level}
+            <span className="text-xs font-semibold text-amber-700">{d.pipeline_id}</span>
+            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${urgencyColor[d.urgency] ?? 'bg-gray-100'}`}>
+              {d.urgency}
             </span>
-            <span className="text-[10px] text-gray-400">{Math.round(d.confidence * 100)}%</span>
+            {d.client_id && (
+              <span className="text-[10px] text-gray-400">{d.client_id}</span>
+            )}
           </div>
-          <p className="mt-1 text-xs text-gray-600 line-clamp-2">{d.reasoning}</p>
-          {d.actions.length > 0 && (
-            <div className="mt-1.5 flex flex-wrap gap-1">
-              {d.actions.slice(0, 3).map((a, i) => (
-                <span key={i} className="rounded bg-white px-1.5 py-0.5 text-[10px] font-mono text-gray-500 shadow-sm">
-                  {a.type}
-                </span>
-              ))}
-            </div>
-          )}
+          <p className="mt-1 text-xs text-gray-600 line-clamp-2">{d.reason}</p>
+          <p className="mt-0.5 text-[10px] text-gray-400 font-mono">run {d.run_id.slice(0, 10)}</p>
           <div className="mt-2 flex gap-2">
             <button
               onClick={() => onApprove(d)}
@@ -126,6 +120,24 @@ function GoalPanel({ goals }: { goals: GoalSummary[] }) {
         </div>
       ))}
     </div>
+  );
+}
+
+// ─── HFL Badge ───────────────────────────────────────────────────
+
+function HFLBadge({ status, urgency }: { status: string; urgency?: string }) {
+  const colors: Record<string, string> = {
+    auto_approved: 'bg-green-100 text-green-700',
+    escalated: 'bg-amber-100 text-amber-700',
+    human_approved: 'bg-green-100 text-green-700',
+    human_rejected: 'bg-red-100 text-red-700',
+    timed_out: 'bg-gray-100 text-gray-500',
+  };
+  const label = status.replace(/_/g, ' ');
+  return (
+    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${colors[status] ?? 'bg-gray-100 text-gray-500'}`}>
+      {urgency && status === 'escalated' ? `${urgency}` : label}
+    </span>
   );
 }
 
@@ -225,15 +237,17 @@ export function CommandCenterPage() {
 
   const handleApprove = async (d: PendingDecision) => {
     try {
-      await approveDecision(d.agent_id, d.id);
+      await approveDecision(d.pipeline_id, d.run_id);
       setDecisions((prev) => prev.filter((x) => x.id !== d.id));
+      await refresh();
     } catch { /* keep visible */ }
   };
 
   const handleReject = async (d: PendingDecision) => {
     try {
-      await rejectDecision(d.agent_id, d.id);
+      await rejectDecision(d.pipeline_id, d.run_id);
       setDecisions((prev) => prev.filter((x) => x.id !== d.id));
+      await refresh();
     } catch { /* keep visible */ }
   };
 
@@ -325,9 +339,26 @@ export function CommandCenterPage() {
           <div className="rounded-lg border border-gray-200 bg-white p-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-gray-900">Stage Output</h3>
-              <StatusBadge status={selectedRunDetail.status} />
+              <div className="flex items-center gap-1.5">
+                {selectedRunDetail.hfl_decision && (
+                  <HFLBadge status={selectedRunDetail.hfl_decision.status} urgency={selectedRunDetail.hfl_decision.urgency} />
+                )}
+                <StatusBadge status={selectedRunDetail.status} />
+              </div>
             </div>
             <p className="mt-1 text-[10px] text-gray-400 font-mono">{selectedRunDetail.id.slice(0, 12)}</p>
+            {selectedRunDetail.hfl_decision && (
+              <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-semibold text-amber-700">HFL Decision</span>
+                  <HFLBadge status={selectedRunDetail.hfl_decision.status} urgency={selectedRunDetail.hfl_decision.urgency} />
+                </div>
+                <p className="mt-1 text-[10px] text-gray-600">{selectedRunDetail.hfl_decision.reason}</p>
+                {selectedRunDetail.hfl_decision.human_feedback && (
+                  <p className="mt-1 text-[10px] text-gray-500 italic">Feedback: {selectedRunDetail.hfl_decision.human_feedback}</p>
+                )}
+              </div>
+            )}
             <div className="mt-3">
               <StageOutputPanel run={selectedRunDetail} />
             </div>
@@ -389,7 +420,10 @@ export function CommandCenterPage() {
                   }`}
                 >
                   <span className="font-mono text-gray-500">{r.id.slice(0, 8)}</span>
-                  <StatusBadge status={r.status} />
+                  <div className="flex items-center gap-1.5">
+                    {r.hfl && <HFLBadge status={r.hfl.status} urgency={r.hfl.urgency} />}
+                    <StatusBadge status={r.status} />
+                  </div>
                 </div>
               ))}
             </div>

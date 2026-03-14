@@ -51,25 +51,35 @@ export async function cycleAgent(id: string): Promise<unknown> {
 
 export interface PendingDecision {
   id: string;
-  agent_id: string;
-  reasoning: string;
-  confidence: number;
-  risk_level: string;
-  requires_approval: boolean;
-  actions: Array<{ type: string; target: Record<string, unknown>; estimated_impact: string }>;
+  run_id: string;
+  pipeline_id: string;
+  client_id: string;
+  needs_human: boolean;
+  urgency: string;
+  reason: string;
+  status: string;
+  risk_score: Record<string, unknown>;
+  render_output?: Record<string, unknown>;
+  created_at: string;
 }
 
 export async function listPendingDecisions(): Promise<PendingDecision[]> {
-  const res = await fetchJson<{ decisions: PendingDecision[] }>('/v1/agents/decisions/pending');
+  const res = await fetchJson<{ decisions: PendingDecision[] }>('/v1/hfl/pending');
   return res.decisions;
 }
 
-export async function approveDecision(agentId: string, decisionId: string): Promise<void> {
-  await fetchJson(`/v1/agents/${agentId}/decisions/${decisionId}/approve`, { method: 'POST' });
+export async function approveDecision(_agentId: string, runId: string, feedback?: string): Promise<void> {
+  await fetchJson(`/v1/mesh/runs/${runId}/approve`, {
+    method: 'POST',
+    body: JSON.stringify({ feedback }),
+  });
 }
 
-export async function rejectDecision(agentId: string, decisionId: string): Promise<void> {
-  await fetchJson(`/v1/agents/${agentId}/decisions/${decisionId}/reject`, { method: 'POST' });
+export async function rejectDecision(_agentId: string, runId: string, feedback?: string): Promise<void> {
+  await fetchJson(`/v1/mesh/runs/${runId}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ feedback }),
+  });
 }
 
 // ─── Mesh endpoints ────────────────────────────────────────────────
@@ -82,6 +92,13 @@ export interface MeshPipeline {
   stages: Array<{ agent_id: string; order: number; skills: string[] }>;
 }
 
+export interface HFLSummary {
+  decision_id: string;
+  status: string;
+  urgency: string;
+  needs_human: boolean;
+}
+
 export interface MeshRunSummary {
   id: string;
   pipeline_id: string;
@@ -89,6 +106,23 @@ export interface MeshRunSummary {
   started_at: string;
   completed_at?: string;
   total_duration_ms: number;
+  hfl?: HFLSummary;
+}
+
+export interface HFLDecisionDetail {
+  id: string;
+  status: string;
+  urgency: string;
+  needs_human: boolean;
+  reason: string;
+  risk_score: Record<string, unknown>;
+  pipeline_score?: { composite: number };
+  render_output?: Record<string, unknown>;
+  dispatched_to?: string;
+  human_response?: string;
+  human_feedback?: string;
+  created_at: string;
+  resolved_at?: string;
 }
 
 export interface MeshRunDetail {
@@ -105,6 +139,7 @@ export interface MeshRunDetail {
     skills_invoked: string[];
     error?: string;
   }>;
+  hfl_decision?: HFLDecisionDetail;
   usage?: {
     stages_executed: number;
     total_duration_ms: number;
@@ -117,10 +152,10 @@ export async function listPipelines(): Promise<MeshPipeline[]> {
   return res.pipelines;
 }
 
-export async function executePipeline(pipelineId: string, goalId?: string): Promise<MeshRunDetail> {
+export async function executePipeline(pipelineId: string, goalId?: string, clientId?: string): Promise<MeshRunDetail> {
   return fetchJson<MeshRunDetail>(`/v1/mesh/pipelines/${pipelineId}/execute`, {
     method: 'POST',
-    body: JSON.stringify({ goal_id: goalId }),
+    body: JSON.stringify({ goal_id: goalId, client_id: clientId }),
   });
 }
 
