@@ -1,13 +1,13 @@
-# Next Session: 15/03/2026 — Second Run Auto-Approve + Scorecard UI + Client Pilot
+# Next Session: 15/03/2026 — Real Data Pipeline + COGS Tracking
 
-## Session Summary: 14/03/2026
+## Session Summary: 14/03/2026 (Extended)
 
 ### Final Scorecard
 
 | # | Task | Result |
 |---|---|---|
 | 0 | Railway redeploy | Admin role `admin` confirmed live |
-| 1a | ACME pipeline run (`/v1/analyze`) | 4 engines ran in 150s, billing works |
+| 1a | ACME pipeline run | 4 engines ran in 150s, billing works |
 | 1b | Billing: unwrap `.data` | Fixed (`apps/api/src/routes/analyze.ts`) |
 | 1c | Billing: `l1_metrics` field name | Fixed (`packages/core/src/billing.ts`) |
 | 1d | Billing: lift dedup (max not sum) | Fixed — ROAS/ROI/MDS take `Math.max()` |
@@ -15,49 +15,74 @@
 | 2a | HFL wiring into mesh | Auto-evaluates after every pipeline completion |
 | 2b | HFL pending/approve/reject | Tested live, all working |
 | 3 | Folder organization | Root decluttered → `docs/`, `prototypes/` |
+| 4 | Billing UI: tier table + rates | Updated to 0.5-1.5% (was 10-20%) |
+| 5 | Billing UI: rate selector | Dropdown for Lift/Efficiency rate in calculator |
+| 6 | HFL UI: badges + decision panel | Runs show HFL status, detail shows reason/feedback |
+| 7 | Pending decisions: real endpoints | Rewired to `/v1/hfl/pending` + approve/reject |
+| 8 | Scorecard auto-creation | Pipeline → scorecard auto-created → UI populates |
+| 9 | Full E2E test (no real data) | Mesh + HFL + Scorecard all reflecting in UI |
+
+### Commits pushed (11 total)
+| Commit | Description |
+|---|---|
+| `6ac647c` | (prior) next_session_100326 |
+| `6251b35` | Folder organization + next_session_150326 |
+| `95529e8` | Billing UI rates update (0.5-1.5%) |
+| `5f4f851` | Rate selector + HFL UI wiring + pending decisions fix |
+| `2b1e3bf` | Scorecard auto-creation from mesh pipeline |
 
 ### ACME CPG live numbers (confirmed)
 - **Recovery**: $35,520 (4% of $888K waste)
 - **Lift**: $136,940 (1% of $13.69M MDS)
 - **Total fees**: $172,460 (7.2% of $2.4M spend)
-- **HFL**: escalated (first run) → human approved with feedback
-- 7 commits pushed, all deployed to Railway
+- **HFL**: escalated (first run) → human approved
 
-### HFL end-to-end verified
-1. Pipeline executed — 4 engines ran in 150s
-2. HFL evaluated — escalated (first run for client `acme-cpg`)
-3. `/v1/hfl/pending` returned the escalated decision with rendered markdown + action URLs
-4. `/v1/mesh/runs/:id/approve` → status changed to `human_approved` with feedback
+---
 
-### What was fixed/built
+## Cost Per Pipeline Run (COGS for P&L)
 
-#### Railway redeploy (auth regression)
-- Root cause: Railway "Redeploy" reuses cached Docker image — it does NOT rebuild from latest commit
-- Fix: used "New Deploy from branch main" → triggered full rebuild
-- Confirmed: `/health` seed status + login returning `role: admin`
+### LLM calls per run
 
-#### Billing model (3 bugs)
-| Bug | Root cause | Fix |
-|---|---|---|
-| All billing zeros | `mapToEngineOutputs` stored full `EngineResult` wrapper instead of inner `.data` | Extract `.data` in `apps/api/src/routes/analyze.ts` |
-| `l1_metrics` mismatch | `extractExecutiveBridgeLift()` looked for `l1_financial`, Executive Bridge outputs `l1_metrics` | Fallback: `revenueResult['l1_financial'] ?? revenueResult['l1_metrics']` |
-| Lift fee 197% of spend | ROAS + ROI + MDS summed (same signal x3) | `Math.max(roasLift, roiLift, mdsValue)` |
+Each pipeline run triggers 4 engines. Each engine runs 1 OODA cycle with 2 LLM calls:
+- **Orient** (1 call): analyzes observations, produces orientation
+- **Decide** (1 call): plans actions from orientation
 
-#### Client-selectable rates
-- `0.5% – 1.5%` range (default 1.0%) for Lift and Efficiency
-- Recovery stays tiered (3-5% by spend tier, system-computed)
-- `BillingInput` accepts `client_lift_rate?` and `client_efficiency_rate?`
-- `clampRate()` enforces bounds
+| Component | LLM Calls | Model | Est. Tokens (in+out) |
+|---|---|---|---|
+| Leak Detector (orient+decide) | 2 | claude-sonnet-4 | ~3K + ~1K |
+| Media Architect (orient+decide) | 2 | claude-sonnet-4 | ~3K + ~1K |
+| Campaign Ops (orient+decide) | 2 | claude-sonnet-4 | ~3K + ~1K |
+| Executive Bridge (orient+decide) | 2 | claude-sonnet-4 | ~3K + ~1K |
+| **Total per run** | **8** | | **~16K tokens** |
 
-#### HFL wired into mesh
-- `evaluateHFL()` called automatically after every completed pipeline run
-- Force-escalate if pipeline quality score < 40
-- First run for any client always escalates
-- 70 billing tests passing
+### Delivery engine (if `full-with-deliverables` pipeline)
+- Adds 1 more engine with LLM calls for report generation
+- Each delivery skill (PDF, PPTX, etc.) may call LLM once for content
 
-#### Folder organization
-- Session docs → `docs/sessions/`, community → `docs/community/`, strategy → `docs/strategy/`, assets → `docs/assets/`, connector refs → `docs/connectors/`, landing prototype → `prototypes/landing-scorecard/`
-- Monorepo untouched — full `turbo build` passes (13/13 packages)
+### Cost estimate per run
+
+| Provider | Model | Input/1M tokens | Output/1M tokens | Est. cost/run |
+|---|---|---|---|---|
+| Anthropic | claude-sonnet-4 | $3.00 | $15.00 | **~$0.06 - $0.10** |
+| DeepSeek | deepseek-chat | $0.14 | $0.28 | **~$0.005** |
+| Ollama | llama3 (local) | $0 | $0 | **$0** |
+
+### Other infra costs per run
+| Item | Cost |
+|---|---|
+| Railway compute (~150s CPU) | ~$0.001 |
+| PostgreSQL (state writes) | negligible |
+| Redis (events) | negligible |
+| Voyage AI embeddings (if enabled) | ~$0.01 per 1K docs |
+
+### COGS summary
+| Scenario | Cost/run | Monthly (100 runs) | Monthly (1000 runs) |
+|---|---|---|---|
+| Claude Sonnet (production) | ~$0.08 | ~$8 | ~$80 |
+| DeepSeek (budget) | ~$0.005 | ~$0.50 | ~$5 |
+| Ollama (self-hosted) | ~$0 | ~$0 | ~$0 |
+
+**Note**: These are per-pipeline-run costs. No LLM calls happen for the billing calculation, HFL evaluation, or scorecard creation — those are pure compute.
 
 ---
 
@@ -70,25 +95,23 @@
 | Admin login | `dedalo@polanyi.tech` / `Morchis1512*` |
 | Admin role | `admin` ✅ |
 | HFL status | Wired + tested live ✅ |
+| Scorecard auto-create | Wired ✅ |
+| Billing rates | 0.5-1.5% selectable ✅ |
+| Latest deploy | `2b1e3bf` |
 
 ---
 
-## Task 0: Confirm prod healthy (2 min)
+## Task 0: Confirm prod healthy
 
 ```bash
 curl https://polanyi-plinth-production.up.railway.app/health
-
-curl -X POST https://polanyi-plinth-production.up.railway.app/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"dedalo@polanyi.tech","password":"Morchis1512*"}'
-# Expect: role: "admin"
 ```
 
 ---
 
 ## Task 1: Second pipeline run — auto-approve verification
 
-The first run for `acme-cpg` was escalated (expected: `first_run_for_client`). A second run for the same client should auto-approve.
+First run for `acme-cpg` escalated. Second should auto-approve.
 
 ```bash
 TOKEN="<jwt-from-login>"
@@ -99,81 +122,46 @@ curl -X POST https://polanyi-plinth-production.up.railway.app/v1/mesh/pipelines/
   -d '{"client_id":"acme-cpg"}'
 ```
 
-Expected: `hfl_decision.status = "auto_approved"`, `needs_human = false`.
+Expected: `hfl_decision.status = "auto_approved"` + `scorecard` in response.
 
 ---
 
-## Task 2: Scorecard UI verification with real data
+## Task 2: Connect first real ad platform
 
-After pipeline runs, verify the scorecard page in `/app/scorecard` shows:
-- Recovery: $35,520 (or similar based on run data)
-- Lift: $136,940 (at 1% default rate)
-- Total fees displayed correctly
-- HFL decision status visible
-
-If data isn't flowing to the UI, check:
-1. Does `/v1/mesh/runs` return the ACME runs?
-2. Does `/v1/mesh/runs/:id/recovery` return the breakdown?
-3. Does the Scorecard page call these endpoints?
+If Google Ads or Meta credentials available:
+1. `/app/integrations` → connect platform
+2. Sync real campaign data
+3. Run pipeline with real data
+4. Verify scorecard shows real recovery/lift values
 
 ---
 
-## Task 3: Billing rate selection UI
-
-Backend supports it, UI doesn't yet.
-
-### Where to add
-- `apps/web/src/pages/app/Scorecard.tsx` (or new Settings/Billing page)
-- Slider or dropdown: 0.5% / 0.75% / 1.0% / 1.25% / 1.5%
-- Pass selected rate in pipeline execute body
-
-### API contract
-```json
-POST /v1/mesh/pipelines/full-optimization/execute
-{
-  "client_id": "acme-cpg",
-  "client_lift_rate": 0.01,
-  "client_efficiency_rate": 0.01
-}
-```
-
----
-
-## Task 4: SSE events stream verification
+## Task 3: SSE events stream verification
 
 ```bash
 curl --max-time 60 https://polanyi-plinth-production.up.railway.app/v1/agents/events/stream \
   -H "Authorization: Bearer $TOKEN" \
   -H "Accept: text/event-stream"
-# Run a pipeline in another terminal → expect hfl.auto_approved or hfl.escalated events
+# Run pipeline in another terminal → expect hfl.auto_approved or hfl.escalated events
 ```
 
 ---
 
-## Task 5: First client pilot prep
+## Task 4: COGS tracking implementation (optional)
 
-If all above passes, the system is production-ready for a demo.
-
-### Demo flow
-1. Upload client ad data CSV (or use ACME CPG: $2.4M spend, 6 channels, 8 campaigns)
-2. Run `full-optimization` pipeline
-3. Show `/app/scorecard`: recovery + lift + efficiency fees
-4. Client approves/rejects via HFL
-5. SSE events fire in real time
-
-### Connect first real ad platform (if credentials available)
-- `/app/integrations` → connect Google Ads or Meta
-- Sync real campaign data
-- Run pipeline with real data
+To track actual LLM costs per run:
+1. The `UsageMeter` in `packages/agent/src/mesh/usage-meter.ts` already tracks `llm_tokens_used`
+2. Add cost calculation: `(prompt_tokens / 1M * input_rate) + (completion_tokens / 1M * output_rate)`
+3. Store in `MeshRun.usage` and expose via `/v1/mesh/runs/:id`
+4. Show in Consumption page (`/app/consumption`)
 
 ---
 
 ## Known bugs (non-blocking)
 
-| Bug | File | Description | Priority |
-|---|---|---|---|
-| `listPendingDecisions` | `apps/web/src/api/agents.ts:63` | Calls `/v1/agents/decisions/pending` (doesn't exist). Never used in any page. | Low |
-| Railway auto-deploy | `railway.toml` | watchPatterns may not trigger. Always use "New Deploy" from dashboard. | Low |
+| Bug | Description | Priority |
+|---|---|---|
+| Railway auto-deploy | watchPatterns may not trigger. Always use "New Deploy" from dashboard. | Low |
 
 ---
 
@@ -194,26 +182,26 @@ API port:     3100
 | Lift | 0.5-1.5% (default 1.0%) | Client |
 | Efficiency | 0.5-1.5% (default 1.0%) | Client |
 
-### HFL flow (confirmed working)
-1. Pipeline completes → `evaluateHFL()` called automatically
-2. `RiskScorer.evaluate()` → needs_human?
-3. Pipeline score < 40 → force escalate
-4. First run for client → always escalates
-5. Auto-approved → event `hfl.auto_approved`
-6. Escalated → rendered markdown + action URLs → human approves/rejects via REST
+### Full pipeline flow (confirmed working)
+1. Command Center → "Execute Full Pipeline"
+2. 4 engines run OODA cycle (8 LLM calls total)
+3. `evaluateHFL()` auto-evaluates risk → escalate or auto-approve
+4. `createScorecardFromMeshRun()` auto-creates scorecard
+5. `/app/scorecard` shows billing cards dynamically
+6. Human approves/rejects via HFL decision queue
+7. SSE events fire for each step
 
 ### Railway deploy checklist
 - "Redeploy" = reuses cached image (DOES NOT rebuild)
 - "New Deploy from branch main" = full rebuild ✅
-- After deploy: check `/health` for uptime reset + seed status
+- After deploy: check `/health` for uptime reset
 
 ---
 
 ## Session order
 
 1. Health check → confirm prod live
-2. Second run for `acme-cpg` → verify auto-approve
-3. Scorecard UI with real data
-4. Billing rate selection UI
-5. SSE events stream
-6. First client pilot / real ad platform connection
+2. Second run for `acme-cpg` → verify auto-approve + scorecard
+3. Connect real ad platform (if credentials available)
+4. SSE events verification
+5. COGS tracking (optional)
