@@ -3,7 +3,7 @@
 import { Hono } from 'hono';
 import type { OpenAgency } from '@openagency/core';
 
-let _seedStatus: { seeded: boolean; hash_prefix?: string; role?: string; error?: string } = { seeded: false };
+let _seedStatus: { seeded: boolean; role?: string; error?: string } = { seeded: false };
 
 export function setSeedStatus(status: typeof _seedStatus) {
   _seedStatus = status;

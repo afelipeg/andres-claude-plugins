@@ -104,7 +104,6 @@ export async function seedAdminUser(repo: UserRepo): Promise<void> {
     const user = await repo.getByEmail(ADMIN_USER.email);
     setSeedStatus({
       seeded: true,
-      hash_prefix: user?.password_hash?.slice(0, 8),
       role: user?.role,
     });
   } catch (err) {
