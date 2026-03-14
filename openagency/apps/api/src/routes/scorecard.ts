@@ -18,7 +18,7 @@ import type { MeshCoordinator } from '@openagency/agent';
 import type { ConnectorInfra } from '../connectors/setup.js';
 
 // ─── In-memory scorecard store (until DB persistence) ─────────────
-interface ScorecardRecord {
+export interface ScorecardRecord {
   id: string;
   created_at: string;
   ad_spend: number;
@@ -27,10 +27,87 @@ interface ScorecardRecord {
   billing: BillingResult;
   status: 'pending' | 'accepted' | 'rejected';
   feedback?: string;
+  run_id?: string;
+  client_id?: string;
 }
 
 const scorecardStore = new Map<string, ScorecardRecord>();
 let latestScorecardId: string | null = null;
+
+/**
+ * Create a scorecard from a completed mesh run's stage results.
+ * Called automatically after pipeline completion.
+ */
+export function createScorecardFromMeshRun(
+  stageResults: Record<string, Record<string, unknown>>,
+  opts: { run_id: string; ad_spend?: number; client_id?: string; client_lift_rate?: number; client_efficiency_rate?: number },
+): ScorecardRecord {
+  const engineOutputs: EngineOutputs = { ad_spend: opts.ad_spend ?? 0 };
+
+  // Extract engine outputs from stage results
+  for (const [agentId, stage] of Object.entries(stageResults)) {
+    const outputSummary = (stage.output_summary ?? {}) as Record<string, unknown>;
+    const cycleResult = stage.cycle_result as Record<string, unknown> | undefined;
+    const actResults = (cycleResult?.results ?? []) as Array<Record<string, unknown>>;
+
+    // Use output_summary as the primary source (it has the skill-level data)
+    // Map each skill that was invoked
+    const skillsInvoked = (stage.skills_invoked ?? []) as string[];
+    for (const skillId of skillsInvoked) {
+      // Find the matching act result for this skill
+      const skillResult = actResults.find((r) => r.skill === skillId || r.skill_id === skillId);
+      const data = (skillResult?.data ?? skillResult?.result ?? outputSummary) as Record<string, unknown>;
+      mapToEngineOutputs(engineOutputs, agentId, skillId, data);
+    }
+
+    // Fallback: if no skills mapped, use output_summary directly for known fields
+    if (skillsInvoked.length === 0 && Object.keys(outputSummary).length > 0) {
+      // Try to infer from output_summary structure
+      if (agentId === 'leak-detector' && !engineOutputs.leak_detector) {
+        engineOutputs.leak_detector = { waste_waterfall: outputSummary };
+      }
+      if (agentId === 'media-architect' && !engineOutputs.media_architect) {
+        engineOutputs.media_architect = { mmm_model: outputSummary };
+      }
+      if (agentId === 'campaign-ops' && !engineOutputs.campaign_ops) {
+        engineOutputs.campaign_ops = { optimization_analyze: outputSummary };
+      }
+      if (agentId === 'executive-bridge' && !engineOutputs.executive_bridge) {
+        engineOutputs.executive_bridge = { revenue_translate: outputSummary };
+      }
+    }
+  }
+
+  // If ad_spend wasn't provided, try to extract from leak-detector output
+  if (!engineOutputs.ad_spend || engineOutputs.ad_spend <= 0) {
+    const wasteOutput = engineOutputs.leak_detector?.waste_waterfall as Record<string, unknown> | undefined;
+    engineOutputs.ad_spend = (wasteOutput?.gross_spend as number) ?? (wasteOutput?.ad_spend as number) ?? 0;
+  }
+
+  // Pass client rates if provided
+  if (opts.client_lift_rate !== undefined) engineOutputs.client_lift_rate = opts.client_lift_rate;
+  if (opts.client_efficiency_rate !== undefined) engineOutputs.client_efficiency_rate = opts.client_efficiency_rate;
+
+  const billing = calculateBillingFromEngines(engineOutputs);
+
+  const id = randomUUID();
+  const record: ScorecardRecord = {
+    id,
+    created_at: new Date().toISOString(),
+    ad_spend: engineOutputs.ad_spend,
+    engine_outputs: engineOutputs,
+    engine_results: stageResults,
+    billing,
+    status: 'pending',
+    run_id: opts.run_id,
+    client_id: opts.client_id,
+  };
+
+  scorecardStore.set(id, record);
+  latestScorecardId = id;
+
+  return record;
+}
 
 export function scorecardRoutes(
   agency: OpenAgency,

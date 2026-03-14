@@ -13,6 +13,7 @@ import type { MeshCoordinator, MeshRun } from '@openagency/agent';
 import { computePipelineScore, HFL_SCORE_THRESHOLD } from '@openagency/agent';
 import type { PipelineScheduler } from '@openagency/agent';
 import type { HFLCoordinator, MeshRunSummary } from '@openagency/hfl';
+import { createScorecardFromMeshRun } from './scorecard.js';
 
 export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, scheduler?: PipelineScheduler) {
   const app = new Hono();
@@ -65,6 +66,29 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, schedule
       if (hfl && run.status === 'completed') {
         const hflResult = await evaluateHFL(hfl, run, mesh, clientId);
         serialized.hfl_decision = hflResult;
+      }
+
+      // ─── Auto-create scorecard from completed pipeline ───────────
+      if (run.status === 'completed') {
+        const stageResults = serialized.stage_results as Record<string, Record<string, unknown>> | undefined;
+        if (stageResults) {
+          try {
+            const scorecard = createScorecardFromMeshRun(stageResults, {
+              run_id: run.id,
+              client_id: clientId,
+            });
+            serialized.scorecard = {
+              id: scorecard.id,
+              total_fee: scorecard.billing.total_fee,
+              value_delivered: scorecard.billing.value_delivered,
+              roi_on_fee: scorecard.billing.roi_on_fee,
+              tier: scorecard.billing.tier.label,
+              status: scorecard.status,
+            };
+          } catch {
+            // Scorecard creation failure doesn't block pipeline response
+          }
+        }
       }
 
       return c.json(serialized, 201);
