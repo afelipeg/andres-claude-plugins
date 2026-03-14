@@ -46,8 +46,34 @@ export function HomePage() {
     }
   };
 
+  const onboarded = localStorage.getItem('plinth_onboarded') === 'true';
+
   return (
     <div className="space-y-8">
+      {/* Onboarding banner — shown only if not completed */}
+      {!onboarded && (
+        <div className="rounded-xl border border-[#02c98d]/30 bg-[#02c98d]/5 p-5 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">Get started with Plinth</h3>
+            <p className="mt-0.5 text-xs text-gray-600">Connect your ad platforms and run your first analysis in 3 simple steps.</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { localStorage.setItem('plinth_onboarded', 'true'); window.location.reload(); }}
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50"
+            >
+              Dismiss
+            </button>
+            <Link
+              to="/app/onboarding"
+              className="rounded-lg bg-zinc-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800"
+            >
+              Start Onboarding
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Hero */}
       <div className="rounded-2xl bg-gradient-to-br from-gray-900 to-gray-800 p-8 text-white">
         <h2 className="text-3xl font-bold">Plinth by Polanyi</h2>

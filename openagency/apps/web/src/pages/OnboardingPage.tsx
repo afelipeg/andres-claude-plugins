@@ -78,23 +78,66 @@ function ConnectStep({ onNext }: { onNext: () => void }) {
 
   const connectedCount = Object.values(statuses).filter(Boolean).length;
 
-  const handleConnect = (platformId: string) => {
-    // Open OAuth flow in new window — the /app/integrations page handles the full flow
-    // For now, redirect to integrations page with the platform highlighted
-    window.open(`/app/integrations?connect=${platformId}`, '_blank');
-    // Poll for status updates
-    const interval = setInterval(() => { void loadStatus(); }, 3000);
-    setTimeout(() => clearInterval(interval), 60000);
+  const handleConnect = async (platformId: string) => {
+    // Get OAuth URL from backend and redirect in a popup window
+    try {
+      const redirectUri = `${window.location.origin}/auth/callback`;
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL ?? ''}/v1/connectors/${platformId}/auth-url?redirect_uri=${encodeURIComponent(redirectUri)}`,
+        { headers: { Authorization: `Bearer ${localStorage.getItem('plinth_token') ?? ''}` } },
+      );
+      if (!res.ok) {
+        // Fallback: redirect to integrations page
+        window.location.href = `/app/integrations`;
+        return;
+      }
+      const data = await res.json() as { url?: string };
+      if (data.url) {
+        // Open OAuth in popup
+        const popup = window.open(data.url, 'oauth', 'width=600,height=700,scrollbars=yes');
+        // Poll for popup close + refresh status
+        const interval = setInterval(() => {
+          if (!popup || popup.closed) {
+            clearInterval(interval);
+            void loadStatus();
+          }
+        }, 1000);
+        setTimeout(() => clearInterval(interval), 120000);
+      } else {
+        window.location.href = `/app/integrations`;
+      }
+    } catch {
+      window.location.href = `/app/integrations`;
+    }
   };
 
   if (loading) return <div className="flex justify-center py-12"><Spinner /></div>;
 
   return (
     <Card title="Connect Your Ad Platforms">
-      <p className="text-sm text-gray-500 mb-6">
+      <p className="text-sm text-gray-500 mb-4">
         Link your advertising accounts to pull live campaign data into the analysis engines.
         Connect at least one platform, or skip to use synthetic data.
       </p>
+
+      {/* MCP Option */}
+      <div className="mb-5 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-900 text-sm font-bold text-white">
+            MCP
+          </span>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-gray-900">Connect via MCP</p>
+            <p className="text-[11px] text-gray-500">Use Claude Desktop, Cursor, or any MCP-compatible agent to interact with all 63 tools.</p>
+          </div>
+          <a
+            href="/app/integrations"
+            className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100"
+          >
+            View MCP Setup
+          </a>
+        </div>
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {PLATFORMS.map((p) => {
