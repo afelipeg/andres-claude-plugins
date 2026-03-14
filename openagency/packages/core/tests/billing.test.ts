@@ -137,13 +137,15 @@ describe('calculateBilling', () => {
     expect(result.recovery_fee.fee).toBe(280_000 * 0.04); // $11,200
   });
 
-  it('calculates lift fee at 14% (Scale tier) with MDS triangulation', () => {
+  it('calculates lift fee at 14% (Scale tier) with MDS as max media signal', () => {
     const result = calculateBilling(baseInput);
     // MDS triangulates to average of 500K and 550K = 525K (within 30%)
-    const expectedLift = 200_000 + 150_000 + 100_000 + 525_000; // $975,000
+    // Lift = KPI lift (200K) + max(ROAS 150K, ROI 100K, MDS 525K) = 725K
+    // ROAS/ROI/MDS are overlapping views of same value — take max, not sum
+    const expectedLift = 200_000 + 525_000; // $725,000
     expect(result.total_lift).toBe(expectedLift);
     expect(result.lift_fee.rate).toBe(0.14);
-    expect(result.lift_fee.fee).toBe(975_000 * 0.14); // $136,500
+    expect(result.lift_fee.fee).toBe(101500); // 725,000 × 14%
   });
 
   it('calculates efficiency fee at 7% (Scale tier)', () => {
@@ -175,7 +177,7 @@ describe('calculateBilling', () => {
   it('line items are transparent — every positive source listed', () => {
     const result = calculateBilling(baseInput);
     expect(result.recovery_fee.line_items.length).toBe(6);
-    expect(result.lift_fee.line_items.length).toBe(4);
+    expect(result.lift_fee.line_items.length).toBe(2); // KPI lift + max media signal
     expect(result.efficiency_fee.line_items.length).toBe(5);
   });
 

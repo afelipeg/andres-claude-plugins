@@ -265,17 +265,47 @@ function computeRecovery(input: RecoveryInput): {
   return { total: items.reduce((sum, i) => sum + i.amount, 0), items };
 }
 
-/** Sum lift sources */
+/**
+ * Compute lift fee base.
+ *
+ * Lift has two independent components:
+ *   1. KPI lift from optimization (Media Architect) — additive, always counted
+ *   2. Media contribution signal — the MAX of { ROAS lift, ROI lift, MDS }
+ *      These three are different views of the same underlying value
+ *      (how much revenue media/advertising contributes), so we take
+ *      the highest signal to avoid double-counting.
+ *
+ * C-Levels and directors care about ONE number: how much did media contribute
+ * to sales. That's MDS, ROAS lift, or ROI lift — whichever is largest.
+ */
 function computeLift(
   input: LiftInput,
   mds: MediaDrivenSalesResult,
 ): { total: number; items: Array<{ label: string; amount: number }> } {
+  const kpiLift = Math.max(0, input.kpi_lift_dollars);
+
+  // Pick the max media contribution signal (these overlap — not additive)
+  const roasLift = Math.max(0, input.roas_lift_dollars);
+  const roiLift = Math.max(0, input.roi_lift_dollars);
+  const mdsValue = Math.max(0, mds.final_value);
+  const mediaContribution = Math.max(roasLift, roiLift, mdsValue);
+
+  // Identify which signal won for transparency
+  let mediaLabel: string;
+  if (mediaContribution === mdsValue && mdsValue > 0) {
+    mediaLabel = `Media-Driven Sales (${mds.method})`;
+  } else if (mediaContribution === roiLift && roiLift > 0) {
+    mediaLabel = 'ROI improvement value';
+  } else if (mediaContribution === roasLift && roasLift > 0) {
+    mediaLabel = 'ROAS improvement value';
+  } else {
+    mediaLabel = 'Media contribution';
+  }
+
   const items = [
-    { label: 'KPI lift from optimization (Media Architect)', amount: Math.max(0, input.kpi_lift_dollars) },
-    { label: 'ROAS improvement value', amount: Math.max(0, input.roas_lift_dollars) },
-    { label: 'ROI improvement value', amount: Math.max(0, input.roi_lift_dollars) },
-    { label: `Media-Driven Sales (${mds.method})`, amount: Math.max(0, mds.final_value) },
-  ].filter((i) => i.amount > 0);
+    ...(kpiLift > 0 ? [{ label: 'KPI lift from optimization (Media Architect)', amount: kpiLift }] : []),
+    ...(mediaContribution > 0 ? [{ label: mediaLabel, amount: mediaContribution }] : []),
+  ];
 
   return { total: items.reduce((sum, i) => sum + i.amount, 0), items };
 }
