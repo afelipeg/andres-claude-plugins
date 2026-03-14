@@ -52,18 +52,6 @@ export default function CTASection() {
       });
       if (!res.ok) throw new Error('Request failed');
       setSubmitted(true);
-
-      // Send email notification to Polanyi team via hidden iframe
-      const subject = encodeURIComponent(`[Plinth Demo Request] ${company} - ${contactName}`);
-      const mailBody = encodeURIComponent(
-        `New demo request:\n\nCompany: ${company}\nContact: ${contactName}\nEmail: ${email}\nMonthly Spend: ${monthlySpend || 'Not specified'}\nPlatforms: ${platforms.length > 0 ? platforms.join(', ') : 'None selected'}\n\nSubmitted: ${new Date().toISOString()}`
-      );
-      const mailto = `mailto:hello@polanyi.tech,dedalo@polanyi.tech?subject=${subject}&body=${mailBody}`;
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = mailto;
-      document.body.appendChild(iframe);
-      setTimeout(() => iframe.remove(), 3000);
     } catch {
       setError('Something went wrong. Please email us at hello@polanyi.tech');
     } finally {
