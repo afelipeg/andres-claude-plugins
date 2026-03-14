@@ -14,6 +14,8 @@ import { BillingPage } from './pages/BillingPage';
 import { ArchitecturePage } from './pages/ArchitecturePage';
 import { ConsumptionPage } from './pages/ConsumptionPage';
 import { AuthCallbackPage } from './pages/AuthCallbackPage';
+import { AcceptInvitePage } from './pages/AcceptInvitePage';
+import { OnboardingPage } from './pages/OnboardingPage';
 import { SettingsLayout } from './pages/settings/SettingsLayout';
 import { ProfilePage } from './pages/settings/ProfilePage';
 import { UsersPage } from './pages/settings/UsersPage';
@@ -38,6 +40,7 @@ function AppRoutes() {
   return (
     <Route element={<Layout />}>
       <Route index element={<HomePage />} />
+      <Route path="onboarding" element={<OnboardingPage />} />
       <Route path="scorecard" element={<ScorecardPage />} />
       <Route path="billing" element={<BillingPage />} />
       <Route path="command-center" element={<CommandCenterPage />} />
@@ -67,6 +70,9 @@ export function App() {
 
       {/* /login — authentication screen */}
       <Route path="login" element={<LoginPage />} />
+
+      {/* /accept-invite — invite acceptance page */}
+      <Route path="accept-invite" element={<AcceptInvitePage />} />
 
       {/* /demo/* — investor demo room (landing-scorecard_Plinth pages, hardcoded) */}
       <Route path="demo" element={<DemoCommandCenter />} />

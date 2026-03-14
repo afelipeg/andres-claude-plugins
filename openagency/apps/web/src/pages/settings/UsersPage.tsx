@@ -76,7 +76,12 @@ export function UsersPage() {
     const data = await res.json();
     if (res.ok) {
       setMsg(`Invited ${inviteEmail}`);
-      setInviteLink(data.invite_url ?? '');
+      // Build the accept-invite link from the token returned by the backend
+      const token = data.token ?? data.invite_token ?? '';
+      const acceptUrl = token
+        ? `${window.location.origin}/accept-invite?token=${token}`
+        : data.invite_url ?? '';
+      setInviteLink(acceptUrl);
       setInviteEmail(''); setInviteName('');
       setShowInvite(false);
       loadUsers();
@@ -145,8 +150,17 @@ export function UsersPage() {
       )}
       {inviteLink && (
         <div className="rounded-lg bg-zinc-50 border border-zinc-200 px-4 py-3 text-sm text-zinc-700">
-          Invite link:{' '}
-          <code className="bg-zinc-100 px-1.5 py-0.5 rounded text-xs font-mono">{inviteLink}</code>
+          <div className="flex items-center gap-3">
+            <span className="shrink-0">Invite link:</span>
+            <code className="bg-zinc-100 px-1.5 py-0.5 rounded text-xs font-mono truncate flex-1">{inviteLink}</code>
+            <button
+              onClick={() => void navigator.clipboard.writeText(inviteLink)}
+              className="shrink-0 rounded-md bg-zinc-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-zinc-800"
+            >
+              Copy
+            </button>
+          </div>
+          <p className="mt-1.5 text-xs text-zinc-500">Send this link to the invited user to set up their account.</p>
         </div>
       )}
 

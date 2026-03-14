@@ -6,36 +6,36 @@
  */
 import { motion, useInView } from "framer-motion";
 import { useRef, useEffect, useState } from "react";
-import { User, Search, Cpu, FileJson, Key, Plug, LayoutGrid } from "lucide-react";
+import { User, Search, Cpu, FileJson, CheckCircle, Key, Plug, LayoutGrid } from "lucide-react";
 
 const steps = [
   {
     number: "01",
     icon: User,
-    title: "CMO sets the goal",
-    description: '"Optimize Q3 for ROAS 4.5x with $2M budget"',
-    detail: "The human approves the goal and reviews results. Nothing more.",
+    title: "Request a demo",
+    description: "Tell us about your ad spend and platforms. We'll set up your account and send you an invite within 24 hours.",
+    detail: "No contracts. No commitments. Just results.",
   },
   {
     number: "02",
     icon: Search,
-    title: "Orchestrator agent discovers services",
-    description: "Via A2A protocol, the agent discovers Plinth endpoints, evaluates reputation scores, and negotiates pricing.",
-    detail: "Fully automated service discovery and procurement.",
+    title: "Connect your platforms",
+    description: "Link Google Ads, Meta, DV360, TikTok, and Amazon Ads via OAuth. Your data stays encrypted and secure.",
+    detail: "One-click OAuth. Covers >80% of ad spend.",
   },
   {
     number: "03",
     icon: Cpu,
-    title: "Plinth engines execute",
-    description: "Leak Detector scans all 6 platforms. Executive Bridge calculates fair value via Shapley. Media Architect models saturation and reallocates. Campaign Ops orchestrates the pipeline.",
-    detail: "24-task DAG pipeline runs end-to-end.",
+    title: "AI engines analyze",
+    description: "4 engines run simultaneously: detect waste, model media mix, optimize campaigns, and bridge to revenue attribution.",
+    detail: "Powered by Claude. Results in under 3 minutes.",
   },
   {
     number: "04",
-    icon: FileJson,
-    title: "Results delivered programmatically",
-    description: "The agent receives structured JSON with waste detected, optimized allocation, and projected ROAS — ready for the next agent in the chain.",
-    detail: "No dashboards. No CSVs. Pure API response.",
+    icon: CheckCircle,
+    title: "Review, approve, pay for results",
+    description: "See your Recovery Scorecard with value delivered. Approve to confirm billing, or provide feedback for re-analysis. You only pay when we deliver.",
+    detail: "Outcome-based: 3-5% recovery + 0.5-1.5% lift & efficiency.",
   },
 ];
 

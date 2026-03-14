@@ -425,5 +425,59 @@ export function authRoutes(userRepo?: UserRepo | null) {
     return c.json({ user: updated ? { id: updated.id, email: updated.email, name: updated.name, role: updated.role } : null });
   });
 
+  // ─── Demo Request (public, no auth) ──────────────────────────────
+  const demoRequests = new Map<string, {
+    id: string;
+    company: string;
+    contact_name: string;
+    email: string;
+    monthly_spend: string;
+    platforms: string[];
+    created_at: string;
+  }>();
+
+  app.post('/v1/demo-request', async (c) => {
+    try {
+      const body = await c.req.json<{
+        company?: string;
+        contact_name?: string;
+        email?: string;
+        monthly_spend?: string;
+        platforms?: string[];
+      }>();
+
+      if (!body.email || !body.company || !body.contact_name) {
+        return c.json({ error: 'validation_error', message: 'company, contact_name, and email are required' }, 400);
+      }
+
+      const id = randomUUID();
+      const record = {
+        id,
+        company: body.company,
+        contact_name: body.contact_name,
+        email: body.email,
+        monthly_spend: body.monthly_spend ?? 'unknown',
+        platforms: body.platforms ?? [],
+        created_at: new Date().toISOString(),
+      };
+      demoRequests.set(id, record);
+
+      return c.json({ message: 'Demo request received. We will reach out within 24 hours.', id }, 201);
+    } catch {
+      return c.json({ error: 'bad_request', message: 'Invalid JSON body' }, 400);
+    }
+  });
+
+  app.get('/v1/demo-requests', authMiddleware(), async (c) => {
+    const auth = c.get('auth') as AuthPayload | undefined;
+    if (!auth || auth.role !== 'admin') {
+      return c.json({ error: 'forbidden', message: 'Admin access required' }, 403);
+    }
+    const requests = Array.from(demoRequests.values()).sort(
+      (a, b) => b.created_at.localeCompare(a.created_at),
+    );
+    return c.json({ requests, total: requests.length });
+  });
+
   return app;
 }

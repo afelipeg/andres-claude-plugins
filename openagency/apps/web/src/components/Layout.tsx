@@ -103,6 +103,14 @@ export function Layout() {
       .catch(() => {});
   }, []);
 
+  // Redirect to onboarding if first visit
+  useEffect(() => {
+    const onboarded = localStorage.getItem('plinth_onboarded');
+    if (!onboarded && pathname.startsWith('/app') && !pathname.includes('/onboarding')) {
+      navigate('/app/onboarding', { replace: true });
+    }
+  }, [pathname, navigate]);
+
   const { events } = useEventStream({ types: ['hfl.escalated', 'mesh.pipeline.failed'] });
   const { active, push, dismiss, dismissAll } = useNotifications();
 
