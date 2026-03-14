@@ -132,7 +132,9 @@ async function runEngines(
       if (skillId) {
         const result = await agency.run(engineId, skillId, data);
         engineResults[engineId] = { [skillId]: result };
-        mapToEngineOutputs(engineOutputs, engineId, skillId, result as unknown as Record<string, unknown>);
+        // Extract inner .data for billing — agency.run() wraps output in { engine, skill, data, timestamp }
+        const innerData = ((result as unknown as Record<string, unknown>).data ?? {}) as Record<string, unknown>;
+        mapToEngineOutputs(engineOutputs, engineId, skillId, innerData);
       }
     } catch (err) {
       engineResults[engineId] = {

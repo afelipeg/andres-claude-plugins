@@ -500,12 +500,17 @@ export function extractExecutiveBridgeLift(
   let attributionRevenue = 0;
 
   if (revenueResult) {
-    const l1 = revenueResult['l1_financial'] as Record<string, unknown> | undefined;
+    // Handle both field names: l1_financial (schema) and l1_metrics (engine output)
+    const l1 = (revenueResult['l1_financial'] ?? revenueResult['l1_metrics']) as Record<string, unknown> | undefined;
     const spend = adSpend ?? Number(revenueResult['total_spend'] ?? 0);
 
     if (l1) {
-      const roas = Number(l1['roas'] ?? 0);
-      // ROAS lift = incremental revenue if ROAS improved from industry avg (2.0x baseline)
+      // ROAS: try direct field, else compute from total_revenue / total_spend
+      let roas = Number(l1['roas'] ?? 0);
+      if (!roas && l1['total_revenue'] && l1['total_spend']) {
+        const totalSpend = Number(l1['total_spend']);
+        if (totalSpend > 0) roas = Number(l1['total_revenue']) / totalSpend;
+      }
       const baselineRoas = 2.0;
       if (roas > baselineRoas && spend > 0) {
         roasLift = (roas - baselineRoas) * spend;
