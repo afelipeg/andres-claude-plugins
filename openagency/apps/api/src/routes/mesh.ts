@@ -9,9 +9,10 @@
 // DELETE /v1/mesh/schedules/:id       — delete schedule
 
 import { Hono } from 'hono';
-import type { MeshCoordinator } from '@openagency/agent';
+import type { MeshCoordinator, MeshRun } from '@openagency/agent';
+import { computePipelineScore, HFL_SCORE_THRESHOLD } from '@openagency/agent';
 import type { PipelineScheduler } from '@openagency/agent';
-import type { HFLCoordinator } from '@openagency/hfl';
+import type { HFLCoordinator, MeshRunSummary } from '@openagency/hfl';
 
 export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, scheduler?: PipelineScheduler) {
   const app = new Hono();
@@ -58,7 +59,15 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, schedule
 
     try {
       const run = await mesh.executePipeline(pipelineId, goalId, clientId);
-      return c.json(mesh.serializeRun(run), 201);
+      const serialized = mesh.serializeRun(run) as Record<string, unknown>;
+
+      // ─── HFL evaluation after pipeline completes ─────────────────
+      if (hfl && run.status === 'completed') {
+        const hflResult = await evaluateHFL(hfl, run, mesh, clientId);
+        serialized.hfl_decision = hflResult;
+      }
+
+      return c.json(serialized, 201);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: 'execution_failed', message }, 500);
@@ -365,4 +374,51 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, schedule
   });
 
   return app;
+}
+
+// ─── HFL Evaluation Helper ──────────────────────────────────────────
+
+async function evaluateHFL(
+  hfl: HFLCoordinator,
+  run: MeshRun,
+  mesh: MeshCoordinator,
+  clientId?: string,
+): Promise<Record<string, unknown>> {
+  // Build MeshRunSummary from the completed run
+  const stageResults: Record<string, { agent_id: string; status: string; duration_ms: number; skills_invoked: string[]; output_summary?: Record<string, unknown>; error?: string }> = {};
+  for (const [agentId, result] of run.context.stage_results) {
+    stageResults[agentId] = {
+      agent_id: result.agent_id,
+      status: result.status,
+      duration_ms: result.duration_ms,
+      skills_invoked: result.skills_invoked,
+      output_summary: result.output_summary,
+      error: result.error,
+    };
+  }
+
+  // Compute pipeline quality score for force-escalation check
+  const pipelineScore = computePipelineScore(run.context.stage_results);
+  const forceEscalate = pipelineScore.composite < HFL_SCORE_THRESHOLD;
+
+  const summary: MeshRunSummary = {
+    id: run.id,
+    pipeline_id: run.pipeline_id,
+    status: run.status,
+    total_duration_ms: run.total_duration_ms ?? 0,
+    client_id: clientId,
+    stage_results: stageResults,
+  };
+
+  const decision = await hfl.evaluate(summary, forceEscalate);
+
+  return {
+    id: decision.id,
+    status: decision.status,
+    urgency: decision.urgency,
+    needs_human: decision.needs_human,
+    reason: decision.reason,
+    risk_score: decision.risk_score,
+    pipeline_score: pipelineScore,
+  };
 }
