@@ -61,6 +61,7 @@ import { campaignRoutes } from './routes/campaigns.js';
 import { onboardingRoutes } from './routes/onboarding.js';
 import { consumptionRoutes } from './routes/consumption.js';
 import { assistantRoutes, autoCreatePipelineConversation } from './routes/assistant.js';
+import { ConversationRepo, ScorecardDbRepo } from '@openagency/memory';
 import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/logger.js';
 import { rateLimiter } from './middleware/rate-limiter.js';
@@ -283,7 +284,7 @@ export async function createApp() {
   app.route('/', hflRoutes(hflCoordinator));
 
   // ─── Scorecard + Billing ──────────────────────────────────────
-  app.route('/', scorecardRoutes(agency, mesh, connectorInfra));
+  app.route('/', scorecardRoutes(agency, mesh, connectorInfra, db ? new ScorecardDbRepo(db) : undefined));
 
   // ─── Analyze pipeline (upload → engines → scorecard) ──────────
   app.route('/', analyzeRoutes(agency));
@@ -313,7 +314,7 @@ export async function createApp() {
   app.route('/', deliveryRoutes(agency, fileRepo));
 
   // ─── AI Assistant routes ──────────────────────────────────────
-  app.route('/', assistantRoutes(llmConfig, mesh, hflCoordinator, connectorInfra));
+  app.route('/', assistantRoutes(llmConfig, mesh, hflCoordinator, connectorInfra, agency, db ? new ConversationRepo(db) : undefined));
 
   // ─── MCP endpoint ───────────────────────────────────────────────
   app.route('/', mcpRoute(agency, agentMap, mesh, connectorInfra, a2aClient, mcpClientRegistry, dynamicSkillRegistry, hflCoordinator, scheduler, fileRepo));

@@ -9,6 +9,8 @@ import type { LLMConfig } from '@openagency/types';
 import { callLLM } from '@openagency/core';
 import type { MeshCoordinator, MeshRun } from '@openagency/agent';
 import type { HFLCoordinator, HFLDecision } from '@openagency/hfl';
+import { ConversationRepo, type ConversationRecord, type ConvMessage } from '@openagency/memory';
+import type { OpenAgency } from '@openagency/core';
 
 // ─── Anthropic tool use types ─────────────────────────────────────────
 
@@ -117,9 +119,9 @@ const PLINTH_TOOLS: AnthropicTool[] = [
   },
 ];
 
-// ─── In-memory conversation store ─────────────────────────────────────
+// ─── In-memory fallback store (used when DB unavailable) ──────────────
 
-interface ConvMessage {
+interface ConvMessageLocal {
   id: string;
   role: 'user' | 'assistant';
   content: string;
@@ -131,12 +133,78 @@ export interface Conversation {
   id: string;
   title: string;
   starred: boolean;
-  messages: ConvMessage[];
+  messages: ConvMessageLocal[];
   created_at: string;
   updated_at: string;
 }
 
-const conversations = new Map<string, Conversation>();
+const memConversations = new Map<string, Conversation>();
+
+// ─── Unified conversation store (DB-first, Map fallback) ──────────────
+
+let convRepo: ConversationRepo | null = null;
+
+export function setConversationRepo(repo: ConversationRepo): void {
+  convRepo = repo;
+}
+
+async function getConv(id: string): Promise<Conversation | null> {
+  if (convRepo) {
+    const r = await convRepo.findById(id).catch(() => null);
+    if (!r) return null;
+    return {
+      id: r.id, title: r.title, starred: r.starred,
+      created_at: r.created_at, updated_at: r.updated_at,
+      messages: r.messages.map((m) => ({
+        id: m.id, role: m.role, content: m.content,
+        timestamp: m.timestamp, actions: m.actions,
+      })),
+    };
+  }
+  return memConversations.get(id) ?? null;
+}
+
+async function saveConv(conv: Conversation): Promise<void> {
+  if (convRepo) {
+    const record: ConversationRecord = {
+      id: conv.id, title: conv.title, starred: conv.starred,
+      run_type: 'standard', created_at: conv.created_at, updated_at: conv.updated_at,
+      message_count: conv.messages.length,
+      messages: conv.messages.map((m) => ({
+        id: m.id, role: m.role, content: m.content,
+        timestamp: m.timestamp, actions: m.actions,
+      } as ConvMessage)),
+    };
+    await convRepo.save(record).catch(() => {});
+  }
+  memConversations.set(conv.id, conv);
+}
+
+async function listConvSummaries(): Promise<Array<{
+  id: string; title: string; starred: boolean; created_at: string; updated_at: string;
+  message_count: number; preview: string;
+}>> {
+  if (convRepo) {
+    const rows = await convRepo.list().catch(() => []);
+    return rows.map((r) => ({
+      id: r.id, title: r.title, starred: r.starred,
+      created_at: r.created_at, updated_at: r.updated_at,
+      message_count: r.message_count, preview: r.preview,
+    }));
+  }
+  return Array.from(memConversations.values())
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    .map(({ id, title, starred, created_at, updated_at, messages }) => ({
+      id, title, starred, created_at, updated_at,
+      message_count: messages.length,
+      preview: messages.at(-2)?.content?.slice(0, 80) ?? '',
+    }));
+}
+
+async function deleteConv(id: string): Promise<boolean> {
+  if (convRepo) await convRepo.delete(id).catch(() => {});
+  return memConversations.delete(id);
+}
 
 // ─── Plinth E2E system prompt ──────────────────────────────────────────
 
@@ -328,6 +396,7 @@ async function executeTool(
   input: Record<string, unknown>,
   mesh: MeshCoordinator,
   hfl: HFLCoordinator,
+  agency?: OpenAgency,
 ): Promise<{ type: string; result: unknown }> {
   try {
     switch (name) {
@@ -375,16 +444,59 @@ async function executeTool(
         };
       }
       case 'generate_report': {
-        const format = input['format'] as string;
-        const reportType = (input['report_type'] as string) ?? 'full_report';
-        // Delivery Engine is triggered server-side — return a link to the Delivery page
+        const format = (input['format'] as string) ?? 'pdf';
+        const reportType = (input['report_type'] as string) ?? 'executive_summary';
+
+        // Map format to delivery skill ID
+        const skillMap: Record<string, string> = {
+          pdf: 'monthly-report',
+          excel: 'client-scorecard-export',
+          ppt: 'media-plan-deck',
+          docx: 'campaign-brief',
+        };
+        const skillId = skillMap[format] ?? 'monthly-report';
+
+        if (agency) {
+          try {
+            const latestRun = mesh.listRuns().at(-1);
+            const deliveryInput = {
+              output_formats: [format === 'ppt' ? 'pptx' : format === 'excel' ? 'xlsx' : format],
+              report_type: reportType,
+              client_id: latestRun?.usage?.agent_client_id ?? 'default',
+              run_id: latestRun?.id,
+              title: `${reportType.replace(/_/g, ' ')} — ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`,
+            };
+            const result = await (agency.run('delivery', skillId, deliveryInput) as Promise<unknown>);
+            const output = result as Record<string, unknown>;
+            const fileId = (output['file_id'] as string | undefined) ?? (output['id'] as string | undefined);
+            const baseUrl = process.env['API_BASE_URL'] ?? 'http://localhost:3100';
+            return {
+              type: 'generate_report',
+              result: {
+                format,
+                skill_id: skillId,
+                file_id: fileId,
+                status: fileId ? 'ready' : 'generated',
+                download_url: fileId ? `${baseUrl}/v1/delivery/files/${fileId}/download` : null,
+                message: fileId
+                  ? `Your ${format.toUpperCase()} report is ready. Download URL: ${baseUrl}/v1/delivery/files/${fileId}/download`
+                  : `Report generated successfully.`,
+              },
+            };
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Generation failed';
+            return {
+              type: 'generate_report',
+              result: { format, skill_id: skillId, status: 'error', message: msg },
+            };
+          }
+        }
+
         return {
           type: 'generate_report',
           result: {
-            format,
-            report_type: reportType,
-            status: 'queued',
-            message: `Report generation queued. Visit the Delivery section or use the /v1/delivery/${format} endpoint to download when ready.`,
+            format, skill_id: skillId, status: 'queued',
+            message: `Report queued. Use /v1/delivery/files to check status and download.`,
           },
         };
       }
@@ -404,6 +516,7 @@ async function callWithTools(
   llmMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
   mesh: MeshCoordinator,
   hfl: HFLCoordinator,
+  agencyRef?: OpenAgency,
 ): Promise<{ text: string; actions: Array<{ type: string; result: unknown }> }> {
   const apiKey = process.env['ANTHROPIC_API_KEY'];
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY required for tool use');
@@ -452,7 +565,7 @@ async function callWithTools(
 
   for (const block of toolUseBlocks) {
     if (!block.id || !block.name) continue;
-    const action = await executeTool(block.name, block.input ?? {}, mesh, hfl);
+    const action = await executeTool(block.name, block.input ?? {}, mesh, hfl, agencyRef);
     actions.push(action);
     toolResults.push({
       type: 'tool_result',
@@ -566,7 +679,7 @@ End with a direct question asking the operator what they'd like to do next.`;
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
-  conversations.set(convId, conv);
+  await saveConv(conv);
   return convId;
 }
 
@@ -582,7 +695,10 @@ export function assistantRoutes(
   mesh: MeshCoordinator,
   hfl: HFLCoordinator,
   connectorInfra: ConnectorInfraLike,
+  agencyRef?: OpenAgency,
+  convRepoInstance?: ConversationRepo,
 ) {
+  if (convRepoInstance) setConversationRepo(convRepoInstance);
   const app = new Hono();
 
   // ─── POST /v1/assistant/chat ─────────────────────────────────────────
@@ -596,8 +712,10 @@ export function assistantRoutes(
 
       if (!body.message?.trim()) return c.json({ error: 'message is required' }, 400);
 
-      // Get or create conversation
-      let conv = body.conversation_id ? conversations.get(body.conversation_id) : undefined;
+      // Get or create conversation (DB-first, in-memory fallback)
+      let conv: Conversation | null = body.conversation_id
+        ? await getConv(body.conversation_id)
+        : null;
       if (!conv) {
         conv = {
           id: ulid(),
@@ -607,11 +725,10 @@ export function assistantRoutes(
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
-        conversations.set(conv.id, conv);
       }
 
       // Append user message
-      const userMsg: ConvMessage = {
+      const userMsg: ConvMessageLocal = {
         id: ulid(),
         role: 'user',
         content: body.message,
@@ -635,7 +752,7 @@ export function assistantRoutes(
       let actionResults: Array<{ type: string; result: unknown }> = [];
 
       if (llmConfig.provider === 'anthropic' && process.env['ANTHROPIC_API_KEY']) {
-        const result = await callWithTools(llmMessages, mesh, hfl);
+        const result = await callWithTools(llmMessages, mesh, hfl, agencyRef);
         cleanContent = result.text;
         actionResults = result.actions;
       } else {
@@ -651,7 +768,7 @@ export function assistantRoutes(
       }
 
       // Append assistant message
-      const assistantMsg: ConvMessage = {
+      const assistantMsg: ConvMessageLocal = {
         id: ulid(),
         role: 'assistant',
         content: cleanContent,
@@ -660,6 +777,7 @@ export function assistantRoutes(
       };
       conv.messages.push(assistantMsg);
       conv.updated_at = new Date().toISOString();
+      await saveConv(conv);
 
       return c.json({
         conversation_id: conv.id,
@@ -678,29 +796,15 @@ export function assistantRoutes(
   });
 
   // ─── GET /v1/assistant/conversations ─────────────────────────────────
-  app.get('/v1/assistant/conversations', (c) => {
-    const list = Array.from(conversations.values())
-      .sort((a, b) => {
-        // Starred first, then by updated_at desc
-        if (a.starred !== b.starred) return a.starred ? -1 : 1;
-        return b.updated_at.localeCompare(a.updated_at);
-      })
-      .map(({ id, title, starred, created_at, updated_at, messages }) => ({
-        id,
-        title,
-        starred,
-        created_at,
-        updated_at,
-        message_count: messages.length,
-        preview: messages.at(-2)?.content?.slice(0, 80) ?? '',
-      }));
+  app.get('/v1/assistant/conversations', async (c) => {
+    const list = await listConvSummaries();
     return c.json({ conversations: list });
   });
 
   // ─── GET /v1/assistant/conversations/:id ─────────────────────────────
-  app.get('/v1/assistant/conversations/:id', (c) => {
+  app.get('/v1/assistant/conversations/:id', async (c) => {
     const id = c.req.param('id');
-    const conv = conversations.get(id);
+    const conv = await getConv(id);
     if (!conv) return c.json({ error: 'not_found', message: `Conversation ${id} not found` }, 404);
     return c.json(conv);
   });
@@ -708,21 +812,24 @@ export function assistantRoutes(
   // ─── PATCH /v1/assistant/conversations/:id — rename or star ──────────
   app.patch('/v1/assistant/conversations/:id', async (c) => {
     const id = c.req.param('id');
-    const conv = conversations.get(id);
-    if (!conv) return c.json({ error: 'not_found' }, 404);
     const body = await c.req.json<{ title?: string; starred?: boolean }>()
       .catch(() => ({} as { title?: string; starred?: boolean }));
-    if (body.title !== undefined) conv.title = body.title.slice(0, 100);
-    if (body.starred !== undefined) conv.starred = body.starred;
-    conv.updated_at = new Date().toISOString();
-    return c.json({ id: conv.id, title: conv.title, starred: conv.starred });
+    // Update in DB
+    if (convRepo) await convRepo.patch(id, body).catch(() => {});
+    // Update in memory fallback
+    const mem = memConversations.get(id);
+    if (mem) {
+      if (body.title !== undefined) mem.title = body.title.slice(0, 100);
+      if (body.starred !== undefined) mem.starred = body.starred;
+      mem.updated_at = new Date().toISOString();
+    }
+    return c.json({ id, title: body.title, starred: body.starred, updated: true });
   });
 
   // ─── DELETE /v1/assistant/conversations/:id ───────────────────────────
-  app.delete('/v1/assistant/conversations/:id', (c) => {
+  app.delete('/v1/assistant/conversations/:id', async (c) => {
     const id = c.req.param('id');
-    const existed = conversations.delete(id);
-    if (!existed) return c.json({ error: 'not_found' }, 404);
+    await deleteConv(id);
     return c.json({ deleted: id });
   });
 

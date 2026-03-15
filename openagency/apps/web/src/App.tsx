@@ -17,6 +17,7 @@ import { AuthCallbackPage } from './pages/AuthCallbackPage';
 import { AcceptInvitePage } from './pages/AcceptInvitePage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { AssistantPage } from './pages/AssistantPage';
+import { HistoryPage } from './pages/HistoryPage';
 import { SettingsLayout } from './pages/settings/SettingsLayout';
 import { ProfilePage } from './pages/settings/ProfilePage';
 import { UsersPage } from './pages/settings/UsersPage';
@@ -44,6 +45,7 @@ function AppRoutes() {
       <Route path="onboarding" element={<OnboardingPage />} />
       <Route path="assistant" element={<AssistantPage />} />
       <Route path="assistant/:id" element={<AssistantPage />} />
+      <Route path="history" element={<HistoryPage />} />
       <Route path="scorecard" element={<ScorecardPage />} />
       <Route path="billing" element={<BillingPage />} />
       <Route path="command-center" element={<CommandCenterPage />} />

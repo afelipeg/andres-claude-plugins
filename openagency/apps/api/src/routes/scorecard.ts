@@ -16,6 +16,7 @@ import {
 import type { EngineOutputs, BillingResult } from '@openagency/core';
 import type { MeshCoordinator } from '@openagency/agent';
 import type { ConnectorInfra } from '../connectors/setup.js';
+import { ScorecardDbRepo } from '@openagency/memory';
 
 // ─── In-memory scorecard store (until DB persistence) ─────────────
 export interface ScorecardRecord {
@@ -33,6 +34,12 @@ export interface ScorecardRecord {
 
 const scorecardStore = new Map<string, ScorecardRecord>();
 let latestScorecardId: string | null = null;
+
+let scorecardDbRepo: ScorecardDbRepo | null = null;
+
+export function setScorecardDbRepo(repo: ScorecardDbRepo): void {
+  scorecardDbRepo = repo;
+}
 
 /**
  * Create a scorecard from a completed mesh run's stage results.
@@ -104,6 +111,22 @@ export function createScorecardFromMeshRun(
   };
 
   scorecardStore.set(id, record);
+  if (scorecardDbRepo) {
+    scorecardDbRepo.save({
+      id: record.id,
+      run_id: record.run_id,
+      client_id: record.client_id,
+      run_type: 'standard',
+      ad_spend: record.ad_spend,
+      billing: record.billing as unknown as Record<string, unknown>,
+      engine_outputs: record.engine_outputs as unknown as Record<string, unknown>,
+      engine_results: record.engine_results as Record<string, unknown>,
+      status: record.status,
+      feedback: record.feedback,
+      created_at: record.created_at,
+      updated_at: record.created_at,
+    }).catch(() => {});
+  }
   latestScorecardId = id;
 
   return record;
@@ -113,7 +136,9 @@ export function scorecardRoutes(
   agency: OpenAgency,
   mesh: MeshCoordinator,
   _connectorInfra: ConnectorInfra,
+  scorecardDb?: ScorecardDbRepo,
 ) {
+  if (scorecardDb) setScorecardDbRepo(scorecardDb);
   const app = new Hono();
 
   // ─── Compute billing from raw engine outputs ─────────────────────

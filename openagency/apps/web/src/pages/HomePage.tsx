@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Loader2, XCircle, CheckCircle2, Bot } from 'lucide-react';
 import { Card } from '../components/Card';
 import { ReportHistory } from '../components/ReportHistory';
 import { listEngines } from '../api/agency';
@@ -31,6 +32,24 @@ export function HomePage() {
   const navigate = useNavigate();
   const [demoRunning, setDemoRunning] = useState(false);
   const [demoError, setDemoError] = useState<string | null>(null);
+  const [lastRun, setLastRun] = useState<{
+    id: string; status: string; pipeline_id: string; total_duration_ms?: number;
+    started_at: string; hfl_decision?: { status: string };
+  } | null>(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem('plinth_token');
+    if (!token) return;
+    const API_URL = import.meta.env.VITE_API_URL ?? '';
+    fetch(`${API_URL}/v1/mesh/runs?limit=1`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { runs?: Array<{ id: string; status: string; pipeline_id: string; total_duration_ms?: number; started_at: string; hfl_decision?: { status: string } }> } | null) => {
+        if (data?.runs?.[0]) setLastRun(data.runs[0]);
+      })
+      .catch(() => {});
+  }, []);
 
   const handleRunDemo = async () => {
     if (demoRunning) return;
@@ -70,6 +89,47 @@ export function HomePage() {
             >
               Start Onboarding
             </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Last run card */}
+      {lastRun && (
+        <div className="mb-6 flex items-center gap-4 rounded-xl border border-zinc-200 bg-white px-5 py-4 shadow-sm">
+          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+            lastRun.status === 'completed' ? 'bg-emerald-50 text-emerald-600'
+            : lastRun.status === 'running' ? 'bg-blue-50 text-blue-600'
+            : 'bg-red-50 text-red-500'
+          }`}>
+            {lastRun.status === 'completed' ? <CheckCircle2 className="h-5 w-5" />
+              : lastRun.status === 'running' ? <Loader2 className="h-5 w-5 animate-spin" />
+              : <XCircle className="h-5 w-5" />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-zinc-800">
+              Last run: {lastRun.pipeline_id} — <span className="capitalize">{lastRun.status}</span>
+            </p>
+            <p className="text-xs text-zinc-500">
+              {new Date(lastRun.started_at).toLocaleString()}
+              {lastRun.total_duration_ms ? ` · ${(lastRun.total_duration_ms / 1000).toFixed(1)}s` : ''}
+              {lastRun.hfl_decision ? ` · HFL: ${lastRun.hfl_decision.status.replace(/_/g, ' ')}` : ''}
+            </p>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <button
+              onClick={() => navigate('/app/scorecard')}
+              className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+            >
+              Scorecard
+            </button>
+            <button
+              onClick={() => navigate('/app/assistant')}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-colors"
+              style={{ backgroundColor: '#02c98d' }}
+            >
+              <Bot className="h-3.5 w-3.5" />
+              Review in Assistant
+            </button>
           </div>
         </div>
       )}

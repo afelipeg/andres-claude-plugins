@@ -18,6 +18,7 @@ import {
   Link,
   FileText,
   Activity,
+  Clock,
   Bot,
   Plus,
   MessageSquare,
@@ -72,6 +73,7 @@ const NAV_ITEMS_BOTTOM: NavItem[] = [
   { path: '/integrations', label: 'Integrations', Icon: Link },
   { path: '/architecture', label: 'Architecture', Icon: FileText },
   { path: '/consumption', label: 'Consumption', Icon: Activity },
+  { path: '/history', label: 'History', Icon: Clock },
   { path: '/billing', label: 'Billing', Icon: CreditCard },
   { path: '/settings', label: 'Settings', Icon: Settings },
 ];
@@ -91,6 +93,7 @@ function getPageTitle(pathname: string): string {
     integrations: 'Integrations',
     architecture: 'Architecture',
     consumption: 'Consumption',
+    history: 'History',
     settings: 'Settings',
   };
   return (segment !== undefined ? titles[segment] : undefined) ?? 'Dashboard';
