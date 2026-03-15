@@ -43,6 +43,7 @@ function AppRoutes() {
       <Route index element={<HomePage />} />
       <Route path="onboarding" element={<OnboardingPage />} />
       <Route path="assistant" element={<AssistantPage />} />
+      <Route path="assistant/:id" element={<AssistantPage />} />
       <Route path="scorecard" element={<ScorecardPage />} />
       <Route path="billing" element={<BillingPage />} />
       <Route path="command-center" element={<CommandCenterPage />} />

@@ -285,7 +285,7 @@ export async function createApp() {
   app.route('/', deliveryRoutes(agency, fileRepo));
 
   // ─── AI Assistant routes ──────────────────────────────────────
-  app.route('/', assistantRoutes(llmConfig, mesh, hflCoordinator));
+  app.route('/', assistantRoutes(llmConfig, mesh, hflCoordinator, connectorInfra));
 
   // ─── MCP endpoint ───────────────────────────────────────────────
   app.route('/', mcpRoute(agency, agentMap, mesh, connectorInfra, a2aClient, mcpClientRegistry, dynamicSkillRegistry, hflCoordinator, scheduler, fileRepo));

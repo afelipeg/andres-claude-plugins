@@ -18,6 +18,7 @@ export interface AssistantMessage {
 export interface Conversation {
   id: string;
   title: string;
+  starred: boolean;
   created_at: string;
   updated_at: string;
   message_count: number;
@@ -27,6 +28,7 @@ export interface Conversation {
 export interface ConversationDetail {
   id: string;
   title: string;
+  starred: boolean;
   messages: AssistantMessage[];
   created_at: string;
   updated_at: string;
@@ -69,6 +71,22 @@ export async function getConversation(id: string): Promise<ConversationDetail> {
   });
   if (!res.ok) throw new Error(`Conversation ${id} not found`);
   return res.json() as Promise<ConversationDetail>;
+}
+
+export async function renameConversation(id: string, title: string): Promise<void> {
+  await fetch(`${API_URL}/v1/assistant/conversations/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ title }),
+  });
+}
+
+export async function toggleStarConversation(id: string, starred: boolean): Promise<void> {
+  await fetch(`${API_URL}/v1/assistant/conversations/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ starred }),
+  });
 }
 
 export async function deleteConversation(id: string): Promise<void> {
