@@ -62,7 +62,9 @@ export type EngineEventType =
   // Delivery Engine
   | 'delivery.file_generated'
   | 'delivery.skill_completed'
-  | 'delivery.search_completed';
+  | 'delivery.search_completed'
+  // Assistant
+  | 'assistant.pipeline_ready';
 
 export interface EngineEvent<T = unknown> {
   id: string; // ULID

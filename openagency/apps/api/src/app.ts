@@ -60,7 +60,7 @@ import { dashboardRoutes } from './routes/dashboard.js';
 import { campaignRoutes } from './routes/campaigns.js';
 import { onboardingRoutes } from './routes/onboarding.js';
 import { consumptionRoutes } from './routes/consumption.js';
-import { assistantRoutes } from './routes/assistant.js';
+import { assistantRoutes, autoCreatePipelineConversation } from './routes/assistant.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/logger.js';
 import { rateLimiter } from './middleware/rate-limiter.js';
@@ -207,6 +207,34 @@ export async function createApp() {
     hflCoordinator.evaluate(summary, forceEscalate).catch((err: unknown) => {
       log.warn({ err, run_id: runId }, 'HFL evaluation error');
     });
+
+    // ── Auto-generate assistant briefing for this run ──────────────
+    // Runs after HFL so the pending decision is already in hfl.listPending()
+    setTimeout(() => {
+      const currentRun = mesh.getRun(runId);
+      if (!currentRun) return;
+      autoCreatePipelineConversation(
+        currentRun,
+        llmConfig,
+        mesh,
+        hflCoordinator,
+        connectorInfra.credentialStore.platforms(),
+      )
+        .then(async (convId) => {
+          const { ulid: makeId } = await import('ulid');
+          await eventBus.publish({
+            id: makeId(),
+            type: 'assistant.pipeline_ready',
+            timestamp: new Date().toISOString(),
+            payload: { conversation_id: convId, run_id: runId },
+            metadata: {},
+          });
+          log.info({ run_id: runId, conversation_id: convId }, 'Assistant briefing ready');
+        })
+        .catch((err: unknown) => {
+          log.warn({ err, run_id: runId }, 'Failed to auto-create assistant briefing');
+        });
+    }, 500); // small delay so HFL decision is registered first
   });
 
   // ─── Federation (external agent consumption) ──────────────────

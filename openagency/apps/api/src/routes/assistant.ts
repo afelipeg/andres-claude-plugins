@@ -214,6 +214,77 @@ async function executeActions(
   return results;
 }
 
+// ─── Auto-create conversation on pipeline completion ──────────────────
+// Called by app.ts after HFL evaluates a completed pipeline run.
+// Generates an LLM briefing proactively and stores it in the conv Map.
+
+export async function autoCreatePipelineConversation(
+  run: MeshRun,
+  llmConfig: LLMConfig,
+  mesh: MeshCoordinator,
+  hfl: HFLCoordinator,
+  connectedPlatforms: string[],
+): Promise<string> {
+  const pending = hfl.listPending();
+  const thisPending = pending.find((d) => d.run_id === run.id);
+  const duration = ((run.total_duration_ms ?? 0) / 1000).toFixed(1);
+  const clientId = run.usage?.agent_client_id ?? 'N/A';
+  const stageCount = run.context.stage_results.size;
+
+  // Synthetic trigger message — becomes the first user turn that Claude responds to
+  const triggerMsg = `A pipeline run just completed. Generate a comprehensive briefing for the operator:
+
+Run ID: ${run.id}
+Pipeline: ${run.pipeline_id}
+Status: ${run.status}
+Client: ${clientId}
+Duration: ${duration}s
+Stages completed: ${stageCount}/4
+HFL Decision: ${thisPending
+    ? `ESCALATED — urgency: ${thisPending.urgency} — ${thisPending.reason}`
+    : 'auto-approved (no human review needed)'}
+
+Your briefing must cover:
+1. What each engine found (waste, optimizations, campaign insights, executive KPIs)
+2. Key numbers — waste %, estimated Recovery/Lift/Efficiency fees
+3. Whether human approval is required and why
+4. Your recommendation: approve, reject, or re-run
+
+End with a direct question asking the operator what they'd like to do next.`;
+
+  const systemPrompt = buildSystemPrompt(mesh, hfl, connectedPlatforms);
+  const llmMessages = [
+    { role: 'system' as const, content: systemPrompt },
+    { role: 'user' as const, content: triggerMsg },
+  ];
+
+  const response = await callLLM({ ...llmConfig, maxTokens: 2048, temperature: 0.3 }, llmMessages);
+  const content = stripActionTags(response.content);
+
+  const dateLabel = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const clientLabel = clientId !== 'N/A' ? ` · ${clientId}` : '';
+  const isHighUrgency = thisPending?.urgency === 'critical' || thisPending?.urgency === 'high';
+
+  const convId = ulid();
+  const conv: Conversation = {
+    id: convId,
+    title: `Pipeline Run ${dateLabel}${clientLabel}`,
+    starred: isHighUrgency,
+    messages: [
+      {
+        id: ulid(),
+        role: 'assistant',
+        content,
+        timestamp: new Date().toISOString(),
+      },
+    ],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  conversations.set(convId, conv);
+  return convId;
+}
+
 // ─── ConnectorInfra minimal interface (duck-typed) ────────────────────
 interface ConnectorInfraLike {
   credentialStore: { platforms(): string[] };

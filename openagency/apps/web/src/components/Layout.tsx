@@ -400,7 +400,7 @@ export function Layout() {
       .catch(() => {});
   }, []);
 
-  const { events } = useEventStream({ types: ['hfl.escalated', 'mesh.pipeline.failed'] });
+  const { events } = useEventStream({ types: ['hfl.escalated', 'mesh.pipeline.failed', 'assistant.pipeline_ready'] });
   const { active, push, dismiss, dismissAll } = useNotifications();
 
   useEffect(() => {
@@ -428,6 +428,16 @@ export function Layout() {
         message: `Pipeline ${payload['pipeline_id'] ?? 'unknown'} failed for run ${payload['run_id'] ?? '?'}.`,
         timestamp: latest.timestamp,
         meta: payload,
+      });
+    } else if (latest.type === 'assistant.pipeline_ready') {
+      push({
+        id: latest.id,
+        type: 'hfl_escalation',
+        urgency: 'high',
+        title: 'Pipeline Analysis Ready',
+        message: 'Your pipeline run has been analyzed. Review the AI summary and approve or reject.',
+        timestamp: latest.timestamp,
+        meta: payload, // includes conversation_id
       });
     }
   }, [events.length]); // eslint-disable-line react-hooks/exhaustive-deps

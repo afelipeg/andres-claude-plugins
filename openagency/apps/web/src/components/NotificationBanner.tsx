@@ -2,6 +2,7 @@
 // Displays HFL escalation alerts and other notifications as a
 // dismissable banner in the top bar area.
 
+import { useNavigate } from 'react-router-dom';
 import type { AppNotification, NotificationUrgency } from '../hooks/useNotifications';
 
 interface NotificationBannerProps {
@@ -56,9 +57,17 @@ function NotificationCard({
   notification: AppNotification;
   onDismiss: (id: string) => void;
 }) {
+  const navigate = useNavigate();
   const style = URGENCY_STYLES[notification.urgency];
   const iconBg = URGENCY_ICON_BG[notification.urgency];
   const time = new Date(notification.timestamp).toLocaleTimeString();
+  const conversationId = notification.meta?.['conversation_id'] as string | undefined;
+
+  const handleReview = () => {
+    const path = conversationId ? `/app/assistant/${conversationId}` : '/app/assistant';
+    navigate(path);
+    onDismiss(notification.id);
+  };
 
   return (
     <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 ${style}`}>
@@ -80,6 +89,14 @@ function NotificationCard({
           <span className="text-xs opacity-60 shrink-0">{time}</span>
         </div>
         <p className="mt-0.5 text-xs opacity-80 line-clamp-2">{notification.message}</p>
+        {conversationId && (
+          <button
+            onClick={handleReview}
+            className="mt-2 text-xs font-semibold underline underline-offset-2 opacity-90 hover:opacity-100 transition-opacity"
+          >
+            Review in Assistant →
+          </button>
+        )}
       </div>
       <button
         onClick={() => onDismiss(notification.id)}
