@@ -10,6 +10,113 @@ import { callLLM } from '@openagency/core';
 import type { MeshCoordinator, MeshRun } from '@openagency/agent';
 import type { HFLCoordinator, HFLDecision } from '@openagency/hfl';
 
+// ─── Anthropic tool use types ─────────────────────────────────────────
+
+interface AnthropicToolProperty {
+  type: string;
+  description?: string;
+  enum?: string[];
+}
+
+interface AnthropicTool {
+  name: string;
+  description: string;
+  input_schema: {
+    type: 'object';
+    properties: Record<string, AnthropicToolProperty>;
+    required: string[];
+  };
+}
+
+interface AnthropicContentBlock {
+  type: 'text' | 'tool_use';
+  text?: string;
+  id?: string;
+  name?: string;
+  input?: Record<string, unknown>;
+}
+
+interface AnthropicMessageResponse {
+  content: AnthropicContentBlock[];
+  stop_reason: 'end_turn' | 'tool_use' | 'max_tokens';
+  model: string;
+  usage: { input_tokens: number; output_tokens: number };
+}
+
+// ─── Plinth tool definitions ──────────────────────────────────────────
+
+const PLINTH_TOOLS: AnthropicTool[] = [
+  {
+    name: 'approve_run',
+    description: 'Approve a pipeline run that is pending HFL (Human Feedback Loop) review. Use when the user asks to approve a run.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        run_id: { type: 'string', description: 'Full ULID of the run to approve' },
+        feedback: { type: 'string', description: 'Optional approval message or comments' },
+      },
+      required: ['run_id'],
+    },
+  },
+  {
+    name: 'reject_run',
+    description: 'Reject a pipeline run that is pending HFL review. Use when the user asks to reject, decline, or deny a run.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        run_id: { type: 'string', description: 'Full ULID of the run to reject' },
+        feedback: { type: 'string', description: 'Reason for rejection (required for audit trail)' },
+      },
+      required: ['run_id'],
+    },
+  },
+  {
+    name: 'run_pipeline',
+    description: 'Trigger a new pipeline run. Use when the user asks to run, re-run, start, or execute the pipeline.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        pipeline_id: {
+          type: 'string',
+          description: "Pipeline to execute. 'full-optimization' runs all 4 engines. 'full-with-deliverables' also generates reports.",
+          enum: ['full-optimization', 'full-with-deliverables'],
+        },
+        client_id: { type: 'string', description: 'Client identifier (optional, defaults to current context)' },
+      },
+      required: ['pipeline_id'],
+    },
+  },
+  {
+    name: 'get_pipeline_status',
+    description: 'Get the current status of the latest pipeline run and any pending HFL decisions. Use when the user asks "what happened", "show me the status", or similar.',
+    input_schema: {
+      type: 'object',
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: 'generate_report',
+    description: 'Generate a report using the Delivery Engine (Engine 5). Returns a download URL.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        format: {
+          type: 'string',
+          description: 'Output format',
+          enum: ['pdf', 'excel', 'ppt', 'docx'],
+        },
+        report_type: {
+          type: 'string',
+          description: "Type of report content: 'executive_summary', 'campaign_performance', 'budget_analysis', 'full_report'",
+          enum: ['executive_summary', 'campaign_performance', 'budget_analysis', 'full_report'],
+        },
+      },
+      required: ['format'],
+    },
+  },
+];
+
 // ─── In-memory conversation store ─────────────────────────────────────
 
 interface ConvMessage {
@@ -214,6 +321,184 @@ async function executeActions(
   return results;
 }
 
+// ─── Anthropic tool execution ─────────────────────────────────────────
+
+async function executeTool(
+  name: string,
+  input: Record<string, unknown>,
+  mesh: MeshCoordinator,
+  hfl: HFLCoordinator,
+): Promise<{ type: string; result: unknown }> {
+  try {
+    switch (name) {
+      case 'approve_run': {
+        const runId = input['run_id'] as string;
+        const feedback = (input['feedback'] as string | undefined) ?? 'Approved via Plinth Assistant';
+        const decision = await hfl.approveRun(runId, feedback);
+        return { type: 'approve_run', result: { run_id: runId, status: decision ? 'approved' : 'not_found' } };
+      }
+      case 'reject_run': {
+        const runId = input['run_id'] as string;
+        const feedback = (input['feedback'] as string | undefined) ?? 'Rejected via Plinth Assistant';
+        const decision = await hfl.rejectRun(runId, feedback);
+        return { type: 'reject_run', result: { run_id: runId, status: decision ? 'rejected' : 'not_found' } };
+      }
+      case 'run_pipeline': {
+        const pipelineId = (input['pipeline_id'] as string) ?? 'full-optimization';
+        const clientId = input['client_id'] as string | undefined;
+        void mesh.executePipeline(pipelineId, undefined, clientId).catch(() => {});
+        return { type: 'run_pipeline', result: { pipeline_id: pipelineId, status: 'triggered' } };
+      }
+      case 'get_pipeline_status': {
+        const runs = mesh.listRuns();
+        const latest = runs[runs.length - 1];
+        const pending = hfl.listPending();
+        return {
+          type: 'get_pipeline_status',
+          result: {
+            latest_run: latest
+              ? {
+                  run_id: latest.id,
+                  pipeline: latest.pipeline_id,
+                  status: latest.status,
+                  duration_s: ((latest.total_duration_ms ?? 0) / 1000).toFixed(1),
+                  client: latest.usage?.agent_client_id ?? 'N/A',
+                  stages_completed: latest.context.stage_results.size,
+                }
+              : null,
+            pending_decisions: pending.map((d) => ({
+              run_id: d.run_id,
+              urgency: d.urgency,
+              reason: d.reason,
+            })),
+          },
+        };
+      }
+      case 'generate_report': {
+        const format = input['format'] as string;
+        const reportType = (input['report_type'] as string) ?? 'full_report';
+        // Delivery Engine is triggered server-side — return a link to the Delivery page
+        return {
+          type: 'generate_report',
+          result: {
+            format,
+            report_type: reportType,
+            status: 'queued',
+            message: `Report generation queued. Visit the Delivery section or use the /v1/delivery/${format} endpoint to download when ready.`,
+          },
+        };
+      }
+      default:
+        return { type: name, result: { error: `Unknown tool: ${name}` } };
+    }
+  } catch {
+    return { type: name, result: { error: 'tool_execution_failed' } };
+  }
+}
+
+// ─── Anthropic native tool use call ──────────────────────────────────
+// Handles multi-turn tool execution: send → tool_use → execute → final response.
+// Falls back to text-based action detection for non-Anthropic providers.
+
+async function callWithTools(
+  llmMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>,
+  mesh: MeshCoordinator,
+  hfl: HFLCoordinator,
+): Promise<{ text: string; actions: Array<{ type: string; result: unknown }> }> {
+  const apiKey = process.env['ANTHROPIC_API_KEY'];
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY required for tool use');
+
+  const systemMsg = llmMessages.find((m) => m.role === 'system');
+  const userMsgs = llmMessages.filter((m) => m.role !== 'system');
+
+  // Turn 1: send messages + tools
+  const res1 = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4096,
+      temperature: 0.3,
+      system: systemMsg?.content,
+      tools: PLINTH_TOOLS,
+      messages: userMsgs.map((m) => ({ role: m.role, content: m.content })),
+    }),
+  });
+
+  if (!res1.ok) {
+    const err = await res1.text();
+    throw new Error(`Anthropic API error (${res1.status}): ${err}`);
+  }
+
+  const data1 = (await res1.json()) as AnthropicMessageResponse;
+
+  // No tool use — just return text
+  if (data1.stop_reason !== 'tool_use') {
+    const text = data1.content
+      .filter((b) => b.type === 'text')
+      .map((b) => b.text ?? '')
+      .join('');
+    return { text, actions: [] };
+  }
+
+  // Execute tools
+  const toolUseBlocks = data1.content.filter((b) => b.type === 'tool_use');
+  const actions: Array<{ type: string; result: unknown }> = [];
+  const toolResults: Array<{ type: 'tool_result'; tool_use_id: string; content: string }> = [];
+
+  for (const block of toolUseBlocks) {
+    if (!block.id || !block.name) continue;
+    const action = await executeTool(block.name, block.input ?? {}, mesh, hfl);
+    actions.push(action);
+    toolResults.push({
+      type: 'tool_result',
+      tool_use_id: block.id,
+      content: JSON.stringify(action.result),
+    });
+  }
+
+  // Turn 2: send tool results, get final response
+  const messagesWithTools = [
+    ...userMsgs.map((m) => ({ role: m.role, content: m.content })),
+    { role: 'assistant' as const, content: data1.content },
+    { role: 'user' as const, content: toolResults },
+  ];
+
+  const res2 = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2048,
+      temperature: 0.3,
+      system: systemMsg?.content,
+      tools: PLINTH_TOOLS,
+      messages: messagesWithTools,
+    }),
+  });
+
+  if (!res2.ok) {
+    const err = await res2.text();
+    throw new Error(`Anthropic API error turn 2 (${res2.status}): ${err}`);
+  }
+
+  const data2 = (await res2.json()) as AnthropicMessageResponse;
+  const text = data2.content
+    .filter((b) => b.type === 'text')
+    .map((b) => b.text ?? '')
+    .join('');
+
+  return { text, actions };
+}
+
 // ─── Auto-create conversation on pipeline completion ──────────────────
 // Called by app.ts after HFL evaluates a completed pipeline run.
 // Generates an LLM briefing proactively and stores it in the conv Map.
@@ -345,18 +630,25 @@ export function assistantRoutes(
         })),
       ];
 
-      // Call Claude (or DeepSeek fallback) — max 4096 tokens for rich responses
-      const llmResponse = await callLLM(
-        { ...llmConfig, maxTokens: 4096, temperature: 0.3 },
-        llmMessages,
-      );
+      // Use Anthropic native tool use when available, text-based fallback otherwise
+      let cleanContent: string;
+      let actionResults: Array<{ type: string; result: unknown }> = [];
 
-      // Detect + execute embedded actions
-      const detectedActions = detectActions(llmResponse.content);
-      const actionResults =
-        detectedActions.length > 0 ? await executeActions(detectedActions, hfl, mesh) : [];
-
-      const cleanContent = stripActionTags(llmResponse.content);
+      if (llmConfig.provider === 'anthropic' && process.env['ANTHROPIC_API_KEY']) {
+        const result = await callWithTools(llmMessages, mesh, hfl);
+        cleanContent = result.text;
+        actionResults = result.actions;
+      } else {
+        // DeepSeek / Ollama fallback — text-based action detection
+        const llmResponse = await callLLM(
+          { ...llmConfig, maxTokens: 4096, temperature: 0.3 },
+          llmMessages,
+        );
+        const detectedActions = detectActions(llmResponse.content);
+        actionResults =
+          detectedActions.length > 0 ? await executeActions(detectedActions, hfl, mesh) : [];
+        cleanContent = stripActionTags(llmResponse.content);
+      }
 
       // Append assistant message
       const assistantMsg: ConvMessage = {

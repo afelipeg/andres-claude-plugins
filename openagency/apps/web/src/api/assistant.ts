@@ -95,3 +95,62 @@ export async function deleteConversation(id: string): Promise<void> {
     headers: authHeaders(),
   });
 }
+
+// ─── Upload and analyze a file through Plinth engines ─────────────────
+
+export interface UploadAnalysisResult {
+  filename: string;
+  platform_detected: string;
+  rows_parsed: number;
+  engines_run: string[];
+  billing?: {
+    total_fee: number;
+    recovery_fee: number;
+    lift_fee: number;
+    efficiency_fee: number;
+  };
+  summary_text: string;
+}
+
+export async function uploadAndAnalyzeFile(
+  file: File,
+  adSpend: number,
+): Promise<UploadAnalysisResult> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('ad_spend', String(adSpend));
+
+  const res = await fetch(`${API_URL}/v1/analyze/file`, {
+    method: 'POST',
+    headers: authHeaders(), // no Content-Type — browser sets multipart boundary
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: 'Upload failed' })) as { message?: string };
+    throw new Error(err.message ?? `HTTP ${res.status}`);
+  }
+
+  const data = await res.json() as Record<string, unknown>;
+
+  // Normalize response into a display-friendly summary
+  const billing = data['billing'] as Record<string, number> | undefined;
+  const parsed = data['parsed'] as Record<string, unknown> | undefined;
+  const engines = (data['engines'] as string[]) ?? [];
+
+  return {
+    filename: file.name,
+    platform_detected: (data['platform'] as string) ?? (parsed?.['platform'] as string) ?? 'unknown',
+    rows_parsed: (parsed?.['row_count'] as number) ?? 0,
+    engines_run: engines,
+    billing: billing
+      ? {
+          total_fee: (billing['total_fee'] ?? 0),
+          recovery_fee: (billing['recovery_fee'] ?? 0),
+          lift_fee: (billing['lift_fee'] ?? 0),
+          efficiency_fee: (billing['efficiency_fee'] ?? 0),
+        }
+      : undefined,
+    summary_text: JSON.stringify(data, null, 2).slice(0, 3000),
+  };
+}
