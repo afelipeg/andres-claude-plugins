@@ -99,29 +99,18 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, schedule
   });
 
   // ─── List runs (paginated) ────────────────────────────────────────
-  app.get('/v1/mesh/runs', (c) => {
+  app.get('/v1/mesh/runs', async (c) => {
     const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
     const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '20', 10)));
-    const statusFilter = c.req.query('status'); // 'completed' | 'running' | 'failed'
-
-    let allRuns = mesh.listRuns();
-
-    // Sort newest first
-    allRuns.sort((a, b) => {
-      const aTime = a.started_at ?? '';
-      const bTime = b.started_at ?? '';
-      return bTime.localeCompare(aTime);
-    });
-
-    // Filter by status if provided
-    if (statusFilter) {
-      allRuns = allRuns.filter((r) => r.status === statusFilter);
-    }
-
-    const total = allRuns.length;
-    const totalPages = Math.ceil(total / limit);
+    const statusFilter = c.req.query('status');
     const offset = (page - 1) * limit;
-    const pageRuns = allRuns.slice(offset, offset + limit);
+
+    const [pageRuns, total] = await Promise.all([
+      mesh.listRunsAsync({ limit, offset, status: statusFilter }),
+      mesh.countRunsAsync(statusFilter ? { status: statusFilter } : undefined),
+    ]);
+
+    const totalPages = Math.ceil(total / limit);
 
     const runs = pageRuns.map((run) => {
       const base: Record<string, unknown> = {
@@ -133,7 +122,6 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, schedule
         total_duration_ms: run.total_duration_ms,
       };
 
-      // Include HFL decision summary if available
       if (hfl) {
         const decision = hfl.getDecisionByRunId(run.id);
         if (decision) {
@@ -163,9 +151,9 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, schedule
   });
 
   // ─── Get run detail (with full HFL decision) ─────────────────────
-  app.get('/v1/mesh/runs/:id', (c) => {
+  app.get('/v1/mesh/runs/:id', async (c) => {
     const runId = c.req.param('id');
-    const run = mesh.getRun(runId);
+    const run = await mesh.getRunAsync(runId);
     if (!run) {
       return c.json({ error: 'not_found', message: `Run not found: ${runId}` }, 404);
     }
@@ -199,9 +187,9 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, schedule
 
   // ─── Recovery breakdown for a run ─────────────────────────────────
   // Returns per-stage recovery/savings data for the scorecard dashboard.
-  app.get('/v1/mesh/runs/:id/recovery', (c) => {
+  app.get('/v1/mesh/runs/:id/recovery', async (c) => {
     const runId = c.req.param('id');
-    const run = mesh.getRun(runId);
+    const run = await mesh.getRunAsync(runId);
     if (!run) {
       return c.json({ error: 'not_found', message: `Run not found: ${runId}` }, 404);
     }
@@ -283,9 +271,9 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, schedule
   });
 
   // ─── Recovery history (12-month trend) ─────────────────────────
-  app.get('/v1/recovery/history', (c) => {
+  app.get('/v1/recovery/history', async (c) => {
     const monthsParam = Math.min(24, Math.max(1, parseInt(c.req.query('months') ?? '12', 10)));
-    const completedRuns = mesh.listRuns().filter((r) => r.status === 'completed');
+    const completedRuns = await mesh.listRunsAsync({ limit: 500, status: 'completed' });
 
     // Group recovery by month
     const monthMap = new Map<string, number>();

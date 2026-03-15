@@ -26,16 +26,94 @@ import {
   meshStageSkipped,
 } from '@openagency/events';
 
+// Minimal structural interface — status is widened to string so MeshRunRepo
+// (from @openagency/memory) satisfies it without importing agent types.
+export interface IMeshRunRepo {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  save(run: any): Promise<void>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  findById(id: string): Promise<any | null>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  list(opts?: { limit?: number; status?: string; offset?: number }): Promise<any[]>;
+  count(opts?: { status?: string }): Promise<number>;
+}
+
 export class MeshCoordinator {
   private pipelines = new Map<string, MeshPipeline>();
   private runs = new Map<string, MeshRun>();
   private eventSubscriptions: Array<() => void> = [];
   private log = createLogger('mesh');
+  private repo?: IMeshRunRepo;
 
   constructor(
     private agents: Map<string, OodaRuntime>,
     private eventBus: EventBus,
-  ) {}
+    repo?: IMeshRunRepo,
+  ) {
+    this.repo = repo;
+  }
+
+  /** Load recent runs from DB into the in-memory Map on startup. */
+  async hydrateFromDb(limit = 100): Promise<void> {
+    if (!this.repo) return;
+    try {
+      const runs = await this.repo.list({ limit });
+      for (const run of runs) {
+        this.runs.set(run.id, run);
+      }
+      this.log.info({ count: runs.length }, 'Hydrated mesh runs from DB');
+    } catch (err) {
+      this.log.warn({ err }, 'Failed to hydrate mesh runs from DB');
+    }
+  }
+
+  /** Get a run — Map first, then DB fallback. */
+  async getRunAsync(id: string): Promise<MeshRun | undefined> {
+    const cached = this.runs.get(id);
+    if (cached) return cached;
+    if (!this.repo) return undefined;
+    try {
+      const run = await this.repo.findById(id);
+      if (run) {
+        this.runs.set(run.id, run); // cache it
+        return run;
+      }
+    } catch (err) {
+      this.log.warn({ err, id }, 'DB fallback for getRun failed');
+    }
+    return undefined;
+  }
+
+  /** List runs — DB primary (when repo available), merged with active in-memory runs. */
+  async listRunsAsync(opts?: { limit?: number; status?: string; offset?: number }): Promise<MeshRun[]> {
+    if (this.repo) {
+      try {
+        return await this.repo.list(opts);
+      } catch (err) {
+        this.log.warn({ err }, 'DB listRuns failed, falling back to memory');
+      }
+    }
+    // Fallback to memory
+    let runs = Array.from(this.runs.values());
+    if (opts?.status) runs = runs.filter((r) => r.status === opts.status);
+    runs.sort((a, b) => b.started_at.localeCompare(a.started_at));
+    const offset = opts?.offset ?? 0;
+    const limit = opts?.limit ?? 100;
+    return runs.slice(offset, offset + limit);
+  }
+
+  async countRunsAsync(opts?: { status?: string }): Promise<number> {
+    if (this.repo) {
+      try {
+        return await this.repo.count(opts);
+      } catch {
+        // fallback
+      }
+    }
+    let runs = Array.from(this.runs.values());
+    if (opts?.status) runs = runs.filter((r) => r.status === opts.status);
+    return runs.length;
+  }
 
   registerPipeline(pipeline: MeshPipeline): void {
     this.pipelines.set(pipeline.id, pipeline);
@@ -206,6 +284,13 @@ export class MeshCoordinator {
           stages_failed: 0,
         }),
       );
+    }
+
+    // Persist to DB (fire-and-forget — never blocks the pipeline response)
+    if (this.repo) {
+      this.repo.save(run).catch((err: unknown) => {
+        this.log.warn({ err, run_id: runId }, 'Failed to persist mesh run to DB');
+      });
     }
 
     return run;

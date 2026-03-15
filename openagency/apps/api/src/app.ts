@@ -34,6 +34,7 @@ import {
   MemoryRepo,
   FileRepo,
   UserRepo,
+  MeshRunRepo,
 } from '@openagency/memory';
 import { setupConnectors } from './connectors/setup.js';
 import { getDb } from './db/client.js';
@@ -98,6 +99,8 @@ export async function createApp() {
   let fileRepo: FileRepo | null = null;
   let userRepo: UserRepo | null = null;
 
+  let meshRunRepo: MeshRunRepo | null = null;
+
   if (db) {
     log.info('Database connected — repos active');
     agentStateRepo = new AgentStateRepo(db);
@@ -108,6 +111,7 @@ export async function createApp() {
     memoryRepo = new MemoryRepo(db);
     fileRepo = new FileRepo(db);
     userRepo = new UserRepo(db);
+    meshRunRepo = new MeshRunRepo(db);
     await seedAdminUser(userRepo);
   } else {
     log.warn('No DATABASE_URL — running without persistence');
@@ -154,10 +158,12 @@ export async function createApp() {
   };
 
   // ─── Mesh Coordinator (multi-agent orchestration) ───────────────
-  const mesh = new MeshCoordinator(agentMap, eventBus);
+  const mesh = new MeshCoordinator(agentMap, eventBus, meshRunRepo ?? undefined);
   mesh.registerPipeline(DEFAULT_PIPELINE);
   mesh.registerPipeline(DELIVERY_PIPELINE);
   mesh.start();
+  // Warm the in-memory Map from DB so runs survive redeploys
+  await mesh.hydrateFromDb(200);
 
   // ─── Pipeline Scheduler (cron-based pipeline runs) ───────────────
   const scheduler = new PipelineScheduler(mesh, eventBus);
