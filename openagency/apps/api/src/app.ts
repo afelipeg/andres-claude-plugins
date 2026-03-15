@@ -60,6 +60,7 @@ import { dashboardRoutes } from './routes/dashboard.js';
 import { campaignRoutes } from './routes/campaigns.js';
 import { onboardingRoutes } from './routes/onboarding.js';
 import { consumptionRoutes } from './routes/consumption.js';
+import { assistantRoutes } from './routes/assistant.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/logger.js';
 import { rateLimiter } from './middleware/rate-limiter.js';
@@ -282,6 +283,9 @@ export async function createApp() {
 
   // ─── Delivery Engine routes ───────────────────────────────────
   app.route('/', deliveryRoutes(agency, fileRepo));
+
+  // ─── AI Assistant routes ──────────────────────────────────────
+  app.route('/', assistantRoutes(llmConfig, mesh, hflCoordinator));
 
   // ─── MCP endpoint ───────────────────────────────────────────────
   app.route('/', mcpRoute(agency, agentMap, mesh, connectorInfra, a2aClient, mcpClientRegistry, dynamicSkillRegistry, hflCoordinator, scheduler, fileRepo));

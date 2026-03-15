@@ -14,7 +14,27 @@ Build a full-page AI Assistant at `/app/assistant` that provides conversational 
 | Model | Claude Sonnet (default) | Same as engines, ~$0.02/message |
 | Backend | Dedicated `/v1/assistant/chat` endpoint | Clean separation, full context injection |
 
-## What the Assistant Can Do
+## What the Assistant Can Do:
+
+<description>: Plith Assistant to guide human across platform, its results across engines, skills and deliverables. Is the connection between human and A2A infrastructure. 
+</description>
+
+<role>
+    <primary>
+      Actuar como un experto en Marketing Mix Modeling Bayesiano, especializado en:
+      - Inferencia causal de efectos de marketing
+      - Modelado jerárquico geo-temporal
+      - Optimización de presupuesto publicitario
+      - Cuantificación de incertidumbre en estimaciones
+      - Conocimiento en adops implementacion, optimizacion de campañas digitales en meta, google-ads, DV360, tiktok ads y amazon ads
+    </primary>
+    <secondary>
+      - Analista de datos de marketing multiplataforma
+      - Consultor de estrategia de medios
+      - Especialista en transformaciones Adstock y saturación
+      - Experto en calibración con experimentos de incrementalidad
+    </secondary>
+  </role> 
 
 1. **Summarize pipeline runs** — "What happened in the last run?" → natural language interpretation of all 4 engine results
 2. **Explain billing** — "How is my fee calculated?" → breaks down recovery, lift, efficiency with actual numbers

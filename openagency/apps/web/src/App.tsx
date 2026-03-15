@@ -16,6 +16,7 @@ import { ConsumptionPage } from './pages/ConsumptionPage';
 import { AuthCallbackPage } from './pages/AuthCallbackPage';
 import { AcceptInvitePage } from './pages/AcceptInvitePage';
 import { OnboardingPage } from './pages/OnboardingPage';
+import { AssistantPage } from './pages/AssistantPage';
 import { SettingsLayout } from './pages/settings/SettingsLayout';
 import { ProfilePage } from './pages/settings/ProfilePage';
 import { UsersPage } from './pages/settings/UsersPage';
@@ -41,6 +42,7 @@ function AppRoutes() {
     <Route element={<Layout />}>
       <Route index element={<HomePage />} />
       <Route path="onboarding" element={<OnboardingPage />} />
+      <Route path="assistant" element={<AssistantPage />} />
       <Route path="scorecard" element={<ScorecardPage />} />
       <Route path="billing" element={<BillingPage />} />
       <Route path="command-center" element={<CommandCenterPage />} />

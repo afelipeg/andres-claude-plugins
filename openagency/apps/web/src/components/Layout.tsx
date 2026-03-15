@@ -17,6 +17,7 @@ import {
   Link,
   FileText,
   Activity,
+  Bot,
 } from 'lucide-react';
 import { SyncStatus } from './SyncStatus';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -45,6 +46,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { path: '', label: 'Home', Icon: Home },
+  { path: '/assistant', label: 'Assistant', Icon: Bot },
   { path: '/scorecard', label: 'Scorecard', Icon: BarChart3 },
   { path: '/command-center', label: 'Command Center', Icon: Monitor },
   { path: '/leak-detector', label: 'Leak Detector', Icon: Search },
@@ -62,6 +64,7 @@ function getPageTitle(pathname: string): string {
   const segment = pathname.replace('/app', '').replace(/^\//, '').split('/')[0];
   const titles: Record<string, string> = {
     '': 'Home',
+    assistant: 'Assistant',
     scorecard: 'Scorecard',
     billing: 'Billing',
     'command-center': 'Command Center',
@@ -270,7 +273,7 @@ export function Layout() {
 
         <NotificationBanner notifications={active} onDismiss={dismiss} onDismissAll={dismissAll} />
 
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className={cn('flex-1 overflow-hidden', pathname.startsWith('/app/assistant') ? '' : 'overflow-y-auto p-6')}>
           <ErrorBoundary key={pathname}>
             <Outlet />
           </ErrorBoundary>
