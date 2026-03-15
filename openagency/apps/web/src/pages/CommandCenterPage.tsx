@@ -25,6 +25,7 @@ import {
   type GoalSummary,
   type PendingDecision,
 } from '../api/agents';
+import { getConnectorStatus } from '../api/onboarding';
 
 // ─── Decision Queue Component ─────────────────────────────────────
 
@@ -186,6 +187,20 @@ function StageOutputPanel({ run }: { run: MeshRunDetail }) {
 
 // ─── Main Page ──────────────────────────────────────────────────────
 
+type RunType = 'standard' | 'planned' | 'actual';
+
+const RUN_TYPE_LABELS: Record<RunType, string> = {
+  standard: 'Standard Run',
+  planned: 'Planned Run',
+  actual: 'Actual Run',
+};
+
+const RUN_TYPE_COLORS: Record<RunType, string> = {
+  standard: 'bg-zinc-100 text-zinc-700',
+  planned: 'bg-blue-100 text-blue-700',
+  actual: 'bg-green-100 text-green-700',
+};
+
 export function CommandCenterPage() {
   const [agents, setAgents] = useState<AgentState[]>([]);
   const [pipelines, setPipelines] = useState<MeshPipeline[]>([]);
@@ -194,22 +209,30 @@ export function CommandCenterPage() {
   const [decisions, setDecisions] = useState<PendingDecision[]>([]);
   const [selectedRunDetail, setSelectedRunDetail] = useState<MeshRunDetail | null>(null);
   const [executing, setExecuting] = useState(false);
+  const [syntheticData, setSyntheticData] = useState(false);
+  const [runType, setRunType] = useState<RunType>('standard');
+  const [runTypeMap, setRunTypeMap] = useState<Record<string, RunType>>({});
   const { events, connected } = useEventStream();
 
   const refresh = useCallback(async () => {
     try {
-      const [a, p, r, g, d] = await Promise.allSettled([
+      const [a, p, r, g, d, cs] = await Promise.allSettled([
         listAgents(),
         listPipelines(),
         listRuns(),
         listGoals(),
         listPendingDecisions(),
+        getConnectorStatus(),
       ]);
       if (a.status === 'fulfilled') setAgents(a.value);
       if (p.status === 'fulfilled') setPipelines(p.value);
       if (r.status === 'fulfilled') setRuns(r.value);
       if (g.status === 'fulfilled') setGoals(g.value);
       if (d.status === 'fulfilled') setDecisions(d.value);
+      if (cs.status === 'fulfilled') {
+        const anyConnected = cs.value.some((s) => s.connected);
+        setSyntheticData(!anyConnected);
+      }
     } catch {
       // API not available
     }
@@ -227,6 +250,7 @@ export function CommandCenterPage() {
     try {
       const result = await executePipeline('full-optimization');
       setSelectedRunDetail(result);
+      setRunTypeMap((prev) => ({ ...prev, [result.id]: runType }));
       await refresh();
     } catch {
       // Error handled
@@ -264,7 +288,19 @@ export function CommandCenterPage() {
   );
 
   return (
-    <div className="grid h-full grid-cols-1 gap-4 lg:grid-cols-12">
+    <div className="flex flex-col gap-4 h-full">
+      {syntheticData && (
+        <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <svg className="h-4 w-4 shrink-0 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+          <p className="text-sm text-amber-800">
+            <span className="font-semibold">Running on synthetic data</span> — no ad platforms are connected.{' '}
+            <a href="/app/integrations" className="underline hover:text-amber-900">Connect a platform</a> to analyze real campaign data.
+          </p>
+        </div>
+      )}
+    <div className="grid flex-1 grid-cols-1 gap-4 lg:grid-cols-12">
       {/* Left panel — Agent Status + Goals + Decisions */}
       <div className="lg:col-span-3 flex flex-col gap-3 overflow-y-auto">
         <h2 className="text-lg font-semibold text-gray-900">Agents</h2>
@@ -325,6 +361,25 @@ export function CommandCenterPage() {
           <p className="mt-1 text-xs text-gray-500">
             Run the full 4-stage optimization pipeline
           </p>
+          {/* Run type selector */}
+          <div className="mt-3">
+            <label className="text-[11px] font-medium text-gray-500 mb-1 block">Run type</label>
+            <div className="flex gap-2">
+              {(['standard', 'planned', 'actual'] as RunType[]).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setRunType(t)}
+                  className={`flex-1 rounded-md border px-2 py-1 text-[11px] font-medium transition-colors ${
+                    runType === t
+                      ? `${RUN_TYPE_COLORS[t]} border-transparent`
+                      : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                  }`}
+                >
+                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
           <button
             onClick={() => void handleExecute()}
             disabled={executing}
@@ -332,13 +387,26 @@ export function CommandCenterPage() {
           >
             {executing ? 'Executing...' : 'Execute Full Pipeline'}
           </button>
+          {syntheticData && (
+            <p className="mt-2 text-center text-[10px] text-amber-600">Results will use synthetic benchmark data</p>
+          )}
         </div>
 
         {/* Stage Output Visualization */}
         {selectedRunDetail && (
           <div className="rounded-lg border border-gray-200 bg-white p-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-900">Stage Output</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-gray-900">Stage Output</h3>
+                {(runTypeMap[selectedRunDetail.id] != null) && (() => {
+                  const rt = runTypeMap[selectedRunDetail.id] as RunType;
+                  return (
+                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${RUN_TYPE_COLORS[rt]}`}>
+                      {RUN_TYPE_LABELS[rt]}
+                    </span>
+                  );
+                })()}
+              </div>
               <div className="flex items-center gap-1.5">
                 {selectedRunDetail.hfl_decision && (
                   <HFLBadge status={selectedRunDetail.hfl_decision.status} urgency={selectedRunDetail.hfl_decision.urgency} />
@@ -430,6 +498,7 @@ export function CommandCenterPage() {
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 }

@@ -59,6 +59,7 @@ function StepIndicator({ current }: { current: number }) {
 function ConnectStep({ onNext }: { onNext: () => void }) {
   const [statuses, setStatuses] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
+  const [showSkipModal, setShowSkipModal] = useState(false);
 
   const loadStatus = useCallback(async () => {
     setLoading(true);
@@ -177,7 +178,7 @@ function ConnectStep({ onNext }: { onNext: () => void }) {
         <span className="text-xs text-gray-500">{connectedCount} platform{connectedCount !== 1 ? 's' : ''} connected</span>
         <div className="flex gap-3">
           <button
-            onClick={onNext}
+            onClick={() => setShowSkipModal(true)}
             className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
           >
             Skip — use synthetic data
@@ -191,6 +192,44 @@ function ConnectStep({ onNext }: { onNext: () => void }) {
           </button>
         </div>
       </div>
+
+      {/* Skip confirmation modal */}
+      {showSkipModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+            <div className="flex items-start gap-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100">
+                <svg className="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Continue with synthetic data?</h3>
+                <p className="mt-1.5 text-sm text-gray-600">
+                  Without connecting an ad platform, Plinth will analyze <strong>synthetic benchmark data</strong> instead of your real campaigns. Scorecard results, recovery amounts, and AI recommendations will not reflect your actual performance.
+                </p>
+                <p className="mt-2 text-sm text-gray-500">
+                  You can connect platforms later from <strong>Integrations</strong> in the sidebar.
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                onClick={() => setShowSkipModal(false)}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Go Back — Connect Platform
+              </button>
+              <button
+                onClick={() => { setShowSkipModal(false); onNext(); }}
+                className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700"
+              >
+                Continue with Synthetic Data
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
