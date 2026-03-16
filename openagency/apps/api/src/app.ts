@@ -158,7 +158,7 @@ export async function createApp() {
   };
 
   // ─── Mesh Coordinator (multi-agent orchestration) ───────────────
-  const mesh = new MeshCoordinator(agentMap, eventBus, meshRunRepo ?? undefined);
+  const mesh = new MeshCoordinator(agentMap, eventBus, meshRunRepo ?? undefined, agency);
   mesh.registerPipeline(DEFAULT_PIPELINE);
   mesh.registerPipeline(DELIVERY_PIPELINE);
   mesh.start();

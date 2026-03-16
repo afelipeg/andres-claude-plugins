@@ -67,8 +67,22 @@ export function createScorecardFromMeshRun(
       mapToEngineOutputs(engineOutputs, agentId, skillId, data);
     }
 
-    // Fallback: if no skills mapped, use output_summary directly for known fields
-    if (skillsInvoked.length === 0 && Object.keys(outputSummary).length > 0) {
+    // Primary: use skill_data populated by mesh-coordinator's agency.run() calls
+    // Keys are qualified like 'leak-detector:waste-waterfall'; split to route correctly.
+    const skillData = outputSummary['skill_data'] as Record<string, unknown> | undefined;
+    if (skillData) {
+      for (const [qualifiedSkill, data] of Object.entries(skillData)) {
+        const colonIdx = qualifiedSkill.indexOf(':');
+        if (colonIdx !== -1) {
+          const skillEngineId = qualifiedSkill.slice(0, colonIdx);
+          const skillName = qualifiedSkill.slice(colonIdx + 1);
+          mapToEngineOutputs(engineOutputs, skillEngineId, skillName, data as Record<string, unknown>);
+        }
+      }
+    }
+
+    // Fallback: if no skills mapped and no skill_data, use output_summary for known fields
+    if (skillsInvoked.length === 0 && !skillData && Object.keys(outputSummary).length > 0) {
       // Try to infer from output_summary structure
       if (agentId === 'leak-detector' && !engineOutputs.leak_detector) {
         engineOutputs.leak_detector = { waste_waterfall: outputSummary };

@@ -90,6 +90,24 @@ export const AGENT_CONFIGS: Record<string, EngineAgentConfig> = {
       writable_platforms: [],
     },
   },
+
+  'delivery': {
+    engine_id: 'delivery',
+    subscriptions: ['domain.executive_report', 'domain.deliverables_ready'],
+    orient_skills: [
+      'delivery:monthly-report',
+      'delivery:client-scorecard-export',
+      'delivery:learnings-digest',
+    ],
+    default_config: {
+      cycle_interval_ms: 86_400_000, // 24 hours (triggered by pipeline, not cron)
+      min_cycle_interval_ms: 5_000,
+      max_budget_change_pct: 0,
+      approval_threshold_usd: Infinity,
+      dry_run: false,
+      writable_platforms: [],
+    },
+  },
 };
 
 export function getAgentConfig(engineId: string): EngineAgentConfig {

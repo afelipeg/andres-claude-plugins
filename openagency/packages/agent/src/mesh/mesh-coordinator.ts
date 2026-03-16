@@ -5,7 +5,9 @@
 import { ulid } from 'ulid';
 import type { EventBus, Observation, OodaCycleResult } from '@openagency/types';
 import { createLogger } from '@openagency/core';
+import type { OpenAgency } from '@openagency/core';
 import type { OodaRuntime } from '../ooda-runtime.js';
+import { AGENT_CONFIGS } from '../agents/engine-configs.js';
 import type {
   MeshPipeline,
   MeshStage,
@@ -44,13 +46,16 @@ export class MeshCoordinator {
   private eventSubscriptions: Array<() => void> = [];
   private log = createLogger('mesh');
   private repo?: IMeshRunRepo;
+  private agency?: OpenAgency;
 
   constructor(
     private agents: Map<string, OodaRuntime>,
     private eventBus: EventBus,
     repo?: IMeshRunRepo,
+    agency?: OpenAgency,
   ) {
     this.repo = repo;
+    this.agency = agency;
   }
 
   /** Load recent runs from DB into the in-memory Map on startup. */
@@ -326,6 +331,28 @@ export class MeshCoordinator {
 
     const stageStart = Date.now();
 
+    // Run the primary orient skill for this stage to produce real analysis data.
+    // Results are included in the observation so the OODA agent reasons over real output.
+    const primarySkillData: Record<string, unknown> = {};
+    if (this.agency) {
+      const agentConfig = AGENT_CONFIGS[stage.agent_id];
+      const primarySkill = agentConfig?.orient_skills[0];
+      if (primarySkill) {
+        const colonIdx = primarySkill.indexOf(':');
+        if (colonIdx !== -1) {
+          const engineId = primarySkill.slice(0, colonIdx);
+          const skillId = primarySkill.slice(colonIdx + 1);
+          try {
+            const result = await this.agency.run(engineId, skillId, {});
+            primarySkillData[primarySkill] = result.data;
+            this.log.info({ run_id: run.id, agent_id: stage.agent_id, skill: primarySkill }, 'Primary skill executed');
+          } catch (err) {
+            this.log.warn({ err, run_id: run.id, agent_id: stage.agent_id, skill: primarySkill }, 'Primary skill failed — continuing without data');
+          }
+        }
+      }
+    }
+
     // Build observations from previous stage results
     const observations: Observation[] = [
       {
@@ -339,6 +366,7 @@ export class MeshCoordinator {
           stage_order: stage.order,
           available_skills: stage.skills,
           previous_results: this.summarizePreviousResults(run.context),
+          primary_skill_data: Object.keys(primarySkillData).length > 0 ? primarySkillData : undefined,
         },
         timestamp: new Date().toISOString(),
       },
@@ -367,7 +395,7 @@ export class MeshCoordinator {
 
       this.log.info({ run_id: run.id, agent_id: stage.agent_id, duration_ms: durationMs, skills_invoked: skillsInvoked }, 'Stage completed');
 
-      const outputSummary = this.extractOutputSummary(cycleResult);
+      const outputSummary = this.extractOutputSummary(cycleResult, primarySkillData);
 
       return {
         agent_id: stage.agent_id,
@@ -430,7 +458,10 @@ export class MeshCoordinator {
     return summary;
   }
 
-  private extractOutputSummary(cycleResult: OodaCycleResult): Record<string, unknown> {
+  private extractOutputSummary(
+    cycleResult: OodaCycleResult,
+    primarySkillData?: Record<string, unknown>,
+  ): Record<string, unknown> {
     const summary: Record<string, unknown> = {
       observation_count: cycleResult.observe.observation_count,
       action_count: cycleResult.decide.action_count,
@@ -445,6 +476,11 @@ export class MeshCoordinator {
       summary['opportunity_count'] = cycleResult.orient.opportunities.length;
       summary['risk_count'] = cycleResult.orient.risks.length;
       summary['reasoning_snippet'] = cycleResult.orient.reasoning.slice(0, 300);
+    }
+
+    // Include primary skill data so the scorecard / billing system can use real engine outputs
+    if (primarySkillData && Object.keys(primarySkillData).length > 0) {
+      summary['skill_data'] = primarySkillData;
     }
 
     return summary;
