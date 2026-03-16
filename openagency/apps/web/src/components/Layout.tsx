@@ -25,6 +25,8 @@ import {
   Pencil,
   Star,
   Trash2,
+  Cpu,
+  Upload,
 } from 'lucide-react';
 import { SyncStatus } from './SyncStatus';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -58,23 +60,59 @@ interface NavItem {
   Icon: React.ComponentType<{ className?: string }>;
 }
 
+interface NavGroup {
+  label: string;
+  Icon: React.ComponentType<{ className?: string }>;
+  path?: string; // If set, group header is clickable (navigates here)
+  children: NavItem[];
+}
+
+type NavEntry = NavItem | NavGroup;
+
+function isNavGroup(entry: NavEntry): entry is NavGroup {
+  return 'children' in entry;
+}
+
 // Nav items excluding Assistant (handled separately)
 const NAV_ITEMS_TOP: NavItem[] = [
   { path: '', label: 'Home', Icon: Home },
 ];
 
-const NAV_ITEMS_BOTTOM: NavItem[] = [
-  { path: '/scorecard', label: 'Scorecard', Icon: BarChart3 },
-  { path: '/command-center', label: 'Command Center', Icon: Monitor },
-  { path: '/leak-detector', label: 'Leak Detector', Icon: Search },
-  { path: '/media-architect', label: 'Media Architect', Icon: TrendingUp },
-  { path: '/campaign-ops', label: 'Campaign Ops', Icon: Megaphone },
-  { path: '/executive-bridge', label: 'Executive Bridge', Icon: Layers },
-  { path: '/integrations', label: 'Integrations', Icon: Link },
-  { path: '/architecture', label: 'Architecture', Icon: FileText },
-  { path: '/consumption', label: 'Consumption', Icon: Activity },
-  { path: '/history', label: 'History', Icon: Clock },
-  { path: '/billing', label: 'Billing', Icon: CreditCard },
+const NAV_STRUCTURE: NavEntry[] = [
+  // Command Center — clickable parent with Scorecard submenu
+  {
+    label: 'Command Center',
+    Icon: Monitor,
+    path: '/command-center',
+    children: [
+      { path: '/scorecard', label: 'Scorecard', Icon: BarChart3 },
+    ],
+  },
+  // A2A Engines — group header (not clickable)
+  {
+    label: 'A2A Engines',
+    Icon: Cpu,
+    children: [
+      { path: '/leak-detector', label: 'Leak Detector', Icon: Search },
+      { path: '/media-architect', label: 'Media Architect', Icon: TrendingUp },
+      { path: '/campaign-ops', label: 'Campaign Ops', Icon: Megaphone },
+      { path: '/executive-bridge', label: 'Executive Bridge', Icon: Layers },
+      { path: '/architecture', label: 'Architecture', Icon: FileText },
+      { path: '/history', label: 'History', Icon: Clock },
+    ],
+  },
+  // Integrations — clickable parent with Data submenu
+  {
+    label: 'Integrations',
+    Icon: Link,
+    path: '/integrations',
+    children: [
+      { path: '/data', label: 'Data', Icon: Upload },
+    ],
+  },
+  // Standalone items
+  { path: '/consumption', label: 'Usage & Runs', Icon: Activity },
+  { path: '/billing', label: 'Outcome Base Fee', Icon: CreditCard },
   { path: '/settings', label: 'Settings', Icon: Settings },
 ];
 
@@ -84,7 +122,7 @@ function getPageTitle(pathname: string): string {
     '': 'Home',
     assistant: 'Assistant',
     scorecard: 'Scorecard',
-    billing: 'Billing',
+    billing: 'Outcome Base Fee',
     'command-center': 'Command Center',
     'leak-detector': 'Leak Detector',
     'media-architect': 'Media Architect',
@@ -92,8 +130,9 @@ function getPageTitle(pathname: string): string {
     'executive-bridge': 'Executive Bridge',
     integrations: 'Integrations',
     architecture: 'Architecture',
-    consumption: 'Consumption',
+    consumption: 'Usage & Runs',
     history: 'History',
+    data: 'Data',
     settings: 'Settings',
   };
   return (segment !== undefined ? titles[segment] : undefined) ?? 'Dashboard';
@@ -384,6 +423,117 @@ function AssistantNav({
   );
 }
 
+// ─── Collapsible nav group ────────────────────────────────────────────
+
+function NavGroupSection({
+  group,
+  pathname,
+  collapsed,
+  base,
+  renderChild,
+}: {
+  group: NavGroup;
+  pathname: string;
+  collapsed: boolean;
+  base: string;
+  renderChild: (item: NavItem) => React.ReactNode;
+}) {
+  const isChildActive = group.children.some((item) =>
+    pathname.startsWith(`${base}${item.path}`),
+  );
+  const isParentActive = group.path
+    ? pathname === `${base}${group.path}` || pathname.startsWith(`${base}${group.path}/`)
+    : false;
+  const isActive = isChildActive || isParentActive;
+  const [expanded, setExpanded] = useState(isActive);
+
+  useEffect(() => {
+    if (isActive) setExpanded(true);
+  }, [isActive]);
+
+  if (collapsed) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {group.path ? (
+            <NavLink
+              to={`${base}${group.path}`}
+              className={cn('plinth-nav-item plinth-nav-collapsed')}
+            >
+              <group.Icon className="h-5 w-5 shrink-0" />
+            </NavLink>
+          ) : (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className={cn('plinth-nav-item plinth-nav-collapsed', isActive && 'text-[#02c98d]')}
+            >
+              <group.Icon className="h-5 w-5 shrink-0" />
+            </button>
+          )}
+        </TooltipTrigger>
+        <TooltipContent side="right">{group.label}</TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  const handleClick = () => {
+    setExpanded(!expanded);
+  };
+
+  return (
+    <div>
+      {group.path ? (
+        // Clickable parent — clicking the label navigates, chevron toggles children
+        <div className="flex items-center">
+          <NavLink
+            to={`${base}${group.path}`}
+            className={cn(
+              'plinth-nav-item flex-1',
+              (isParentActive || isChildActive) && 'bg-[rgba(2,201,141,0.12)] text-[#02c98d]',
+            )}
+          >
+            <group.Icon className="h-5 w-5 shrink-0" />
+            <span className="ml-3 flex-1 text-left">{group.label}</span>
+          </NavLink>
+          <button
+            onClick={handleClick}
+            className="p-1 text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            {expanded ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" />
+            )}
+          </button>
+        </div>
+      ) : (
+        // Non-clickable group header — entire row toggles
+        <button
+          onClick={handleClick}
+          className={cn(
+            'plinth-nav-item w-full',
+            isActive && 'text-[#02c98d]',
+          )}
+        >
+          <group.Icon className="h-5 w-5 shrink-0" />
+          <span className="ml-3 flex-1 text-left">{group.label}</span>
+          {expanded ? (
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-60" />
+          )}
+        </button>
+      )}
+
+      {expanded && (
+        <div className="mt-0.5 pl-4 space-y-0.5">
+          {group.children.map(renderChild)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Layout ───────────────────────────────────────────────────────────
 
 export function Layout() {
@@ -510,8 +660,21 @@ export function Layout() {
             {/* Assistant — expandable with conversation list */}
             <AssistantNav pathname={pathname} collapsed={collapsed} />
 
-            {/* Rest of nav */}
-            {NAV_ITEMS_BOTTOM.map(renderNavItem)}
+            {/* Grouped nav structure */}
+            {NAV_STRUCTURE.map((entry) =>
+              isNavGroup(entry) ? (
+                <NavGroupSection
+                  key={entry.label}
+                  group={entry}
+                  pathname={pathname}
+                  collapsed={collapsed}
+                  base={base}
+                  renderChild={renderNavItem}
+                />
+              ) : (
+                renderNavItem(entry)
+              ),
+            )}
           </TooltipProvider>
         </nav>
 

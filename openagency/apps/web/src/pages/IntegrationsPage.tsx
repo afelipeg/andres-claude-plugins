@@ -1,6 +1,6 @@
 // @ts-nocheck
-// ─── Integrations & API Access Page ─────────────────────────────────
-// Stripe-style API credentials + MCP connection instructions + platform connectors
+// ─── Integrations Page (Perplexity-style) ────────────────────────────
+// Platform connectors with OAuth dialog + API credentials + MCP instructions
 
 import { useState, useCallback, useEffect } from 'react';
 import type { ConnectorPlatform, SyncInterval } from '@openagency/types';
@@ -8,10 +8,21 @@ import { useConnectorStore } from '../stores/connector-store';
 import { isApiMode } from '../api/agency';
 import {
   listConnectors,
-  connectPlatform,
   disconnectPlatform,
   syncPlatform,
+  getAuthUrl,
+  exchangeOAuthCode,
+  openOAuthPopup,
 } from '../api/connectors';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '../components/ui/dialog';
+
 // ─── Config ──────────────────────────────────────────────────────────
 
 const API_URL =
@@ -20,72 +31,120 @@ const API_URL =
 
 const MCP_URL = `${API_URL}/mcp`;
 
-// ─── Platform Connector Config ───────────────────────────────────────
+// ─── Platform Logos (inline SVG) ─────────────────────────────────────
+
+function GoogleAdsLogo({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none">
+      <path d="M3.5 18.5l6-10.5 3 5.25-6 10.5z" fill="#FBBC04" />
+      <path d="M14.5 3l6 10.5-3 5.25-6-10.5z" fill="#4285F4" />
+      <circle cx="6.5" cy="19.5" r="2.5" fill="#34A853" />
+    </svg>
+  );
+}
+
+function DV360Logo({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none">
+      <rect x="2" y="2" width="20" height="20" rx="4" fill="#00897B" />
+      <text x="12" y="16" textAnchor="middle" fill="white" fontSize="10" fontWeight="bold" fontFamily="sans-serif">DV</text>
+    </svg>
+  );
+}
+
+function MetaLogo({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none">
+      <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z" fill="#1877F2" />
+      <path d="M16.5 8.5c-1.5-1.5-3.5-.5-4.5 1l-1.5 2.5-1.5-2.5c-1-1.5-3-2.5-4.5-1C3 10 3.5 12 5 14l4 5.5c.5.7 1.5.7 2 0L15 14c1.5-2 2-4 1.5-5.5z" fill="white" />
+    </svg>
+  );
+}
+
+function TikTokLogo({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none">
+      <rect x="2" y="2" width="20" height="20" rx="4" fill="#010101" />
+      <path d="M16.5 7.5c-1-.8-1.7-2-1.8-3.5h-2.5v10.5c0 1.4-1.1 2.5-2.5 2.5s-2.5-1.1-2.5-2.5 1.1-2.5 2.5-2.5c.3 0 .5 0 .8.1V9.5c-.3 0-.5-.1-.8-.1C7 9.4 5 11.4 5 14s2 4.6 4.5 4.6c2.8 0 4.7-2 4.7-4.6V10c1 .7 2.2 1.2 3.5 1.2V8.8c-.5 0-1-.5-1.2-1.3z" fill="white" />
+    </svg>
+  );
+}
+
+function TikTokShopLogo({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none">
+      <rect x="2" y="2" width="20" height="20" rx="4" fill="#FF2D55" />
+      <path d="M8 8h8l-1 6H9L8 8z" stroke="white" strokeWidth="1.5" fill="none" />
+      <circle cx="10" cy="17" r="1" fill="white" />
+      <circle cx="15" cy="17" r="1" fill="white" />
+      <path d="M10 8V6" stroke="white" strokeWidth="1.5" />
+      <path d="M14 8V6" stroke="white" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+function AmazonAdsLogo({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none">
+      <rect x="2" y="2" width="20" height="20" rx="4" fill="#FF9900" />
+      <path d="M7 14c2.5 1.5 5.5 1.5 8 0" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
+      <text x="12" y="12" textAnchor="middle" fill="white" fontSize="7" fontWeight="bold" fontFamily="sans-serif">a</text>
+    </svg>
+  );
+}
+
+// ─── Platform Config ─────────────────────────────────────────────────
 
 interface PlatformCardConfig {
   platform: ConnectorPlatform;
   name: string;
   description: string;
-  color: string;
-  bgColor: string;
-  icon: string;
-  envVars: string[];
+  Logo: React.ComponentType<{ className?: string }>;
+  scopes: string;
 }
 
 const PLATFORMS: PlatformCardConfig[] = [
   {
     platform: 'google_ads',
     name: 'Google Ads',
-    description: 'Search, Display, Shopping, YouTube campaigns',
-    color: 'text-zinc-700',
-    bgColor: 'bg-zinc-100',
-    icon: 'G',
-    envVars: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_ADS_DEVELOPER_TOKEN'],
+    description: 'Search, Display, Shopping, and YouTube campaigns',
+    Logo: GoogleAdsLogo,
+    scopes: 'Campaign performance, ad groups, keywords, and conversion data',
   },
   {
     platform: 'dv360',
     name: 'Display & Video 360',
     description: 'Programmatic display, video, and audio campaigns',
-    color: 'text-emerald-700',
-    bgColor: 'bg-emerald-100',
-    icon: 'D',
-    envVars: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
+    Logo: DV360Logo,
+    scopes: 'Insertion orders, line items, creatives, and audience data',
   },
   {
     platform: 'meta_ads',
     name: 'Meta Ads',
-    description: 'Facebook + Instagram campaigns, ad sets, and insights',
-    color: 'text-indigo-700',
-    bgColor: 'bg-indigo-100',
-    icon: 'M',
-    envVars: ['META_APP_ID', 'META_APP_SECRET'],
+    description: 'Facebook and Instagram campaigns and insights',
+    Logo: MetaLogo,
+    scopes: 'Ad accounts, campaigns, ad sets, ads, and performance insights',
   },
   {
     platform: 'tiktok_ads',
     name: 'TikTok Ads',
     description: 'In-feed, TopView, and Spark Ads campaigns',
-    color: 'text-pink-700',
-    bgColor: 'bg-pink-100',
-    icon: 'T',
-    envVars: ['TIKTOK_ADS_APP_ID', 'TIKTOK_ADS_SECRET'],
+    Logo: TikTokLogo,
+    scopes: 'Campaign data, ad groups, creatives, and audience reports',
   },
   {
     platform: 'tiktok_shop',
     name: 'TikTok Shop',
     description: 'Shop orders, product performance, and sales data',
-    color: 'text-rose-700',
-    bgColor: 'bg-rose-100',
-    icon: 'S',
-    envVars: ['TIKTOK_SHOP_APP_KEY', 'TIKTOK_SHOP_APP_SECRET'],
+    Logo: TikTokShopLogo,
+    scopes: 'Product catalog, orders, GMV, and shop analytics',
   },
   {
     platform: 'amazon_ads',
     name: 'Amazon Ads',
     description: 'Sponsored Products, Brands, and Display campaigns',
-    color: 'text-orange-700',
-    bgColor: 'bg-orange-100',
-    icon: 'A',
-    envVars: ['AMAZON_ADS_CLIENT_ID', 'AMAZON_ADS_CLIENT_SECRET'],
+    Logo: AmazonAdsLogo,
+    scopes: 'Campaign metrics, keyword bids, ACOS, and attribution data',
   },
 ];
 
@@ -200,7 +259,6 @@ function CredentialsSection() {
         <p className="mt-0.5 text-xs text-gray-500">Use these to authenticate requests to the Plinth API and MCP server.</p>
       </div>
       <div className="divide-y divide-gray-50 p-6 space-y-4">
-        {/* API Key */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <label className="text-xs font-semibold uppercase tracking-wider text-gray-500">API Key</label>
@@ -210,7 +268,7 @@ function CredentialsSection() {
                 disabled={generating}
                 className="rounded-md bg-gray-900 px-3 py-1 text-xs font-semibold text-white hover:bg-gray-800 disabled:opacity-50"
               >
-                {generating ? 'Generating…' : 'Generate Key'}
+                {generating ? 'Generating...' : 'Generate Key'}
               </button>
             )}
           </div>
@@ -236,7 +294,6 @@ function CredentialsSection() {
           )}
         </div>
 
-        {/* MCP Server URL */}
         <div className="pt-4">
           <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-gray-500">MCP Server URL</label>
           <div className="flex items-center gap-2">
@@ -248,7 +305,6 @@ function CredentialsSection() {
           <p className="mt-1 text-xs text-gray-400">Streamable HTTP transport — compatible with Claude Desktop, Cursor, and any MCP client.</p>
         </div>
 
-        {/* REST API URL */}
         <div className="pt-4">
           <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-gray-500">REST API Base URL</label>
           <div className="flex items-center gap-2">
@@ -268,9 +324,9 @@ function CredentialsSection() {
 type McpTab = 'claude' | 'cursor' | 'http';
 
 const MCP_TABS: { id: McpTab; label: string; icon: string }[] = [
-  { id: 'claude', label: 'Claude Desktop', icon: '🤖' },
-  { id: 'cursor', label: 'Cursor / VS Code', icon: '⌨️' },
-  { id: 'http', label: 'HTTP / Custom Agent', icon: '⚡' },
+  { id: 'claude', label: 'Claude Desktop', icon: '>' },
+  { id: 'cursor', label: 'Cursor / VS Code', icon: '#' },
+  { id: 'http', label: 'HTTP / Custom Agent', icon: '$' },
 ];
 
 function McpInstructionsSection() {
@@ -334,7 +390,7 @@ curl -X POST ${MCP_URL} \\
       title: 'Cursor / VS Code MCP config',
       file: '.cursor/mcp.json  (project root) or ~/.cursor/mcp.json (global)',
       code: cursorConfig,
-      hint: 'Reload your Cursor window after saving. Plinth tools appear in Composer with ⌘K.',
+      hint: 'Reload your Cursor window after saving. Plinth tools appear in Composer with CMD+K.',
     },
     http: {
       title: 'Direct HTTP calls',
@@ -354,7 +410,6 @@ curl -X POST ${MCP_URL} \\
         </p>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-100 px-4 pt-3 pb-0">
         {MCP_TABS.map((tab) => (
           <button
@@ -366,7 +421,7 @@ curl -X POST ${MCP_URL} \\
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            <span>{tab.icon}</span>
+            <span className="font-mono text-[10px]">{tab.icon}</span>
             {tab.label}
           </button>
         ))}
@@ -393,7 +448,93 @@ curl -X POST ${MCP_URL} \\
   );
 }
 
-// ─── Platform Connector Card ─────────────────────────────────────────
+// ─── Connection Dialog ───────────────────────────────────────────────
+
+function ConnectDialog({
+  config,
+  open,
+  onOpenChange,
+  onConnected,
+}: {
+  config: PlatformCardConfig;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConnected: () => void;
+}) {
+  const [connecting, setConnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleConnect = async () => {
+    setConnecting(true);
+    setError(null);
+    try {
+      const redirectUri = `${window.location.origin}/auth/callback`;
+      const { auth_url } = await getAuthUrl(config.platform, redirectUri, config.platform);
+      const { code } = await openOAuthPopup(auth_url);
+      await exchangeOAuthCode(config.platform, code, redirectUri);
+      onConnected();
+      onOpenChange(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Connection failed');
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <div className="flex items-center gap-3 mb-2">
+            <config.Logo className="h-10 w-10" />
+            <div>
+              <DialogTitle>Connect {config.name}</DialogTitle>
+              <DialogDescription>{config.description}</DialogDescription>
+            </div>
+          </div>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="rounded-lg bg-gray-50 p-4">
+            <p className="text-xs font-semibold text-gray-700 mb-2">Data access</p>
+            <p className="text-xs text-gray-500">{config.scopes}</p>
+          </div>
+
+          <div className="rounded-lg bg-blue-50 border border-blue-100 p-4">
+            <p className="text-xs text-blue-700">
+              You will be redirected to {config.name}'s authorization page.
+              Plinth will only request read access to your campaign data. Tokens are encrypted and stored server-side.
+            </p>
+          </div>
+
+          {error && (
+            <div className="rounded-lg bg-red-50 border border-red-100 p-3">
+              <p className="text-xs text-red-700">{error}</p>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <button
+            onClick={() => onOpenChange(false)}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => void handleConnect()}
+            disabled={connecting}
+            className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50 transition-colors"
+          >
+            {connecting ? 'Connecting...' : `Connect with ${config.name}`}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Platform Connector Card (Perplexity-style) ──────────────────────
 
 function PlatformCard({ config, apiMode }: { config: PlatformCardConfig; apiMode: boolean }) {
   const platformState = useConnectorStore((s) => s.getPlatform(config.platform));
@@ -402,25 +543,14 @@ function PlatformCard({ config, apiMode }: { config: PlatformCardConfig; apiMode
   const setSyncInterval = useConnectorStore((s) => s.setSyncInterval);
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
-  const [connecting, setConnecting] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const isConnected = platformState?.status === 'connected';
   const hasError = platformState?.status === 'error';
 
-  const handleConnect = useCallback(async () => {
-    setConnecting(true);
-    setSyncError(null);
-    try {
-      if (apiMode) {
-        await connectPlatform(config.platform, { access_token: 'mvp_placeholder_token' });
-      }
-      connect(config.platform);
-    } catch (err) {
-      setSyncError(err instanceof Error ? err.message : 'Connection failed');
-    } finally {
-      setConnecting(false);
-    }
-  }, [config.platform, connect, apiMode]);
+  const handleConnected = () => {
+    connect(config.platform);
+  };
 
   const handleDisconnect = useCallback(async () => {
     try {
@@ -449,71 +579,86 @@ function PlatformCard({ config, apiMode }: { config: PlatformCardConfig; apiMode
   }, [config.platform, apiMode]);
 
   return (
-    <div className={`rounded-xl border p-5 transition-shadow hover:shadow-md ${
-      isConnected ? 'border-green-200 bg-green-50/30' : hasError ? 'border-red-200 bg-red-50/30' : 'border-gray-200 bg-white'
-    }`}>
-      <div className="flex items-center gap-3">
-        <span className={`flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold ${config.bgColor} ${config.color}`}>
-          {config.icon}
-        </span>
-        <div className="flex-1">
-          <h3 className="text-sm font-semibold text-gray-900">{config.name}</h3>
-          <p className="text-xs text-gray-500">{config.description}</p>
+    <>
+      <div
+        className={`flex items-center gap-4 rounded-xl border p-4 transition-all hover:shadow-md cursor-pointer ${
+          isConnected
+            ? 'border-green-200 bg-green-50/30'
+            : hasError
+              ? 'border-red-200 bg-red-50/30'
+              : 'border-gray-200 bg-white hover:border-gray-300'
+        }`}
+        onClick={() => !isConnected && setDialogOpen(true)}
+      >
+        {/* Logo */}
+        <config.Logo className="h-10 w-10 shrink-0" />
+
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-gray-900">{config.name}</h3>
+            {isConnected && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700">
+                <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                Connected
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 mt-0.5">{config.description}</p>
+
+          {platformState?.lastSync && (
+            <p className="text-[10px] text-gray-400 mt-1">
+              Last sync: {new Date(platformState.lastSync.synced_at).toLocaleString()} ({platformState.lastSync.row_count} rows)
+            </p>
+          )}
+          {syncError && <p className="text-[10px] text-red-500 mt-1">{syncError}</p>}
         </div>
-        {isConnected && (
-          <div className="h-2 w-2 rounded-full bg-green-500" title="Connected" />
-        )}
+
+        {/* Actions */}
+        <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+          {isConnected ? (
+            <>
+              <select
+                value={platformState?.syncInterval ?? '1h'}
+                onChange={(e) => setSyncInterval(config.platform, e.target.value as SyncInterval)}
+                className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-[11px] text-gray-600"
+              >
+                {SYNC_INTERVALS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              <button
+                onClick={() => void handleSync()}
+                disabled={syncing}
+                className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800 disabled:opacity-50 transition-colors"
+              >
+                {syncing ? 'Syncing...' : 'Sync'}
+              </button>
+              <button
+                onClick={() => void handleDisconnect()}
+                className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-red-500 hover:border-red-200 transition-colors"
+              >
+                Disconnect
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setDialogOpen(true)}
+              className="rounded-lg bg-gray-900 px-4 py-1.5 text-xs font-medium text-white hover:bg-gray-800 transition-colors"
+            >
+              Connect
+            </button>
+          )}
+        </div>
       </div>
 
-      {platformState?.lastSync && (
-        <p className="mt-2 text-xs text-gray-400">
-          Last sync: {new Date(platformState.lastSync.synced_at).toLocaleString()} ({platformState.lastSync.row_count} rows)
-        </p>
-      )}
-      {syncError && <p className="mt-2 text-xs text-red-600">{syncError}</p>}
-
-      {isConnected && (
-        <div className="mt-3">
-          <select
-            value={platformState?.syncInterval ?? '1h'}
-            onChange={(e) => setSyncInterval(config.platform, e.target.value as SyncInterval)}
-            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700"
-          >
-            {SYNC_INTERVALS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      <div className="mt-4 flex gap-2">
-        {isConnected ? (
-          <>
-            <button
-              onClick={() => void handleSync()}
-              disabled={syncing}
-              className="flex-1 rounded-lg bg-zinc-900 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-zinc-800 disabled:opacity-50"
-            >
-              {syncing ? 'Syncing...' : 'Sync Now'}
-            </button>
-            <button
-              onClick={() => void handleDisconnect()}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
-            >
-              Disconnect
-            </button>
-          </>
-        ) : (
-          <button
-            onClick={() => void handleConnect()}
-            disabled={connecting}
-            className="flex-1 rounded-lg bg-gray-900 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-gray-800 disabled:opacity-50"
-          >
-            {connecting ? 'Connecting...' : 'Connect'}
-          </button>
-        )}
-      </div>
-    </div>
+      <ConnectDialog
+        config={config}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onConnected={handleConnected}
+      />
+    </>
   );
 }
 
@@ -534,13 +679,41 @@ export function IntegrationsPage() {
       .catch(() => {});
   }, [apiMode, setStatus]);
 
+  const connectedCount = useConnectorStore((s) => {
+    let count = 0;
+    for (const p of PLATFORMS) {
+      if (s.getPlatform(p.platform)?.status === 'connected') count++;
+    }
+    return count;
+  });
+
   return (
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">Integrations & API Access</h2>
+        <h2 className="text-2xl font-bold text-gray-900">Integrations</h2>
         <p className="mt-1 text-sm text-gray-500">
-          Your API credentials, MCP connection details, and ad platform connectors.
+          Connect your advertising platforms, configure API access, and set up MCP clients.
+        </p>
+      </div>
+
+      {/* Ad Platform Connectors — now first */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">Platform Connectors</h3>
+          {connectedCount > 0 && (
+            <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+              {connectedCount} connected
+            </span>
+          )}
+        </div>
+        <div className="space-y-3">
+          {PLATFORMS.map((config) => (
+            <PlatformCard key={config.platform} config={config} apiMode={apiMode} />
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-gray-400">
+          Connections use OAuth 2.0. Tokens are encrypted and stored server-side.
         </p>
       </div>
 
@@ -549,23 +722,6 @@ export function IntegrationsPage() {
 
       {/* MCP connection instructions */}
       <McpInstructionsSection />
-
-      {/* Ad Platform Connectors */}
-      <div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-1">Ad Platform Connectors</h3>
-        <p className="text-sm text-gray-500 mb-4">
-          Connect your advertising platforms to pull live campaign data into the engines.
-        </p>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {PLATFORMS.map((config) => (
-            <PlatformCard key={config.platform} config={config} apiMode={apiMode} />
-          ))}
-        </div>
-        <p className="mt-3 text-xs text-gray-400">
-          Connections use OAuth 2.0. Tokens are encrypted and stored server-side. See docs for required environment variables per platform.
-        </p>
-      </div>
-
     </div>
   );
 }

@@ -54,9 +54,9 @@ export default function Navbar() {
 
         {/* Desktop CTA */}
         <div className="hidden lg:flex items-center gap-3">
-          <a href="#developers" className="text-sm font-medium text-zinc-400 hover:text-white transition-colors">
-            Documentation
-          </a>
+          <Link to="/vision" className="text-sm font-medium text-zinc-400 hover:text-white transition-colors">
+            Vision
+          </Link>
           <Link to="/demo">
             <div className="px-4 py-2 text-sm font-semibold rounded-lg border border-[#00e5a0]/30 text-[#00e5a0] hover:bg-[#00e5a0]/10 transition-all duration-200 flex items-center gap-2 cursor-pointer">
               <Play size={12} fill="currentColor" />
@@ -101,9 +101,9 @@ export default function Navbar() {
                 </a>
               ))}
               <div className="pt-4 border-t border-white/[0.06] flex flex-col gap-3">
-                <a href="#developers" className="text-base font-medium text-zinc-400 hover:text-white transition-colors py-2">
-                  Documentation
-                </a>
+                <Link to="/vision" className="text-base font-medium text-zinc-400 hover:text-white transition-colors py-2" onClick={() => setMobileOpen(false)}>
+                  Vision
+                </Link>
                 <Link to="/demo">
                   <div
                     className="px-5 py-3 text-sm font-semibold rounded-lg border border-[#00e5a0]/30 text-[#00e5a0] text-center hover:bg-[#00e5a0]/10 transition-all flex items-center justify-center gap-2 cursor-pointer"

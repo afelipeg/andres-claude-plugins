@@ -65,3 +65,63 @@ export async function syncPlatform(platform: string, dateRangeDays?: number): Pr
 export async function getSyncResults(platform: string): Promise<SyncResultResponse> {
   return fetchJson(`/v1/connectors/${platform}/sync/results`);
 }
+
+// ─── OAuth Flow ────────────────────────────────────────────────────
+
+export async function getAuthUrl(
+  platform: string,
+  redirectUri: string,
+  state?: string,
+): Promise<{ auth_url: string }> {
+  const params = new URLSearchParams({ redirect_uri: redirectUri });
+  if (state) params.set('state', state);
+  return fetchJson(`/v1/connectors/${platform}/auth-url?${params}`);
+}
+
+export async function exchangeOAuthCode(
+  platform: string,
+  code: string,
+  redirectUri: string,
+): Promise<{ status: string; platform: string }> {
+  return fetchJson(`/v1/connectors/${platform}/callback`, {
+    method: 'POST',
+    body: JSON.stringify({ code, redirect_uri: redirectUri }),
+  });
+}
+
+export function openOAuthPopup(url: string): Promise<{ code: string; state?: string }> {
+  return new Promise((resolve, reject) => {
+    const w = 600;
+    const h = 700;
+    const left = window.screenX + (window.innerWidth - w) / 2;
+    const top = window.screenY + (window.innerHeight - h) / 2;
+    const popup = window.open(
+      url,
+      'oauth_popup',
+      `width=${w},height=${h},left=${left},top=${top}`,
+    );
+    if (!popup) {
+      reject(new Error('Popup blocked — please allow popups for this site'));
+      return;
+    }
+
+    const handler = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'oauth_callback') {
+        window.removeEventListener('message', handler);
+        clearInterval(interval);
+        resolve({ code: event.data.code, state: event.data.state });
+      }
+    };
+    window.addEventListener('message', handler);
+
+    // Detect popup closed without completing
+    const interval = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(interval);
+        window.removeEventListener('message', handler);
+        reject(new Error('Authorization window was closed'));
+      }
+    }, 500);
+  });
+}

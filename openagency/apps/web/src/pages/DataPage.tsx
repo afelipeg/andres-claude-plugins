@@ -1,0 +1,386 @@
+// ─── Data Upload Page ────────────────────────────────────────────────
+// Drag-and-drop file upload, upload history, and preview
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Upload, FileText, Trash2, Eye, X } from 'lucide-react';
+import {
+  uploadFile,
+  listUploads,
+  getUpload,
+  deleteUpload,
+  type UploadRecord,
+  type UploadDetail,
+} from '../api/uploads';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
+
+const API_URL = import.meta.env.VITE_API_URL ?? '';
+
+const DATA_TYPES = [
+  { value: '', label: 'Auto-detect' },
+  { value: 'platform_export', label: 'Ad Platform Data' },
+  { value: 'sell_in', label: 'Sell-in' },
+  { value: 'sell_out', label: 'Sell-out' },
+  { value: 'digital_sales', label: 'Digital Sales' },
+  { value: 'other', label: 'Other' },
+];
+
+// ─── Upload Zone ─────────────────────────────────────────────────────
+
+function UploadZone({
+  onUpload,
+  uploading,
+}: {
+  onUpload: (file: File, dataType: string) => void;
+  uploading: boolean;
+}) {
+  const [dragOver, setDragOver] = useState(false);
+  const [dataType, setDataType] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) onUpload(file, dataType);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) onUpload(file, dataType);
+    if (inputRef.current) inputRef.current.value = '';
+  };
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">Upload Data</h3>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Upload CSV or Excel files with campaign, sell-in, sell-out, or digital sales data.
+          </p>
+        </div>
+        <select
+          value={dataType}
+          onChange={(e) => setDataType(e.target.value)}
+          className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700"
+        >
+          {DATA_TYPES.map((dt) => (
+            <option key={dt.value} value={dt.value}>{dt.label}</option>
+          ))}
+        </select>
+      </div>
+
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+        onClick={() => inputRef.current?.click()}
+        className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-10 cursor-pointer transition-colors ${
+          dragOver
+            ? 'border-[#02c98d] bg-[#02c98d]/5'
+            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/50'
+        }`}
+      >
+        <Upload className={`h-8 w-8 mb-3 ${dragOver ? 'text-[#02c98d]' : 'text-gray-400'}`} />
+        {uploading ? (
+          <p className="text-sm text-gray-600">Uploading and parsing...</p>
+        ) : (
+          <>
+            <p className="text-sm text-gray-600">
+              <span className="font-medium text-gray-900">Click to upload</span> or drag and drop
+            </p>
+            <p className="text-xs text-gray-400 mt-1">CSV, XLSX, XLS (max 50MB)</p>
+          </>
+        )}
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".csv,.xlsx,.xls"
+          className="hidden"
+          onChange={handleFileSelect}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─── Upload History ──────────────────────────────────────────────────
+
+function platformBadge(platform: string) {
+  const colors: Record<string, string> = {
+    google_ads: 'bg-blue-100 text-blue-700',
+    meta_ads: 'bg-indigo-100 text-indigo-700',
+    tiktok_ads: 'bg-pink-100 text-pink-700',
+    dv360: 'bg-emerald-100 text-emerald-700',
+    amazon_ads: 'bg-orange-100 text-orange-700',
+    unknown: 'bg-gray-100 text-gray-600',
+  };
+  const cls = colors[platform] ?? colors.unknown;
+  const label = platform.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  return (
+    <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
+function UploadHistory({
+  records,
+  onPreview,
+  onDelete,
+}: {
+  records: UploadRecord[];
+  onPreview: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  if (records.length === 0) {
+    return (
+      <div className="rounded-xl border border-gray-200 bg-white p-8 text-center">
+        <FileText className="h-8 w-8 text-gray-300 mx-auto mb-3" />
+        <p className="text-sm text-gray-500">No uploads yet</p>
+        <p className="text-xs text-gray-400 mt-1">
+          Upload a CSV or Excel file to enrich your pipeline runs with real business data.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      <div className="border-b border-gray-100 px-6 py-4">
+        <h3 className="text-sm font-semibold text-gray-900">Upload History</h3>
+        <p className="text-xs text-gray-500 mt-0.5">{records.length} file{records.length !== 1 ? 's' : ''} uploaded</p>
+      </div>
+      <div className="divide-y divide-gray-50">
+        {records.map((rec) => (
+          <div key={rec.id} className="flex items-center gap-4 px-6 py-3 hover:bg-gray-50/50 transition-colors">
+            <FileText className="h-5 w-5 text-gray-400 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-gray-900 truncate">{rec.file_name}</p>
+                {platformBadge(rec.platform)}
+              </div>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {rec.data_type.replace(/_/g, ' ')} &middot; {rec.row_count.toLocaleString()} rows &middot; {rec.format.toUpperCase()} &middot; {new Date(rec.uploaded_at).toLocaleDateString()}
+              </p>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                onClick={() => onPreview(rec.id)}
+                className="rounded-lg p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                title="Preview"
+              >
+                <Eye className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => onDelete(rec.id)}
+                className="rounded-lg p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                title="Delete"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Preview Dialog ──────────────────────────────────────────────────
+
+function PreviewDialog({
+  detail,
+  open,
+  onOpenChange,
+}: {
+  detail: UploadDetail | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  if (!detail) return null;
+
+  const previewRows = detail.data.slice(0, 20);
+  const columns = detail.columns.slice(0, 10); // limit columns for readability
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            {detail.file_name}
+          </DialogTitle>
+          <p className="text-xs text-gray-500">
+            {detail.row_count.toLocaleString()} rows &middot; {detail.columns.length} columns &middot; {detail.platform} &middot; {detail.format.toUpperCase()}
+          </p>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-auto border rounded-lg">
+          <table className="w-full text-xs">
+            <thead className="bg-gray-50 sticky top-0">
+              <tr>
+                {columns.map((col) => (
+                  <th key={col} className="px-3 py-2 text-left font-semibold text-gray-700 whitespace-nowrap border-b border-gray-200">
+                    {col}
+                  </th>
+                ))}
+                {detail.columns.length > 10 && (
+                  <th className="px-3 py-2 text-left font-semibold text-gray-400 whitespace-nowrap border-b border-gray-200">
+                    +{detail.columns.length - 10} more
+                  </th>
+                )}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {previewRows.map((row, i) => (
+                <tr key={i} className="hover:bg-gray-50/50">
+                  {columns.map((col) => (
+                    <td key={col} className="px-3 py-1.5 text-gray-600 whitespace-nowrap max-w-[200px] truncate">
+                      {String(row[col] ?? '')}
+                    </td>
+                  ))}
+                  {detail.columns.length > 10 && <td className="px-3 py-1.5 text-gray-300">...</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {detail.row_count > 20 && (
+          <p className="text-xs text-gray-400 text-center py-2">
+            Showing first 20 of {detail.row_count.toLocaleString()} rows
+          </p>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────
+
+export function DataPage() {
+  const [records, setRecords] = useState<UploadRecord[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [previewDetail, setPreviewDetail] = useState<UploadDetail | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [clientId, setClientId] = useState<string>('');
+
+  // Get client_id from auth context
+  useEffect(() => {
+    const token = localStorage.getItem('plinth_token');
+    if (!token) return;
+    fetch(`${API_URL}/v1/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const user = data?.user ?? data;
+        setClientId(user?.client_id ?? user?.id ?? user?.email ?? 'default');
+      })
+      .catch(() => setClientId('default'));
+  }, []);
+
+  const loadRecords = useCallback(async () => {
+    if (!clientId) return;
+    try {
+      const recs = await listUploads(clientId);
+      setRecords(recs);
+    } catch {
+      // API may not be available
+    }
+  }, [clientId]);
+
+  useEffect(() => {
+    void loadRecords();
+  }, [loadRecords]);
+
+  const handleUpload = async (file: File, dataType: string) => {
+    setUploading(true);
+    setUploadResult(null);
+    try {
+      const result = await uploadFile(file, clientId, dataType || undefined);
+      setUploadResult({
+        success: true,
+        message: `Uploaded ${file.name}: ${result.rows} rows, detected as ${result.platform} (${Math.round(result.confidence * 100)}% confidence)`,
+      });
+      void loadRecords();
+    } catch (err) {
+      setUploadResult({
+        success: false,
+        message: err instanceof Error ? err.message : 'Upload failed',
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handlePreview = async (id: string) => {
+    try {
+      const detail = await getUpload(id);
+      setPreviewDetail(detail);
+      setPreviewOpen(true);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteUpload(id);
+      setRecords((prev) => prev.filter((r) => r.id !== id));
+    } catch {
+      // ignore
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h2 className="text-2xl font-bold text-gray-900">Data Uploads</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          Upload CSV or Excel files with business data to enrich pipeline runs.
+          Uploaded data is automatically merged into subsequent analysis cycles.
+        </p>
+      </div>
+
+      {/* Upload zone */}
+      <UploadZone onUpload={(f, dt) => void handleUpload(f, dt)} uploading={uploading} />
+
+      {/* Upload result toast */}
+      {uploadResult && (
+        <div
+          className={`flex items-center gap-3 rounded-lg border p-3 ${
+            uploadResult.success
+              ? 'border-green-200 bg-green-50 text-green-800'
+              : 'border-red-200 bg-red-50 text-red-800'
+          }`}
+        >
+          <p className="flex-1 text-xs">{uploadResult.message}</p>
+          <button onClick={() => setUploadResult(null)} className="shrink-0">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Upload history */}
+      <UploadHistory
+        records={records}
+        onPreview={(id) => void handlePreview(id)}
+        onDelete={(id) => void handleDelete(id)}
+      />
+
+      {/* Preview dialog */}
+      <PreviewDialog
+        detail={previewDetail}
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+      />
+    </div>
+  );
+}

@@ -15,9 +15,11 @@ import { ArchitecturePage } from './pages/ArchitecturePage';
 import { ConsumptionPage } from './pages/ConsumptionPage';
 import { AuthCallbackPage } from './pages/AuthCallbackPage';
 import { AcceptInvitePage } from './pages/AcceptInvitePage';
+import { VisionPage } from './pages/VisionPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { AssistantPage } from './pages/AssistantPage';
 import { HistoryPage } from './pages/HistoryPage';
+import { DataPage } from './pages/DataPage';
 import { SettingsLayout } from './pages/settings/SettingsLayout';
 import { ProfilePage } from './pages/settings/ProfilePage';
 import { UsersPage } from './pages/settings/UsersPage';
@@ -54,6 +56,7 @@ function AppRoutes() {
       <Route path="campaign-ops" element={<CampaignOpsPage />} />
       <Route path="executive-bridge" element={<ExecutiveBridgePage />} />
       <Route path="integrations" element={<IntegrationsPage />} />
+      <Route path="data" element={<DataPage />} />
       <Route path="architecture" element={<ArchitecturePage />} />
       <Route path="consumption" element={<ConsumptionPage />} />
       <Route path="settings" element={<SettingsLayout />}>
@@ -78,6 +81,9 @@ export function App() {
 
       {/* /accept-invite — invite acceptance page */}
       <Route path="accept-invite" element={<AcceptInvitePage />} />
+
+      {/* /vision — cinematic vision page */}
+      <Route path="vision" element={<VisionPage />} />
 
       {/* /demo/* — investor demo room (landing-scorecard_Plinth pages, hardcoded) */}
       <Route path="demo" element={<DemoCommandCenter />} />

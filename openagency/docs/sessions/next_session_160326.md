@@ -108,27 +108,64 @@ Pipeline execution flow (updated):
 
 ## Next Session Priorities
 
-### 1. Email notifications (Resend/SendGrid)
+### 1. Include in https://plinth.polanyi.tech/ a section https://plinth.polanyi.tech/vision
+- Read plinth-vision-v2.md in the sessions folder
+- In nav.bar in https://plinth.polanyi.tech/ "Documentation" replace with new section https://plinth.polanyi.tech/vision
+- clone style, effects from https://atoms.co/vision keep plith.polanyi.tech style, CSS, UI, components, fonts and frontend framework. Its the same /vision from atoms.co but with plith.polanyi layout.
+- When user clicks on "vision" redirects to https://plinth.polanyi.tech/vision
+
+### 2. Reorder menu in https://plith.polanyi.tech/app
+- Currently we have this structure:
+  - Home
+  - Assistant
+    - Conversations
+  - Scorecard
+  - Command Center
+  - Leak Detector
+  - Media Architech
+  - Campaign Ops
+  - Executive bridge
+  - Integrations
+  - Architecture
+  - Consumption
+  - History
+  - Billing
+- But there is a lot of menu options, lets organice using menu -> Submenu
+- My proposal (open to hear recommendations from you based on A2A and A2H approach)
+ - Home
+ - Assistant
+    - Conversations
+ - Command Center
+ - A2A Engines
+  - Leak Detector
+  - Media Architech
+  - Campaign Ops
+  - Executive bridge
+  - Integrations: I know in the home will start the onboarding. I need the in the onboarding and setup screen and integrations clone this screen (https://www.perplexity.ai/account/connectors) after user clicks on the 3rd party integration (meda, google-ads, dv360, tiktok, amazon ads) a popup will apear. In home will hapen the initial set-up, but "integration" menu option is the directory fo connections. Review in assets folder the reference flow Connectors_flow.png and images to apply. Use the context and logic of plith. Use same design in each card of perplexity.ai/account/connectors (Icon logo - name and description)
+  - Consumption: Change the current menu name; instead of consumption replace with "Usage and runs"
+  - Billing: Change the current menu name; instead of "Billing" replace with "Outcome Base Fee"
+
+### 3. Email notifications (Resend/SendGrid)
 - Wire server-side email for demo requests + HFL escalations
 - Add `RESEND_API_KEY` to Railway env
 - Send email when pipeline completes with scorecard summary
 
-### 2. Connect first real ad platform
+### 4. Connect first real ad platform
 - Set up Google Ads or Meta OAuth credentials on Railway
 - Test: OAuth popup → token exchange → data sync → pipeline with real platform data
 - Verify context assembler produces real channels from syncResultCache
 
-### 3. Human batch upload E2E in /app
+### 5. Human batch upload E2E in /app
 - Frontend UI: upload CSV/Excel in onboarding wizard or assistant chat
 - Pass client_id → persist to client_data → verify next pipeline run includes it
 - Test with real sell-in/sell-out data
 
-### 4. Google Drive / OneDrive env vars on Railway
+### 6. Google Drive / OneDrive env vars on Railway
 - `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET`
 - `ONEDRIVE_CLIENT_ID`, `ONEDRIVE_CLIENT_SECRET`
 - Test /v1/storage/google_drive/auth-url → callback → files → import
 
-### 5. Cross-client benchmarking
+### 7. Cross-client benchmarking
 - Compare waste/lift/efficiency across multiple client scorecards
 - Aggregate pipeline run data by client for industry benchmarks
 
