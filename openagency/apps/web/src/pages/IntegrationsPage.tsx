@@ -421,9 +421,10 @@ function McpApiSection() {
   };
 
   const firstKey = apiKeys[0];
-  const maskedKey = firstKey
-    ? `${firstKey.key.slice(0, 8)}${'*'.repeat(24)}${firstKey.key.slice(-6)}`
-    : null;
+  const keyStr = firstKey?.key ?? '';
+  const maskedKey = keyStr.length >= 14
+    ? `${keyStr.slice(0, 8)}${'*'.repeat(24)}${keyStr.slice(-6)}`
+    : keyStr || null;
 
   const mcpConfig = (client: string) => `{
   "mcpServers": {
@@ -487,7 +488,7 @@ function McpApiSection() {
               <div className="flex items-center gap-2">
                 <div className="flex flex-1 items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
                   <code className="flex-1 font-mono text-xs text-gray-700 truncate">
-                    {showKey === firstKey.id ? firstKey.key : maskedKey}
+                    {showKey === firstKey.id ? keyStr : maskedKey}
                   </code>
                   <button
                     onClick={() => setShowKey(showKey === firstKey.id ? null : firstKey.id)}
@@ -496,7 +497,7 @@ function McpApiSection() {
                     {showKey === firstKey.id ? 'Hide' : 'Reveal'}
                   </button>
                 </div>
-                <CopyButton text={firstKey.key} />
+                <CopyButton text={keyStr} />
               </div>
             ) : (
               <p className="text-xs text-gray-400 italic">No API key yet. Generate one above.</p>

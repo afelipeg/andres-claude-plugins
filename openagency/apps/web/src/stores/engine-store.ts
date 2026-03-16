@@ -16,7 +16,7 @@ export const useEngineStore = create<EngineState>((set) => ({
   error: null,
   results: {},
   setLoading: (loading) => set({ loading }),
-  setError: (error) => set({ error }),
+  setError: (error) => set({ error: typeof error === 'string' ? error : error != null ? String(error) : null }),
   setResult: (key, result) =>
     set((state) => ({ results: { ...state.results, [key]: result } })),
   clearResult: (key) =>

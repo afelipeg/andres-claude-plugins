@@ -85,7 +85,7 @@ export function LeakDetectorPage() {
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          {error}
+          {typeof error === 'string' ? error : JSON.stringify(error)}
         </div>
       )}
 
