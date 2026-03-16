@@ -47,7 +47,7 @@ export function setScorecardDbRepo(repo: ScorecardDbRepo): void {
  */
 export function createScorecardFromMeshRun(
   stageResults: Record<string, Record<string, unknown>>,
-  opts: { run_id: string; ad_spend?: number; client_id?: string; client_lift_rate?: number; client_efficiency_rate?: number },
+  opts: { run_id: string; ad_spend?: number; client_id?: string; client_lift_rate?: number; client_efficiency_rate?: number; run_type?: string },
 ): ScorecardRecord {
   const engineOutputs: EngineOutputs = { ad_spend: opts.ad_spend ?? 0 };
 
@@ -130,7 +130,7 @@ export function createScorecardFromMeshRun(
       id: record.id,
       run_id: record.run_id,
       client_id: record.client_id,
-      run_type: 'standard',
+      run_type: opts.run_type ?? 'standard',
       ad_spend: record.ad_spend,
       billing: record.billing as unknown as Record<string, unknown>,
       engine_outputs: record.engine_outputs as unknown as Record<string, unknown>,
@@ -347,6 +347,56 @@ export function scorecardRoutes(
         status: r.status,
       }));
     return c.json({ scorecards: records });
+  });
+
+  // ─── Compare plan vs actual scorecards ──────────────────────────
+  app.post('/v1/scorecard/compare', async (c) => {
+    if (!scorecardDb) return c.json({ error: 'no_db', message: 'Database not configured' }, 503);
+
+    const body = await c.req.json<{ plan_id: string; actual_id: string }>();
+    if (!body.plan_id || !body.actual_id) {
+      return c.json({ error: 'missing_fields', message: 'plan_id and actual_id required' }, 400);
+    }
+
+    const [plan, actual] = await Promise.all([
+      scorecardDb.findById(body.plan_id),
+      scorecardDb.findById(body.actual_id),
+    ]);
+
+    if (!plan) return c.json({ error: 'not_found', message: `Plan scorecard not found: ${body.plan_id}` }, 404);
+    if (!actual) return c.json({ error: 'not_found', message: `Actual scorecard not found: ${body.actual_id}` }, 404);
+
+    const planBilling = plan.billing as Record<string, unknown>;
+    const actualBilling = actual.billing as Record<string, unknown>;
+
+    const num = (obj: Record<string, unknown>, key: string) => Number(obj[key] ?? 0);
+
+    const comparison = {
+      plan_id: plan.id,
+      actual_id: actual.id,
+      plan_run_type: plan.run_type,
+      actual_run_type: actual.run_type,
+      ad_spend_delta: actual.ad_spend - plan.ad_spend,
+      recovery_delta: num(actualBilling, 'total_recovery') - num(planBilling, 'total_recovery'),
+      lift_delta: num(actualBilling, 'total_lift') - num(planBilling, 'total_lift'),
+      efficiency_delta: num(actualBilling, 'total_efficiency_savings') - num(planBilling, 'total_efficiency_savings'),
+      total_fee_delta: num(actualBilling, 'total_fee') - num(planBilling, 'total_fee'),
+      roi_delta: num(actualBilling, 'roi_on_fee') - num(planBilling, 'roi_on_fee'),
+      plan_summary: {
+        ad_spend: plan.ad_spend,
+        total_fee: num(planBilling, 'total_fee'),
+        roi_on_fee: num(planBilling, 'roi_on_fee'),
+        created_at: plan.created_at,
+      },
+      actual_summary: {
+        ad_spend: actual.ad_spend,
+        total_fee: num(actualBilling, 'total_fee'),
+        roi_on_fee: num(actualBilling, 'roi_on_fee'),
+        created_at: actual.created_at,
+      },
+    };
+
+    return c.json(comparison);
   });
 
   return app;

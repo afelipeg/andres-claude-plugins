@@ -31,8 +31,6 @@ const API_URL =
   (import.meta.env.VITE_API_URL as string | undefined) ||
   'https://polanyi-plinth-production.up.railway.app';
 
-const MCP_URL = `${API_URL}/mcp`;
-
 const SYNC_INTERVALS: { value: SyncInterval; label: string }[] = [
   { value: '15m', label: 'Every 15 min' },
   { value: '1h', label: 'Hourly' },
@@ -40,39 +38,6 @@ const SYNC_INTERVALS: { value: SyncInterval; label: string }[] = [
   { value: '24h', label: 'Daily' },
   { value: 'manual', label: 'Manual only' },
 ];
-
-// ─── Copy Button ──────────────────────────────────────────────────────
-
-function CopyButton({ text, label = 'Copy' }: { text: string; label?: string }) {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-  return (
-    <button
-      onClick={() => void handleCopy()}
-      className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900"
-    >
-      {copied ? (
-        <>
-          <svg className="h-3.5 w-3.5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-          </svg>
-          Copied!
-        </>
-      ) : (
-        <>
-          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-          </svg>
-          {label}
-        </>
-      )}
-    </button>
-  );
-}
 
 // ─── Connection Dialog (OAuth-first + API key fallback) ──────────────
 
@@ -375,192 +340,6 @@ function PlatformCard({ config, apiMode }: { config: PlatformConfig; apiMode: bo
   );
 }
 
-// ─── MCP & API Credentials (collapsible) ─────────────────────────────
-
-interface ApiKey {
-  id: string;
-  key: string;
-  name?: string;
-  created_at?: string;
-}
-
-function McpApiSection() {
-  const [expanded, setExpanded] = useState(false);
-  const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
-  const [showKey, setShowKey] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'claude' | 'cursor' | 'http'>('claude');
-
-  const loadKeys = useCallback(async () => {
-    const token = localStorage.getItem('plinth_token');
-    if (!token) { setLoading(false); return; }
-    try {
-      const res = await fetch(`${API_URL}/v1/auth/api-keys`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setApiKeys(Array.isArray(data) ? data : (data.keys ?? data.api_keys ?? []));
-      }
-    } catch { /* API not available */ } finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => { void loadKeys(); }, [loadKeys]);
-
-  const handleGenerate = async () => {
-    const token = localStorage.getItem('plinth_token');
-    if (!token) return;
-    setGenerating(true);
-    try {
-      const res = await fetch(`${API_URL}/v1/auth/api-keys`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ name: 'Default key' }),
-      });
-      if (res.ok) await loadKeys();
-    } catch { /* ignore */ } finally { setGenerating(false); }
-  };
-
-  const firstKey = apiKeys[0];
-  const keyStr = firstKey?.key ?? '';
-  const maskedKey = keyStr.length >= 14
-    ? `${keyStr.slice(0, 8)}${'*'.repeat(24)}${keyStr.slice(-6)}`
-    : keyStr || null;
-
-  const mcpConfig = (client: string) => `{
-  "mcpServers": {
-    "plinth": {
-      "url": "${MCP_URL}",
-      "headers": {
-        "X-API-Key": "YOUR_API_KEY"
-      }
-    }
-  }
-}`;
-
-  const httpExample = `curl -X POST ${MCP_URL} \\
-  -H "Content-Type: application/json" \\
-  -H "X-API-Key: YOUR_API_KEY" \\
-  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'`;
-
-  const tabs = [
-    { id: 'claude' as const, label: 'Claude Desktop', file: '~/.config/claude/claude_desktop_config.json' },
-    { id: 'cursor' as const, label: 'Cursor / VS Code', file: '.cursor/mcp.json' },
-    { id: 'http' as const, label: 'HTTP / Agent', file: undefined },
-  ];
-
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center justify-between px-6 py-4 text-left hover:bg-gray-50/50 transition-colors"
-      >
-        <div>
-          <h3 className="text-sm font-semibold text-gray-900">MCP & API Credentials</h3>
-          <p className="mt-0.5 text-xs text-gray-500">Configure MCP clients, API keys, and REST endpoints.</p>
-        </div>
-        <svg
-          className={`h-5 w-5 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
-          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-
-      {expanded && (
-        <div className="border-t border-gray-100 p-6 space-y-6">
-          {/* API Key */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-semibold uppercase tracking-wider text-gray-500">API Key</label>
-              {!loading && !firstKey && (
-                <button
-                  onClick={() => void handleGenerate()}
-                  disabled={generating}
-                  className="rounded-md bg-gray-900 px-3 py-1 text-xs font-semibold text-white hover:bg-gray-800 disabled:opacity-50"
-                >
-                  {generating ? 'Generating...' : 'Generate Key'}
-                </button>
-              )}
-            </div>
-            {loading ? (
-              <div className="h-9 animate-pulse rounded-lg bg-gray-100" />
-            ) : firstKey ? (
-              <div className="flex items-center gap-2">
-                <div className="flex flex-1 items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                  <code className="flex-1 font-mono text-xs text-gray-700 truncate">
-                    {showKey === firstKey.id ? keyStr : maskedKey}
-                  </code>
-                  <button
-                    onClick={() => setShowKey(showKey === firstKey.id ? null : firstKey.id)}
-                    className="text-xs text-gray-400 hover:text-gray-600 shrink-0"
-                  >
-                    {showKey === firstKey.id ? 'Hide' : 'Reveal'}
-                  </button>
-                </div>
-                <CopyButton text={keyStr} />
-              </div>
-            ) : (
-              <p className="text-xs text-gray-400 italic">No API key yet. Generate one above.</p>
-            )}
-          </div>
-
-          {/* URLs */}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-500">MCP Server</label>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 font-mono text-xs text-gray-700 truncate">{MCP_URL}</code>
-                <CopyButton text={MCP_URL} />
-              </div>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-gray-500">REST API</label>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 font-mono text-xs text-gray-700 truncate">{API_URL}</code>
-                <CopyButton text={API_URL} />
-              </div>
-            </div>
-          </div>
-
-          {/* MCP Config Tabs */}
-          <div>
-            <h4 className="text-xs font-semibold text-gray-700 mb-3">Connect your MCP client</h4>
-            <div className="flex gap-1 border-b border-gray-100 pb-0">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`rounded-t-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                    activeTab === tab.id
-                      ? 'bg-white border border-b-white border-gray-200 text-gray-900 -mb-px'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-            <div className="relative mt-3 rounded-xl bg-gray-900 p-4">
-              <pre className="overflow-x-auto text-[11px] leading-relaxed text-green-300 font-mono whitespace-pre">
-                {activeTab === 'http' ? httpExample : mcpConfig(activeTab)}
-              </pre>
-              <div className="absolute right-3 top-3">
-                <CopyButton text={activeTab === 'http' ? httpExample : mcpConfig(activeTab)} />
-              </div>
-            </div>
-            {tabs.find((t) => t.id === activeTab)?.file && (
-              <code className="mt-2 block rounded bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500 w-fit">
-                {tabs.find((t) => t.id === activeTab)?.file}
-              </code>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ─── Main Page ────────────────────────────────────────────────────────
 
@@ -615,8 +394,6 @@ export function IntegrationsPage() {
         </div>
       </div>
 
-      {/* MCP & API Credentials (collapsible) */}
-      <McpApiSection />
     </div>
   );
 }

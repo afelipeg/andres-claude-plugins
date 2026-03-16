@@ -105,6 +105,7 @@ export async function createApp() {
 
   let meshRunRepo: MeshRunRepo | null = null;
   let clientDataRepo: ClientDataRepo | null = null;
+  let scorecardDbRepo: ScorecardDbRepo | null = null;
 
   if (db) {
     log.info('Database connected — repos active');
@@ -118,6 +119,7 @@ export async function createApp() {
     userRepo = new UserRepo(db);
     meshRunRepo = new MeshRunRepo(db);
     clientDataRepo = new ClientDataRepo(db);
+    scorecardDbRepo = new ScorecardDbRepo(db);
     await seedAdminUser(userRepo);
   } else {
     log.warn('No DATABASE_URL — running without persistence');
@@ -293,7 +295,7 @@ export async function createApp() {
   app.route('/', goalRoutes({ goalRepo, decomposer: goalDecomposer, tracker: goalTracker }));
 
   // ─── Mesh routes (with HFL + Scheduler) ────────────────────────
-  app.route('/', meshRoutes(mesh, hflCoordinator, scheduler, connectorInfra, clientDataRepo ?? undefined));
+  app.route('/', meshRoutes(mesh, hflCoordinator, scheduler, connectorInfra, clientDataRepo ?? undefined, mcpClientRegistry, scorecardDbRepo ?? undefined));
 
   // ─── Connector routes ──────────────────────────────────────────
   app.route('/', connectorRoutes(connectorInfra, eventBus));
@@ -308,7 +310,7 @@ export async function createApp() {
   app.route('/', hflRoutes(hflCoordinator));
 
   // ─── Scorecard + Billing ──────────────────────────────────────
-  app.route('/', scorecardRoutes(agency, mesh, connectorInfra, db ? new ScorecardDbRepo(db) : undefined));
+  app.route('/', scorecardRoutes(agency, mesh, connectorInfra, scorecardDbRepo ?? undefined));
 
   // ─── Analyze pipeline (upload → engines → scorecard) ──────────
   app.route('/', analyzeRoutes(agency));

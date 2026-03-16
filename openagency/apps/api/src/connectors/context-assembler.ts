@@ -8,6 +8,10 @@
 //   explicit context from POST body → merged last (overrides)
 
 import type { ConnectorPlatform, NormalizedCampaignRow, SyncResult } from '@openagency/types';
+import type { McpClientRegistry } from '@openagency/agent';
+import { createLogger } from '@openagency/core';
+
+const log = createLogger('context-assembler');
 
 interface ChannelSummary {
   name: string;
@@ -193,4 +197,78 @@ export function mergeClientBatchData(
   // Batch data keys: sell_in, sell_out, digital_sales, investor_relations, etc.
   // These are first-party client data that enrich the engine analysis
   return { ...ctx, client_data: batchData, _has_client_batch: true };
+}
+
+// ─── MCP Data Injection ──────────────────────────────────────────────
+
+/** Build minimum required params for an MCP tool call based on catalog auth fields. */
+function buildMinParams(
+  catalogId: string,
+  _toolName: string,
+): Record<string, unknown> {
+  // Map catalog_id to the params that tools typically require
+  const paramMaps: Record<string, Record<string, string>> = {
+    meta_ads_mcp: { ad_account_id: 'ad_account_id' },
+    tiktok_ads_mcp: { advertiser_id: 'advertiser_id' },
+    google_ads_mcp: { login_customer_id: 'customer_id' },
+    amazon_ads_mcp: { profile_id: 'profile_id' },
+    dv360_mcp: { partner_id: 'partner_id' },
+  };
+  // Note: actual auth field values come from the encrypted connection.
+  // MCP servers receive them as env vars at spawn time, not as tool params.
+  // This function only provides tool-level params that some tools require.
+  return paramMaps[catalogId] ?? {};
+}
+
+/**
+ * Fetch data from connected external MCP servers and merge into skillContext.
+ * Calls data-fetch tools (get_, campaign, performance) on each connected server.
+ */
+export async function mergeMcpData(
+  ctx: Record<string, unknown>,
+  mcpRegistry: McpClientRegistry,
+  _clientId: string,
+): Promise<Record<string, unknown>> {
+  const servers = mcpRegistry.listServers();
+  if (servers.length === 0) return ctx;
+
+  const mcpData: Record<string, unknown> = {};
+  const mcpErrors: string[] = [];
+
+  for (const server of servers) {
+    for (const tool of server.tools) {
+      // Only call data-fetch tools (get_*, *campaign*, *performance*, *insight*)
+      const isDataTool =
+        tool.name.startsWith('get_') ||
+        tool.name.includes('campaign') ||
+        tool.name.includes('performance') ||
+        tool.name.includes('insight');
+
+      if (!isDataTool) continue;
+
+      const toolKey = `${server.name}:${tool.name}`;
+      try {
+        const params = buildMinParams(server.name, tool.name);
+        const result = await mcpRegistry.callTool(server.name, tool.name, params);
+        if (result.isError) {
+          log.warn({ server: server.name, tool: tool.name }, 'MCP tool returned error — skipping');
+          mcpErrors.push(`${toolKey}: ${result.content?.[0]?.text ?? 'unknown error'}`);
+          continue;
+        }
+        mcpData[toolKey] = result.content?.[0]?.text ?? null;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.warn({ server: server.name, tool: tool.name, error: msg }, 'MCP tool call failed — skipping');
+        mcpErrors.push(`${toolKey}: ${msg}`);
+      }
+    }
+  }
+
+  return {
+    ...ctx,
+    mcp_data: mcpData,
+    _has_mcp_data: Object.keys(mcpData).length > 0,
+    _mcp_sources: servers.map((s) => s.name),
+    _mcp_errors: mcpErrors.length > 0 ? mcpErrors : undefined,
+  };
 }

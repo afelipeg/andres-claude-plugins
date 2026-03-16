@@ -90,6 +90,35 @@ export class ScorecardDbRepo {
     return this.deserialize(r);
   }
 
+  async getLatestByClient(clientId: string, runType?: string): Promise<ScorecardDbRecord | null> {
+    const rows = runType
+      ? await this.db`
+          SELECT id, run_id, client_id, run_type, ad_spend, billing, engine_outputs,
+                 engine_results, status, feedback, created_at, updated_at
+          FROM scorecards WHERE client_id = ${clientId} AND run_type = ${runType}
+          ORDER BY created_at DESC LIMIT 1
+        ` as Array<{
+          id: string; run_id: string | null; client_id: string | null; run_type: string;
+          ad_spend: number | string; billing: unknown; engine_outputs: unknown;
+          engine_results: unknown; status: 'pending' | 'accepted' | 'rejected';
+          feedback: string | null; created_at: Date; updated_at: Date;
+        }>
+      : await this.db`
+          SELECT id, run_id, client_id, run_type, ad_spend, billing, engine_outputs,
+                 engine_results, status, feedback, created_at, updated_at
+          FROM scorecards WHERE client_id = ${clientId}
+          ORDER BY created_at DESC LIMIT 1
+        ` as Array<{
+          id: string; run_id: string | null; client_id: string | null; run_type: string;
+          ad_spend: number | string; billing: unknown; engine_outputs: unknown;
+          engine_results: unknown; status: 'pending' | 'accepted' | 'rejected';
+          feedback: string | null; created_at: Date; updated_at: Date;
+        }>;
+    const r = rows[0];
+    if (!r) return null;
+    return this.deserialize(r);
+  }
+
   async updateStatus(id: string, status: 'accepted' | 'rejected', feedback?: string): Promise<void> {
     await this.db`
       UPDATE scorecards

@@ -107,7 +107,7 @@ const NAV_STRUCTURE: NavEntry[] = [
     label: 'Integrations',
     Icon: Link,
     children: [
-      { path: '/integrations', label: 'Apps & MCP', Icon: Link },
+      { path: '/integrations', label: 'Connectors', Icon: Link },
       { path: '/marketplace', label: 'Marketplace', Icon: ShoppingBag },
       { path: '/data', label: 'Data', Icon: Upload },
     ],
@@ -130,7 +130,7 @@ function getPageTitle(pathname: string): string {
     'media-architect': 'Media Architect',
     'campaign-ops': 'Campaign Ops',
     'executive-bridge': 'Executive Bridge',
-    integrations: 'Apps & MCP',
+    integrations: 'Connectors',
     architecture: 'Architecture',
     consumption: 'Usage & Runs',
     history: 'History',

@@ -26,6 +26,8 @@ const DATA_TYPES = [
   { value: 'sell_in', label: 'Sell-in' },
   { value: 'sell_out', label: 'Sell-out' },
   { value: 'digital_sales', label: 'Digital Sales' },
+  { value: 'kpi_results', label: 'KPI Results (Actual)' },
+  { value: 'budget_plan', label: 'Budget Plan' },
   { value: 'other', label: 'Other' },
 ];
 
@@ -304,9 +306,12 @@ export function DataPage() {
     setUploadResult(null);
     try {
       const result = await uploadFile(file, clientId, dataType || undefined);
+      const kpiNotice = dataType === 'kpi_results'
+        ? ' Column mapping will be available soon — data is saved and will be reprocessed automatically.'
+        : '';
       setUploadResult({
         success: true,
-        message: `Uploaded ${file.name}: ${result.rows} rows, detected as ${result.platform} (${Math.round(result.confidence * 100)}% confidence)`,
+        message: `Uploaded ${file.name}: ${result.rows} rows, detected as ${result.platform} (${Math.round(result.confidence * 100)}% confidence).${kpiNotice}`,
       });
       void loadRecords();
     } catch (err) {

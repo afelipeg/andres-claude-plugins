@@ -15,10 +15,11 @@ import type { PipelineScheduler } from '@openagency/agent';
 import type { HFLCoordinator, MeshRunSummary } from '@openagency/hfl';
 import { createScorecardFromMeshRun } from './scorecard.js';
 import type { ConnectorInfra } from '../connectors/setup.js';
-import { assembleContextFromSync, mergeClientBatchData } from '../connectors/context-assembler.js';
-import type { ClientDataRepo } from '@openagency/memory';
+import { assembleContextFromSync, mergeClientBatchData, mergeMcpData } from '../connectors/context-assembler.js';
+import type { ClientDataRepo, ScorecardDbRepo } from '@openagency/memory';
+import type { McpClientRegistry } from '@openagency/agent';
 
-export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, scheduler?: PipelineScheduler, connectorInfra?: ConnectorInfra, clientDataRepo?: ClientDataRepo) {
+export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, scheduler?: PipelineScheduler, connectorInfra?: ConnectorInfra, clientDataRepo?: ClientDataRepo, mcpClientRegistry?: McpClientRegistry, scorecardDbRepo?: ScorecardDbRepo) {
   const app = new Hono();
 
   // ─── List pipelines ──────────────────────────────────────────────
@@ -53,12 +54,14 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, schedule
     let goalId: string | undefined;
     let clientId: string | undefined;
     let explicitContext: Record<string, unknown> | undefined;
+    let runType: string = 'standard';
 
     try {
-      const body = await c.req.json<{ goal_id?: string; client_id?: string; context?: Record<string, unknown> }>();
+      const body = await c.req.json<{ goal_id?: string; client_id?: string; context?: Record<string, unknown>; run_type?: string }>();
       goalId = body.goal_id;
       clientId = body.client_id;
       explicitContext = body.context;
+      if (body.run_type === 'plan' || body.run_type === 'actual') runType = body.run_type;
     } catch {
       // Empty body is fine
     }
@@ -80,6 +83,37 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, schedule
       }
     }
 
+    // Merge MCP data from connected external servers
+    if (mcpClientRegistry) {
+      try {
+        skillContext = await mergeMcpData(skillContext, mcpClientRegistry, clientId ?? 'default');
+      } catch {
+        // MCP data fetch failure doesn't block pipeline
+      }
+    }
+
+    // Inject previous run baseline for plan vs actual comparison
+    if (clientId && scorecardDbRepo) {
+      try {
+        const previousScorecard = await scorecardDbRepo.getLatestByClient(clientId, 'plan');
+        if (previousScorecard) {
+          const prevBilling = previousScorecard.billing as Record<string, unknown>;
+          skillContext._previous_run = {
+            run_id: previousScorecard.run_id,
+            billing: prevBilling,
+            engine_outputs: previousScorecard.engine_outputs,
+            created_at: previousScorecard.created_at,
+          };
+          skillContext._baseline = {
+            roas: (prevBilling as Record<string, unknown>)?.roi_on_fee ?? 2.0,
+            waste_pct: ((prevBilling as Record<string, unknown>)?.recovery as Record<string, unknown>)?.waste_pct ?? 20,
+          };
+        }
+      } catch {
+        // Previous run fetch failure doesn't block pipeline
+      }
+    }
+
     try {
       const run = await mesh.executePipeline(pipelineId, goalId, clientId, skillContext);
       const serialized = mesh.serializeRun(run) as Record<string, unknown>;
@@ -98,6 +132,7 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, schedule
             const scorecard = createScorecardFromMeshRun(stageResults, {
               run_id: run.id,
               client_id: clientId,
+              run_type: runType,
             });
             serialized.scorecard = {
               id: scorecard.id,
