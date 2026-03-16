@@ -36,6 +36,11 @@ FROM node:20-alpine AS runtime
 
 RUN corepack enable && corepack prepare pnpm@10.30.0 --activate
 
+# Python for MCP managed servers (Google Ads, Meta, TikTok, DV360)
+RUN apk add --no-cache python3 py3-pip pipx \
+    && pipx install google-ads-mcp 2>/dev/null || true \
+    && pip3 install --break-system-packages facebook-ads-mcp adsmcp-tiktok 2>/dev/null || true
+
 WORKDIR /app
 
 # Copy built artifacts

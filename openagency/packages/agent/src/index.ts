@@ -40,6 +40,7 @@ export type {
 // Federation (external agent consumption)
 export { A2AClient } from './federation/a2a-client.js';
 export { McpClientRegistry } from './federation/mcp-client.js';
+export { McpProcessManager } from './federation/mcp-process-manager.js';
 export type {
   AgentCard as FederatedAgentCard,
   ExternalMcpServer,

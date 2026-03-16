@@ -104,15 +104,10 @@ function ConnectDialog({
       await exchangeOAuthCode(config.platform, code, redirectUri);
       onConnected();
       onOpenChange(false);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Connection failed';
-      // If OAuth isn't configured on server, fallback to API key input
-      if (msg.includes('401') || msg.includes('not configured') || msg.includes('not found')) {
-        setShowApiKey(true);
-        setError('OAuth not configured for this platform yet. Use an API key instead.');
-      } else {
-        setError(msg);
-      }
+    } catch {
+      // Fallback to API key on ANY error (401, 404, 500, network)
+      setShowApiKey(true);
+      setError('Direct connection unavailable. Enter your API key to connect.');
     } finally {
       setConnecting(false);
     }

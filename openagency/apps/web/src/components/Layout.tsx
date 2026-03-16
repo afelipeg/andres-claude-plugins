@@ -27,6 +27,7 @@ import {
   Trash2,
   Cpu,
   Upload,
+  ShoppingBag,
 } from 'lucide-react';
 import { SyncStatus } from './SyncStatus';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -101,12 +102,13 @@ const NAV_STRUCTURE: NavEntry[] = [
       { path: '/history', label: 'History', Icon: Clock },
     ],
   },
-  // Integrations — group with Apps & MCP + Data submenus
+  // Integrations — group with Apps & MCP + Marketplace + Data
   {
     label: 'Integrations',
     Icon: Link,
     children: [
       { path: '/integrations', label: 'Apps & MCP', Icon: Link },
+      { path: '/marketplace', label: 'Marketplace', Icon: ShoppingBag },
       { path: '/data', label: 'Data', Icon: Upload },
     ],
   },
@@ -133,6 +135,7 @@ function getPageTitle(pathname: string): string {
     consumption: 'Usage & Runs',
     history: 'History',
     data: 'Data',
+    marketplace: 'MCP Marketplace',
     settings: 'Settings',
   };
   return (segment !== undefined ? titles[segment] : undefined) ?? 'Dashboard';

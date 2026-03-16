@@ -20,6 +20,7 @@ import { OnboardingPage } from './pages/OnboardingPage';
 import { AssistantPage } from './pages/AssistantPage';
 import { HistoryPage } from './pages/HistoryPage';
 import { DataPage } from './pages/DataPage';
+import { McpMarketplacePage } from './pages/McpMarketplacePage';
 import { SettingsLayout } from './pages/settings/SettingsLayout';
 import { ProfilePage } from './pages/settings/ProfilePage';
 import { UsersPage } from './pages/settings/UsersPage';
@@ -57,6 +58,7 @@ function AppRoutes() {
       <Route path="executive-bridge" element={<ExecutiveBridgePage />} />
       <Route path="integrations" element={<IntegrationsPage />} />
       <Route path="data" element={<DataPage />} />
+      <Route path="marketplace" element={<McpMarketplacePage />} />
       <Route path="architecture" element={<ArchitecturePage />} />
       <Route path="consumption" element={<ConsumptionPage />} />
       <Route path="settings" element={<SettingsLayout />}>

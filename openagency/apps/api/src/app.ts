@@ -19,6 +19,7 @@ import {
   GoalTracker,
   A2AClient,
   McpClientRegistry,
+  McpProcessManager,
   ActionExecutor,
   computePipelineScore,
   HFL_SCORE_THRESHOLD,
@@ -35,6 +36,7 @@ import {
   FileRepo,
   UserRepo,
   MeshRunRepo,
+  McpConnectionRepo,
 } from '@openagency/memory';
 import { setupConnectors } from './connectors/setup.js';
 import { getDb } from './db/client.js';
@@ -55,6 +57,7 @@ import { mcpRoute } from './mcp/transport.js';
 import { a2aDiscoveryRoute } from './a2a/discovery.js';
 import { federationRoutes } from './routes/federation.js';
 import { marketplaceRoutes } from './routes/marketplace.js';
+import { mcpMarketplaceRoutes } from './routes/mcp-marketplace.js';
 import { deliveryRoutes } from './routes/delivery.js';
 import { HFLCoordinator } from '@openagency/hfl';
 import { hflRoutes } from './routes/hfl.js';
@@ -249,7 +252,16 @@ export async function createApp() {
 
   // ─── Federation (external agent consumption) ──────────────────
   const a2aClient = new A2AClient();
-  const mcpClientRegistry = new McpClientRegistry();
+  const mcpProcessManager = new McpProcessManager();
+  const mcpConnectionRepo = db ? new McpConnectionRepo(db) : undefined;
+  const mcpClientRegistry = new McpClientRegistry(mcpConnectionRepo, mcpProcessManager);
+
+  // Load persisted MCP connections from DB (marks stale if process dead)
+  if (mcpConnectionRepo) {
+    mcpClientRegistry.loadFromDb().catch((err) => {
+      log.warn({ err }, 'Failed to load MCP connections from DB');
+    });
+  }
 
   // ─── Skill Marketplace (dynamic skill registration) ──────────
   const dynamicSkillRegistry = new DynamicSkillRegistry();
@@ -309,6 +321,11 @@ export async function createApp() {
 
   // ─── Marketplace routes ──────────────────────────────────────
   app.route('/', marketplaceRoutes(dynamicSkillRegistry));
+
+  // ─── MCP Marketplace (catalog + connections) ──────────────────
+  if (mcpConnectionRepo) {
+    app.route('/', mcpMarketplaceRoutes(mcpConnectionRepo, mcpClientRegistry, mcpProcessManager));
+  }
 
   // ─── Dashboard (aggregated KPIs for Command Center) ──────────
   app.route('/', dashboardRoutes({ mesh, connectorInfra, registry, hfl: hflCoordinator }));

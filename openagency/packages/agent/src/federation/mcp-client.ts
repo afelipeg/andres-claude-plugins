@@ -1,8 +1,11 @@
 // ─── MCP Client Registry ───────────────────────────────────────────
 // Connects to and invokes tools on external MCP servers.
+// Supports optional DB persistence via McpConnectionRepo.
 
 import { createLogger } from '@openagency/core';
 import type { ExternalMcpServer } from './types.js';
+import type { McpConnectionRepo } from '@openagency/memory';
+import type { McpProcessManager } from './mcp-process-manager.js';
 
 const log = createLogger('federation:mcp');
 
@@ -14,17 +17,30 @@ interface McpToolResult {
 export class McpClientRegistry {
   private servers = new Map<string, ExternalMcpServer>();
 
+  constructor(
+    private repo?: McpConnectionRepo,
+    private processManager?: McpProcessManager,
+  ) {}
+
   /**
    * Connect to an external MCP server via StreamableHTTP.
    * Discovers available tools and caches them.
    */
-  async connect(name: string, url: string): Promise<ExternalMcpServer> {
+  async connect(
+    name: string,
+    url: string,
+    authToken?: string,
+    clientId?: string,
+  ): Promise<ExternalMcpServer> {
     log.info({ name, url }, 'Connecting to external MCP server');
 
-    // Use StreamableHTTP to discover tools
+    const authHeaders: Record<string, string> = {};
+    if (authToken) authHeaders['Authorization'] = `Bearer ${authToken}`;
+
+    // Initialize
     const initRes = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
       body: JSON.stringify({
         jsonrpc: '2.0',
         id: 1,
@@ -32,7 +48,7 @@ export class McpClientRegistry {
         params: {
           protocolVersion: '2025-03-26',
           capabilities: {},
-          clientInfo: { name: 'openagency-federation', version: '3.1.0' },
+          clientInfo: { name: 'openagency-federation', version: '3.2.0' },
         },
       }),
       signal: AbortSignal.timeout(10_000),
@@ -47,6 +63,7 @@ export class McpClientRegistry {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders,
         ...(initRes.headers.get('mcp-session-id')
           ? { 'mcp-session-id': initRes.headers.get('mcp-session-id')! }
           : {}),
@@ -123,6 +140,38 @@ export class McpClientRegistry {
 
     log.info({ server: serverName, tool: toolName, duration }, 'MCP tool completed');
     return body.result ?? { content: [{ type: 'text', text: '{}' }] };
+  }
+
+  /** Load persisted connections from DB. Marks stale if process is dead. */
+  async loadFromDb(clientId?: string): Promise<void> {
+    if (!this.repo) return;
+
+    const rows = clientId
+      ? await this.repo.listByClient(clientId)
+      : await this.repo.listAll();
+
+    for (const row of rows) {
+      // Check if non-hosted process is still alive
+      if (row.process_pid && !row.catalog_id?.endsWith('_hosted')) {
+        const alive = this.processManager?.isProcessAlive(row.process_pid) ?? false;
+        if (!alive) {
+          log.warn({ name: row.name, pid: row.process_pid }, 'MCP process dead — marking stale');
+          await this.repo.updateStatus(row.id, 'stale', 'Process not running. Click Reconnect.');
+          continue; // Don't load into in-memory registry
+        }
+      }
+
+      if (row.status === 'connected') {
+        this.servers.set(row.name, {
+          name: row.name,
+          url: row.url,
+          connected_at: row.connected_at,
+          tools: row.tools,
+        });
+      }
+    }
+
+    log.info({ loaded: this.servers.size, total: rows.length }, 'Loaded MCP connections from DB');
   }
 
   /** List all connected servers */

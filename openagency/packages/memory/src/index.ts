@@ -19,3 +19,5 @@ export { ConversationRepo, type ConversationRecord, type ConvMessage, type Conve
 export { ScorecardDbRepo, type ScorecardDbRecord } from './repos/scorecard-db.js';
 export { MeshRunRepo } from './repos/mesh-run.js';
 export { ClientDataRepo, type ClientDataRecord } from './repos/client-data.js';
+export { McpConnectionRepo, type McpConnectionRow } from './repositories/mcp-connection-repo.js';
+export { encrypt, decrypt } from './utils/encrypt.js';
