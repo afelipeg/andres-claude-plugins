@@ -8,6 +8,8 @@ import { Spinner } from '../components/Spinner';
 import { StatusBadge } from '../components/StatusBadge';
 import { markOnboarded, getConnectorStatus } from '../api/onboarding';
 import { executePipeline } from '../api/agents';
+import { getAuthUrl, exchangeOAuthCode, openOAuthPopup } from '../api/connectors';
+import { PLATFORMS as PLATFORM_CONFIGS } from '../components/platform-logos';
 
 const RATE_OPTIONS = [
   { value: 0.005, label: '0.5%' },
@@ -15,14 +17,6 @@ const RATE_OPTIONS = [
   { value: 0.01, label: '1.0%' },
   { value: 0.0125, label: '1.25%' },
   { value: 0.015, label: '1.5%' },
-];
-
-const PLATFORMS = [
-  { id: 'google_ads', name: 'Google Ads', desc: 'Search, Display, Shopping, YouTube', icon: 'G', color: 'text-blue-500', bg: 'bg-blue-500/10' },
-  { id: 'meta_ads', name: 'Meta Ads', desc: 'Facebook + Instagram campaigns', icon: 'M', color: 'text-indigo-500', bg: 'bg-indigo-500/10' },
-  { id: 'dv360', name: 'Display & Video 360', desc: 'Programmatic display, video, audio', icon: 'D', color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-  { id: 'tiktok_ads', name: 'TikTok Ads', desc: 'In-feed, TopView, Spark Ads', icon: 'T', color: 'text-pink-500', bg: 'bg-pink-500/10' },
-  { id: 'amazon_ads', name: 'Amazon Ads', desc: 'Sponsored Products, Brands, Display', icon: 'A', color: 'text-orange-500', bg: 'bg-orange-500/10' },
 ];
 
 // ─── Step Indicator ───────────────────────────────────────────────
@@ -80,34 +74,14 @@ function ConnectStep({ onNext }: { onNext: () => void }) {
   const connectedCount = Object.values(statuses).filter(Boolean).length;
 
   const handleConnect = async (platformId: string) => {
-    // Get OAuth URL from backend and redirect in a popup window
     try {
       const redirectUri = `${window.location.origin}/auth/callback`;
-      const res = await fetch(
-        `${import.meta.env.VITE_API_URL ?? ''}/v1/connectors/${platformId}/auth-url?redirect_uri=${encodeURIComponent(redirectUri)}`,
-        { headers: { Authorization: `Bearer ${localStorage.getItem('plinth_token') ?? ''}` } },
-      );
-      if (!res.ok) {
-        // Fallback: redirect to integrations page
-        window.location.href = `/app/integrations`;
-        return;
-      }
-      const data = await res.json() as { url?: string };
-      if (data.url) {
-        // Open OAuth in popup
-        const popup = window.open(data.url, 'oauth', 'width=600,height=700,scrollbars=yes');
-        // Poll for popup close + refresh status
-        const interval = setInterval(() => {
-          if (!popup || popup.closed) {
-            clearInterval(interval);
-            void loadStatus();
-          }
-        }, 1000);
-        setTimeout(() => clearInterval(interval), 120000);
-      } else {
-        window.location.href = `/app/integrations`;
-      }
+      const { auth_url } = await getAuthUrl(platformId, redirectUri, platformId);
+      const { code } = await openOAuthPopup(auth_url);
+      await exchangeOAuthCode(platformId, code, redirectUri);
+      void loadStatus();
     } catch {
+      // Fallback: redirect to integrations page
       window.location.href = `/app/integrations`;
     }
   };
@@ -141,30 +115,35 @@ function ConnectStep({ onNext }: { onNext: () => void }) {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {PLATFORMS.map((p) => {
-          const connected = statuses[p.id] ?? false;
+        {PLATFORM_CONFIGS.map((p) => {
+          const connected = statuses[p.platform] ?? false;
           return (
-            <div key={p.id} className={`rounded-lg border p-4 transition-colors ${connected ? 'border-green-200 bg-green-50' : 'border-gray-200 hover:border-gray-300'}`}>
-              <div className="flex items-center gap-3 mb-2">
-                <span className={`flex h-9 w-9 items-center justify-center rounded-lg text-sm font-bold ${p.bg} ${p.color}`}>
-                  {p.icon}
-                </span>
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">{p.name}</p>
-                  <p className="text-[11px] text-gray-500">{p.desc}</p>
+            <div
+              key={p.platform}
+              className={`group rounded-xl border p-4 transition-all ${
+                connected
+                  ? 'border-green-200 bg-green-50/40'
+                  : 'border-gray-200 hover:border-gray-300 hover:shadow-sm cursor-pointer'
+              }`}
+              onClick={() => !connected && void handleConnect(p.platform)}
+            >
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-50 border border-gray-100">
+                  <p.Logo className="h-6 w-6" />
                 </div>
+                {connected && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                    Connected
+                  </span>
+                )}
               </div>
-              {connected ? (
-                <div className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
-                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                  Connected
-                </div>
-              ) : (
+              <p className="text-sm font-semibold text-gray-900">{p.name}</p>
+              <p className="text-[11px] text-gray-500 mt-0.5">{p.description}</p>
+              {!connected && (
                 <button
-                  onClick={() => handleConnect(p.id)}
-                  className="mt-1 w-full rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800"
+                  onClick={(e) => { e.stopPropagation(); void handleConnect(p.platform); }}
+                  className="mt-3 w-full rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800 transition-colors"
                 >
                   Connect
                 </button>

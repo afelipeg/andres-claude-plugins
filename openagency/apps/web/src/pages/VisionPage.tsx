@@ -1,15 +1,15 @@
 // ─── Vision Page ─────────────────────────────────────────────────────
-// Cinematic editorial page inspired by atoms.co/vision
-// Dark bg, scroll-triggered animations, section numbers
+// Cinematic editorial page — matches landing page design system
+// Font: Inter, bg: #09090B, headings: font-extrabold, body: font-light text-zinc-300
 
 import { motion } from 'framer-motion';
 import Navbar from '../components/landing/Navbar';
 
 const fadeUp = {
-  initial: { opacity: 0, y: 40 },
+  initial: { opacity: 0, y: 30 },
   whileInView: { opacity: 1, y: 0 },
   viewport: { once: true, margin: '-100px' },
-  transition: { duration: 0.7, ease: 'easeOut' as const },
+  transition: { duration: 0.7, ease: [0.25, 0.46, 0.45, 0.94] as const },
 };
 
 function Section({
@@ -22,18 +22,18 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <motion.section {...fadeUp} className="py-16 md:py-20 border-b border-white/[0.06]">
+    <motion.section {...fadeUp} className="py-16 md:py-24 border-b border-white/[0.06]">
       {number && (
-        <span className="block text-[#02c98d] font-mono text-sm tracking-widest mb-4">
+        <span className="block text-[#00e5a0] font-mono text-sm tracking-widest mb-4">
           {number}
         </span>
       )}
       {title && (
-        <h2 className="text-2xl md:text-4xl font-bold text-white mb-8 leading-tight">
+        <h2 className="text-2xl md:text-4xl font-extrabold text-white mb-8 tracking-tight leading-tight">
           {title}
         </h2>
       )}
-      <div className="text-[#fff7dde6] text-base md:text-lg leading-relaxed space-y-5">
+      <div className="text-zinc-300 text-base md:text-lg font-light leading-relaxed space-y-5">
         {children}
       </div>
     </motion.section>
@@ -44,9 +44,9 @@ function Quote({ children, author }: { children: React.ReactNode; author?: strin
   return (
     <motion.blockquote
       {...fadeUp}
-      className="border-l-2 border-[#02c98d] pl-6 md:pl-8 my-16 md:my-20"
+      className="border-l-2 border-[#00e5a0] pl-6 md:pl-8 my-16 md:my-24"
     >
-      <p className="text-xl md:text-2xl italic text-zinc-300 leading-relaxed">{children}</p>
+      <p className="text-xl md:text-2xl italic text-zinc-300 font-light leading-relaxed">{children}</p>
       {author && (
         <cite className="mt-4 block text-sm text-zinc-500 not-italic">{author}</cite>
       )}
@@ -55,21 +55,21 @@ function Quote({ children, author }: { children: React.ReactNode; author?: strin
 }
 
 function HorizontalRule() {
-  return <div className="border-t border-white/[0.06] my-4" />;
+  return <div className="h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent my-4" />;
 }
 
 export function VisionPage() {
   return (
-    <div className="min-h-screen bg-[#09090B]">
+    <div className="min-h-screen bg-[#09090B]" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
       <Navbar />
 
       {/* Hero intro — no number */}
       <div className="max-w-[900px] mx-auto px-6 pt-28 md:pt-36 pb-8">
         <motion.div {...fadeUp}>
-          <h1 className="text-4xl md:text-6xl font-bold text-white leading-[1.1] mb-10">
+          <h1 className="text-4xl md:text-6xl font-extrabold text-white leading-[1.05] tracking-tight mb-10">
             Vision
           </h1>
-          <div className="text-[#fff7dde6] text-base md:text-lg leading-relaxed space-y-5">
+          <div className="text-zinc-300 text-base md:text-lg font-light leading-relaxed space-y-5">
             <p>
               I spent a decade inside the machine. Running a top-tier digital agency across
               Latin America — managing hundreds of millions in ad spend for brands you know.
@@ -137,7 +137,7 @@ export function VisionPage() {
             own metrics, its own attribution window, its own definition of success. No one is
             looking across the entire landscape and asking the only question that matters:
           </p>
-          <p className="text-white italic text-xl">Did this money grow the business?</p>
+          <p className="text-white italic text-xl font-normal">Did this money grow the business?</p>
         </Section>
 
         <Quote>
@@ -512,10 +512,11 @@ export function VisionPage() {
         </Section>
 
         {/* Author signature */}
-        <motion.div {...fadeUp} className="text-center py-20 md:py-28">
-          <p className="text-sm text-zinc-500 tracking-widest uppercase">axiom nexar</p>
-          <p className="text-xs text-zinc-600 mt-1">founder, plinth by polanyi</p>
-          <p className="text-xs text-zinc-700 mt-0.5">2026</p>
+        <motion.div {...fadeUp} className="text-center py-24 md:py-32">
+          <div className="h-px w-16 bg-[#00e5a0]/30 mx-auto mb-10" />
+          <p className="text-sm text-zinc-400 tracking-widest uppercase font-medium">axiom nexar</p>
+          <p className="text-xs text-zinc-500 mt-2 font-light">founder, plinth by polanyi</p>
+          <p className="text-xs text-zinc-600 mt-1 font-light">2026</p>
         </motion.div>
       </div>
     </div>

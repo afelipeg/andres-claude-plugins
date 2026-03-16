@@ -101,12 +101,12 @@ const NAV_STRUCTURE: NavEntry[] = [
       { path: '/history', label: 'History', Icon: Clock },
     ],
   },
-  // Integrations — clickable parent with Data submenu
+  // Integrations — group with Apps & MCP + Data submenus
   {
     label: 'Integrations',
     Icon: Link,
-    path: '/integrations',
     children: [
+      { path: '/integrations', label: 'Apps & MCP', Icon: Link },
       { path: '/data', label: 'Data', Icon: Upload },
     ],
   },
@@ -128,7 +128,7 @@ function getPageTitle(pathname: string): string {
     'media-architect': 'Media Architect',
     'campaign-ops': 'Campaign Ops',
     'executive-bridge': 'Executive Bridge',
-    integrations: 'Integrations',
+    integrations: 'Apps & MCP',
     architecture: 'Architecture',
     consumption: 'Usage & Runs',
     history: 'History',
