@@ -120,6 +120,15 @@ export class ClientDataRepo {
     return batch;
   }
 
+  async updateColumnMap(id: string, columnMap: Record<string, string>): Promise<void> {
+    const db = this.db as { unsafe: (q: string, p: unknown[]) => Promise<unknown[]> };
+    const result = await db.unsafe(
+      'UPDATE client_data SET column_map = $1 WHERE id = $2 RETURNING id',
+      [JSON.stringify(columnMap), id],
+    );
+    if ((result as unknown[]).length === 0) throw new Error('Not found');
+  }
+
   async delete(id: string): Promise<boolean> {
     const db = this.db as { unsafe: (q: string, p: unknown[]) => Promise<unknown[]> };
     const result = await db.unsafe('DELETE FROM client_data WHERE id = $1 RETURNING id', [id]);

@@ -93,3 +93,15 @@ export async function deleteUpload(id: string): Promise<void> {
   });
   if (!res.ok) throw new Error(`Failed to delete upload: ${res.status}`);
 }
+
+export async function updateColumnMap(
+  id: string,
+  columnMap: Record<string, string>,
+): Promise<void> {
+  const res = await fetch(`${API_URL}/v1/upload/${id}/column-map`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ column_map: columnMap }),
+  });
+  if (!res.ok) throw new Error(`Failed to update column map: ${res.status}`);
+}

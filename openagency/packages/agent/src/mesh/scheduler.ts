@@ -91,6 +91,7 @@ export class PipelineScheduler {
     private mesh: MeshCoordinator,
     private eventBus: EventBus,
     private repo?: ScheduleRepository,
+    private contextBuilder?: (clientId: string) => Promise<Record<string, unknown>>,
   ) {}
 
   /** Load persisted schedules and start the 60-second tick. */
@@ -212,10 +213,18 @@ export class PipelineScheduler {
 
   private async triggerSchedule(schedule: PipelineSchedule, now: Date): Promise<void> {
     try {
+      // Build skillContext with previous run comparison for feedback loop
+      const skillContext: Record<string, unknown> = {};
+      if (this.contextBuilder) {
+        const ctx = await this.contextBuilder(schedule.client_id);
+        Object.assign(skillContext, ctx);
+      }
+
       const run = await this.mesh.executePipeline(
         schedule.pipeline_id,
         undefined,
         schedule.client_id,
+        skillContext,
       );
 
       const nextRun = nextCronDate(schedule.cron, now);

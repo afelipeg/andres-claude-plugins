@@ -174,7 +174,65 @@ export async function createApp() {
   await mesh.hydrateFromDb(200);
 
   // ─── Pipeline Scheduler (cron-based pipeline runs) ───────────────
-  const scheduler = new PipelineScheduler(mesh, eventBus);
+  // Context builder for scheduled runs — assembles MCP data + batch data + previous run baseline
+  const schedulerContextBuilder = async (clientId: string): Promise<Record<string, unknown>> => {
+    let ctx: Record<string, unknown> = {};
+
+    // Platform sync data
+    if (connectorInfra) {
+      const { assembleContextFromSync } = await import('./connectors/context-assembler.js');
+      ctx = assembleContextFromSync(connectorInfra.syncResultCache);
+    }
+
+    // Client batch data
+    if (clientDataRepo) {
+      try {
+        const batchData = await clientDataRepo.getLatestBatchContext(clientId);
+        if (Object.keys(batchData).length > 0) {
+          const { mergeClientBatchData } = await import('./connectors/context-assembler.js');
+          ctx = mergeClientBatchData(ctx, batchData);
+        }
+      } catch { /* non-blocking */ }
+    }
+
+    // MCP data
+    if (mcpClientRegistry && mcpClientRegistry.listServers().length > 0) {
+      try {
+        const { mergeMcpData } = await import('./connectors/context-assembler.js');
+        ctx = await mergeMcpData(ctx, mcpClientRegistry, clientId);
+      } catch { /* non-blocking */ }
+    }
+
+    // Previous run baseline + comparison context
+    if (scorecardDbRepo) {
+      try {
+        const prev = await scorecardDbRepo.getLatestByClient(clientId);
+        if (prev) {
+          const prevBilling = prev.billing as Record<string, unknown>;
+          ctx._previous_run = {
+            run_id: prev.run_id,
+            run_type: prev.run_type,
+            billing: prevBilling,
+            created_at: prev.created_at,
+          };
+          ctx._baseline = {
+            roas: (prevBilling as Record<string, unknown>)?.roi_on_fee ?? 2.0,
+            waste_pct: ((prevBilling as Record<string, unknown>)?.recovery as Record<string, unknown>)?.waste_pct ?? 20,
+          };
+          // Feedback insight for engines
+          const waste = Number((prevBilling as Record<string, unknown>)?.total_recovery ?? 0);
+          const fee = Number((prevBilling as Record<string, unknown>)?.total_fee ?? 0);
+          if (waste > 0 || fee > 0) {
+            ctx._feedback = `Previous run: $${waste.toLocaleString()} waste recovered, $${fee.toLocaleString()} total fee, ROI ${Number((prevBilling as Record<string, unknown>)?.roi_on_fee ?? 0).toFixed(1)}x. Optimize to reduce waste further.`;
+          }
+        }
+      } catch { /* non-blocking */ }
+    }
+
+    return ctx;
+  };
+
+  const scheduler = new PipelineScheduler(mesh, eventBus, undefined, schedulerContextBuilder);
   await scheduler.start();
 
   // ─── Human Feedback Loop (agent-to-human escalation) ────────────

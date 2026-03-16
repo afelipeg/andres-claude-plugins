@@ -92,6 +92,20 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, schedule
       }
     }
 
+    // Auto-detect run_type: first run = 'plan', subsequent = 'actual'
+    if (clientId && scorecardDbRepo && runType === 'standard') {
+      try {
+        const previousPlan = await scorecardDbRepo.getLatestByClient(clientId, 'plan');
+        if (!previousPlan) {
+          runType = 'plan'; // First run for this client — save as plan snapshot
+        } else {
+          runType = 'actual'; // Plan exists — this is an actual run
+        }
+      } catch {
+        // Detection failure defaults to 'standard'
+      }
+    }
+
     // Inject previous run baseline for plan vs actual comparison
     if (clientId && scorecardDbRepo) {
       try {
@@ -100,6 +114,7 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, schedule
           const prevBilling = previousScorecard.billing as Record<string, unknown>;
           skillContext._previous_run = {
             run_id: previousScorecard.run_id,
+            run_type: previousScorecard.run_type,
             billing: prevBilling,
             engine_outputs: previousScorecard.engine_outputs,
             created_at: previousScorecard.created_at,

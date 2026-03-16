@@ -371,29 +371,85 @@ export function scorecardRoutes(
 
     const num = (obj: Record<string, unknown>, key: string) => Number(obj[key] ?? 0);
 
+    // Extract engine-level metrics for real lift/MDS/waste calculation
+    const planOutputs = plan.engine_outputs as Record<string, unknown>;
+    const actualOutputs = actual.engine_outputs as Record<string, unknown>;
+
+    // Real lift: (actual revenue - plan baseline revenue) / plan baseline revenue
+    const planRevenue = num(planBilling, 'value_delivered');
+    const actualRevenue = num(actualBilling, 'value_delivered');
+    const realLiftPct = planRevenue > 0 ? ((actualRevenue - planRevenue) / planRevenue) * 100 : 0;
+
+    // Real waste: plan waste vs actual waste
+    const planWaste = num(planBilling, 'total_recovery');
+    const actualWaste = num(actualBilling, 'total_recovery');
+    const wasteReductionPct = planWaste > 0 ? ((planWaste - actualWaste) / planWaste) * 100 : 0;
+
+    // Media-driven sales: from executive bridge attribution if available
+    const planMDS = num(planBilling, 'media_driven_sales');
+    const actualMDS = num(actualBilling, 'media_driven_sales');
+
+    // Per-engine delta breakdown
+    const engineDeltas: Record<string, { plan: number; actual: number; delta: number; delta_pct: number }> = {};
+    for (const engineId of ['leak_detector', 'media_architect', 'campaign_ops', 'executive_bridge']) {
+      const planEngine = (planOutputs[engineId] ?? {}) as Record<string, unknown>;
+      const actualEngine = (actualOutputs[engineId] ?? {}) as Record<string, unknown>;
+      const planVal = Number(Object.values(planEngine)[0] ?? 0) || 0;
+      const actualVal = Number(Object.values(actualEngine)[0] ?? 0) || 0;
+      engineDeltas[engineId] = {
+        plan: planVal,
+        actual: actualVal,
+        delta: actualVal - planVal,
+        delta_pct: planVal > 0 ? ((actualVal - planVal) / planVal) * 100 : 0,
+      };
+    }
+
     const comparison = {
       plan_id: plan.id,
       actual_id: actual.id,
       plan_run_type: plan.run_type,
       actual_run_type: actual.run_type,
+
+      // Fee deltas
       ad_spend_delta: actual.ad_spend - plan.ad_spend,
       recovery_delta: num(actualBilling, 'total_recovery') - num(planBilling, 'total_recovery'),
       lift_delta: num(actualBilling, 'total_lift') - num(planBilling, 'total_lift'),
       efficiency_delta: num(actualBilling, 'total_efficiency_savings') - num(planBilling, 'total_efficiency_savings'),
       total_fee_delta: num(actualBilling, 'total_fee') - num(planBilling, 'total_fee'),
       roi_delta: num(actualBilling, 'roi_on_fee') - num(planBilling, 'roi_on_fee'),
+
+      // Real attribution metrics
+      real_lift_pct: Math.round(realLiftPct * 100) / 100,
+      waste_reduction_pct: Math.round(wasteReductionPct * 100) / 100,
+      media_driven_sales: { plan: planMDS, actual: actualMDS, delta: actualMDS - planMDS },
+
+      // Per-engine breakdown
+      engine_deltas: engineDeltas,
+
+      // Summaries
       plan_summary: {
         ad_spend: plan.ad_spend,
         total_fee: num(planBilling, 'total_fee'),
+        value_delivered: planRevenue,
         roi_on_fee: num(planBilling, 'roi_on_fee'),
+        total_waste: planWaste,
         created_at: plan.created_at,
       },
       actual_summary: {
         ad_spend: actual.ad_spend,
         total_fee: num(actualBilling, 'total_fee'),
+        value_delivered: actualRevenue,
         roi_on_fee: num(actualBilling, 'roi_on_fee'),
+        total_waste: actualWaste,
         created_at: actual.created_at,
       },
+
+      // Insights
+      insights: [
+        realLiftPct > 0 ? `Performance lifted ${realLiftPct.toFixed(1)}% vs plan` : realLiftPct < 0 ? `Performance declined ${Math.abs(realLiftPct).toFixed(1)}% vs plan` : null,
+        wasteReductionPct > 0 ? `Waste reduced by ${wasteReductionPct.toFixed(1)}% from plan` : wasteReductionPct < 0 ? `Waste increased ${Math.abs(wasteReductionPct).toFixed(1)}% from plan` : null,
+        actualMDS > planMDS ? `Media-driven sales exceeded plan by $${(actualMDS - planMDS).toLocaleString()}` : null,
+      ].filter(Boolean),
     };
 
     return c.json(comparison);

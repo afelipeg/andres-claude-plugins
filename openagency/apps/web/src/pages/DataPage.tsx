@@ -8,6 +8,7 @@ import {
   listUploads,
   getUpload,
   deleteUpload,
+  updateColumnMap,
   type UploadRecord,
   type UploadDetail,
 } from '../api/uploads';
@@ -264,6 +265,121 @@ function PreviewDialog({
   );
 }
 
+// ─── Column Mapping Wizard ───────────────────────────────────────────
+
+const STANDARD_METRICS = [
+  { value: '', label: 'Skip (do not map)' },
+  { value: 'period', label: 'Period (week/month)' },
+  { value: 'net_revenue', label: 'Net Revenue' },
+  { value: 'gross_revenue', label: 'Gross Revenue' },
+  { value: 'units_sold', label: 'Units Sold' },
+  { value: 'market_share', label: 'Market Share (%)' },
+  { value: 'digital_sales', label: 'Digital Sales' },
+  { value: 'sell_in', label: 'Sell-in' },
+  { value: 'sell_out', label: 'Sell-out' },
+  { value: 'conversions', label: 'Conversions' },
+  { value: 'roas', label: 'ROAS' },
+  { value: 'cpa', label: 'CPA' },
+  { value: 'spend', label: 'Ad Spend' },
+  { value: 'impressions', label: 'Impressions' },
+  { value: 'clicks', label: 'Clicks' },
+  { value: 'ctr', label: 'CTR (%)' },
+  { value: 'brand_awareness', label: 'Brand Awareness' },
+  { value: 'custom', label: 'Custom metric' },
+];
+
+function ColumnMappingDialog({
+  uploadId,
+  columns,
+  open,
+  onOpenChange,
+  onSaved,
+}: {
+  uploadId: string;
+  columns: string[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSaved: () => void;
+}) {
+  const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
+  const updateMapping = (col: string, metric: string) => {
+    setMapping((prev) => {
+      const next = { ...prev };
+      if (metric) next[col] = metric;
+      else delete next[col];
+      return next;
+    });
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateColumnMap(uploadId, mapping);
+      onSaved();
+      onOpenChange(false);
+    } catch {
+      // ignore
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const mappedCount = Object.values(mapping).filter(Boolean).length;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[80vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle>Map Columns to Metrics</DialogTitle>
+          <p className="text-xs text-gray-500 mt-1">
+            Tell Plinth what each column represents so engines can interpret your data correctly.
+          </p>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-auto space-y-2 py-2">
+          {columns.map((col) => (
+            <div key={col} className="flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">{col}</p>
+              </div>
+              <select
+                value={mapping[col] ?? ''}
+                onChange={(e) => updateMapping(col, e.target.value)}
+                className="w-48 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700"
+              >
+                {STANDARD_METRICS.map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+          <p className="text-xs text-gray-400">{mappedCount} of {columns.length} columns mapped</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => onOpenChange(false)}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Skip for now
+            </button>
+            <button
+              onClick={() => void handleSave()}
+              disabled={saving || mappedCount === 0}
+              className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+            >
+              {saving ? 'Saving...' : 'Save Mapping'}
+            </button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────
 
 export function DataPage() {
@@ -272,6 +388,7 @@ export function DataPage() {
   const [uploadResult, setUploadResult] = useState<{ success: boolean; message: string } | null>(null);
   const [previewDetail, setPreviewDetail] = useState<UploadDetail | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [mappingUpload, setMappingUpload] = useState<{ id: string; columns: string[] } | null>(null);
   const [clientId, setClientId] = useState<string>('');
 
   // Get client_id from auth context
@@ -306,13 +423,14 @@ export function DataPage() {
     setUploadResult(null);
     try {
       const result = await uploadFile(file, clientId, dataType || undefined);
-      const kpiNotice = dataType === 'kpi_results'
-        ? ' Column mapping will be available soon — data is saved and will be reprocessed automatically.'
-        : '';
       setUploadResult({
         success: true,
-        message: `Uploaded ${file.name}: ${result.rows} rows, detected as ${result.platform} (${Math.round(result.confidence * 100)}% confidence).${kpiNotice}`,
+        message: `Uploaded ${file.name}: ${result.rows} rows, detected as ${result.platform} (${Math.round(result.confidence * 100)}% confidence).`,
       });
+      // Open column mapping wizard for KPI results and budget plans
+      if ((dataType === 'kpi_results' || dataType === 'budget_plan') && result.record_id) {
+        setMappingUpload({ id: result.record_id, columns: result.columns });
+      }
       void loadRecords();
     } catch (err) {
       setUploadResult({
@@ -386,6 +504,17 @@ export function DataPage() {
         open={previewOpen}
         onOpenChange={setPreviewOpen}
       />
+
+      {/* Column mapping wizard */}
+      {mappingUpload && (
+        <ColumnMappingDialog
+          uploadId={mappingUpload.id}
+          columns={mappingUpload.columns}
+          open={!!mappingUpload}
+          onOpenChange={(open) => { if (!open) setMappingUpload(null); }}
+          onSaved={() => void loadRecords()}
+        />
+      )}
     </div>
   );
 }

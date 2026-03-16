@@ -129,6 +129,22 @@ export function uploadRoutes(clientDataRepo?: ClientDataRepo): Hono {
     return c.json({ deleted: true, id });
   });
 
+  // PUT /v1/upload/:id/column-map — save user's column mapping
+  app.put('/v1/upload/:id/column-map', async (c) => {
+    if (!clientDataRepo) return c.json({ error: 'no_db' }, 503);
+    const id = c.req.param('id');
+    const body = await c.req.json<{ column_map: Record<string, string> }>();
+    if (!body.column_map || typeof body.column_map !== 'object') {
+      return c.json({ error: 'invalid_body', message: 'column_map object required' }, 400);
+    }
+    try {
+      await clientDataRepo.updateColumnMap(id, body.column_map);
+      return c.json({ updated: true, id, column_map: body.column_map });
+    } catch {
+      return c.json({ error: 'not_found', message: `Upload not found: ${id}` }, 404);
+    }
+  });
+
   return app;
 }
 
