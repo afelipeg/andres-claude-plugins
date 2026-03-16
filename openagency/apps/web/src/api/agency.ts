@@ -68,6 +68,8 @@ async function runEngineRemote<T>(
     'Content-Type': 'application/json',
   };
   if (API_KEY) headers['X-API-Key'] = API_KEY;
+  const token = localStorage.getItem('plinth_token');
+  if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetch(url, {
     method: 'POST',

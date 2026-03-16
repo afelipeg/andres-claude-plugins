@@ -6,6 +6,8 @@ const API_KEY = import.meta.env.VITE_API_KEY ?? '';
 function headers(): HeadersInit {
   const h: Record<string, string> = { 'Content-Type': 'application/json' };
   if (API_KEY) h['X-API-Key'] = API_KEY;
+  const token = localStorage.getItem('plinth_token');
+  if (token) h['Authorization'] = `Bearer ${token}`;
   return h;
 }
 
