@@ -49,17 +49,19 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, schedule
 
     let goalId: string | undefined;
     let clientId: string | undefined;
+    let skillContext: Record<string, unknown> | undefined;
 
     try {
-      const body = await c.req.json<{ goal_id?: string; client_id?: string }>();
+      const body = await c.req.json<{ goal_id?: string; client_id?: string; context?: Record<string, unknown> }>();
       goalId = body.goal_id;
       clientId = body.client_id;
+      skillContext = body.context;
     } catch {
       // Empty body is fine
     }
 
     try {
-      const run = await mesh.executePipeline(pipelineId, goalId, clientId);
+      const run = await mesh.executePipeline(pipelineId, goalId, clientId, skillContext);
       const serialized = mesh.serializeRun(run) as Record<string, unknown>;
 
       // ─── HFL evaluation after pipeline completes ─────────────────

@@ -155,6 +155,7 @@ export class MeshCoordinator {
     pipelineId: string,
     goalId?: string,
     clientId?: string,
+    skillContext?: Record<string, unknown>,
   ): Promise<MeshRun> {
     const pipeline = this.pipelines.get(pipelineId);
     if (!pipeline) {
@@ -223,7 +224,7 @@ export class MeshCoordinator {
         continue;
       }
 
-      const stageResult = await this.executeStage(run, stage, pipeline);
+      const stageResult = await this.executeStage(run, stage, pipeline, skillContext);
       context.stage_results.set(stage.agent_id, stageResult);
 
       // Track usage
@@ -305,6 +306,7 @@ export class MeshCoordinator {
     run: MeshRun,
     stage: MeshStage,
     pipeline: MeshPipeline,
+    skillContext?: Record<string, unknown>,
   ): Promise<MeshStageResult> {
     const agent = this.agents.get(stage.agent_id);
     if (!agent) {
@@ -331,23 +333,23 @@ export class MeshCoordinator {
 
     const stageStart = Date.now();
 
-    // Run the primary orient skill for this stage to produce real analysis data.
-    // Results are included in the observation so the OODA agent reasons over real output.
+    // Run ALL orient skills for this stage to produce real analysis data.
+    // Results are attached to the observation so the OODA agent reasons over real output.
     const primarySkillData: Record<string, unknown> = {};
     if (this.agency) {
       const agentConfig = AGENT_CONFIGS[stage.agent_id];
-      const primarySkill = agentConfig?.orient_skills[0];
-      if (primarySkill) {
-        const colonIdx = primarySkill.indexOf(':');
+      const orientSkills = agentConfig?.orient_skills ?? [];
+      for (const qualifiedSkill of orientSkills) {
+        const colonIdx = qualifiedSkill.indexOf(':');
         if (colonIdx !== -1) {
-          const engineId = primarySkill.slice(0, colonIdx);
-          const skillId = primarySkill.slice(colonIdx + 1);
+          const engineId = qualifiedSkill.slice(0, colonIdx);
+          const skillId = qualifiedSkill.slice(colonIdx + 1);
           try {
-            const result = await this.agency.run(engineId, skillId, {});
-            primarySkillData[primarySkill] = result.data;
-            this.log.info({ run_id: run.id, agent_id: stage.agent_id, skill: primarySkill }, 'Primary skill executed');
+            const result = await this.agency.run(engineId, skillId, skillContext ?? {});
+            primarySkillData[qualifiedSkill] = result.data;
+            this.log.info({ run_id: run.id, agent_id: stage.agent_id, skill: qualifiedSkill }, 'Orient skill executed');
           } catch (err) {
-            this.log.warn({ err, run_id: run.id, agent_id: stage.agent_id, skill: primarySkill }, 'Primary skill failed — continuing without data');
+            this.log.warn({ err, run_id: run.id, agent_id: stage.agent_id, skill: qualifiedSkill }, 'Orient skill failed — continuing');
           }
         }
       }
