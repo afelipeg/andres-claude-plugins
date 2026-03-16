@@ -365,34 +365,31 @@ function getEngineSkills(engineId: string): string[] {
   return map[engineId] ?? [];
 }
 
-/** Map a skill result into the EngineOutputs structure for billing */
+/** Map a skill result into the EngineOutputs structure for billing.
+ *  Uses dynamic key mapping: skill-id → skill_id (kebab → snake_case). */
 function mapToEngineOutputs(
   outputs: EngineOutputs,
   engineId: string,
   skillId: string,
   result: Record<string, unknown>,
 ): void {
+  const key = skillId.replace(/-/g, '_');
   switch (engineId) {
     case 'leak-detector':
       if (!outputs.leak_detector) outputs.leak_detector = {};
-      if (skillId === 'waste-waterfall') outputs.leak_detector.waste_waterfall = result;
-      else if (skillId === 'media-quality-score') outputs.leak_detector.media_quality_score = result;
-      else if (skillId === 'supply-chain-audit') outputs.leak_detector.supply_chain_audit = result;
+      (outputs.leak_detector as Record<string, unknown>)[key] = result;
       break;
     case 'media-architect':
       if (!outputs.media_architect) outputs.media_architect = {};
-      if (skillId === 'mmm-optimize') outputs.media_architect.mmm_optimize = result;
-      else if (skillId === 'mmm-model') outputs.media_architect.mmm_model = result;
+      (outputs.media_architect as Record<string, unknown>)[key] = result;
       break;
     case 'campaign-ops':
       if (!outputs.campaign_ops) outputs.campaign_ops = {};
-      if (skillId === 'optimization-analyze') outputs.campaign_ops.optimization_analyze = result;
-      else if (skillId === 'optimization-reallocate') outputs.campaign_ops.optimization_reallocate = result;
+      (outputs.campaign_ops as Record<string, unknown>)[key] = result;
       break;
     case 'executive-bridge':
       if (!outputs.executive_bridge) outputs.executive_bridge = {};
-      if (skillId === 'reconcile') outputs.executive_bridge.reconcile = result;
-      else if (skillId === 'revenue-translate') outputs.executive_bridge.revenue_translate = result;
+      (outputs.executive_bridge as Record<string, unknown>)[key] = result;
       break;
   }
 }

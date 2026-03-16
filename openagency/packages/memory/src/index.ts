@@ -18,3 +18,4 @@ export type { UserRow } from './repositories/user-repo.js';
 export { ConversationRepo, type ConversationRecord, type ConvMessage, type ConversationSummary } from './repos/conversation.js';
 export { ScorecardDbRepo, type ScorecardDbRecord } from './repos/scorecard-db.js';
 export { MeshRunRepo } from './repos/mesh-run.js';
+export { ClientDataRepo, type ClientDataRecord } from './repos/client-data.js';

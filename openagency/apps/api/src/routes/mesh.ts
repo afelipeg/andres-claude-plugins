@@ -14,8 +14,11 @@ import { computePipelineScore, HFL_SCORE_THRESHOLD } from '@openagency/agent';
 import type { PipelineScheduler } from '@openagency/agent';
 import type { HFLCoordinator, MeshRunSummary } from '@openagency/hfl';
 import { createScorecardFromMeshRun } from './scorecard.js';
+import type { ConnectorInfra } from '../connectors/setup.js';
+import { assembleContextFromSync, mergeClientBatchData } from '../connectors/context-assembler.js';
+import type { ClientDataRepo } from '@openagency/memory';
 
-export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, scheduler?: PipelineScheduler) {
+export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, scheduler?: PipelineScheduler, connectorInfra?: ConnectorInfra, clientDataRepo?: ClientDataRepo) {
   const app = new Hono();
 
   // ─── List pipelines ──────────────────────────────────────────────
@@ -49,15 +52,32 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, schedule
 
     let goalId: string | undefined;
     let clientId: string | undefined;
-    let skillContext: Record<string, unknown> | undefined;
+    let explicitContext: Record<string, unknown> | undefined;
 
     try {
       const body = await c.req.json<{ goal_id?: string; client_id?: string; context?: Record<string, unknown> }>();
       goalId = body.goal_id;
       clientId = body.client_id;
-      skillContext = body.context;
+      explicitContext = body.context;
     } catch {
       // Empty body is fine
+    }
+
+    // Auto-assemble skillContext from live platform sync data + explicit overrides
+    let skillContext = connectorInfra
+      ? assembleContextFromSync(connectorInfra.syncResultCache, explicitContext)
+      : (explicitContext ?? {});
+
+    // Merge human batch uploads (sell-in, sell-out, digital sales) if available
+    if (clientId && clientDataRepo) {
+      try {
+        const batchData = await clientDataRepo.getLatestBatchContext(clientId);
+        if (Object.keys(batchData).length > 0) {
+          skillContext = mergeClientBatchData(skillContext, batchData);
+        }
+      } catch {
+        // Batch data fetch failure doesn't block pipeline
+      }
     }
 
     try {

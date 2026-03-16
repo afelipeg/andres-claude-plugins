@@ -46,6 +46,7 @@ import { agentRoutes, type AgentRegistry } from './routes/agents.js';
 import { goalRoutes } from './routes/goals.js';
 import { meshRoutes } from './routes/mesh.js';
 import { connectorRoutes } from './routes/connectors.js';
+import { storageConnectorRoutes } from './routes/storage-connectors.js';
 import { uploadRoutes } from './routes/upload.js';
 import { scorecardRoutes } from './routes/scorecard.js';
 import { analyzeRoutes } from './routes/analyze.js';
@@ -62,7 +63,7 @@ import { campaignRoutes } from './routes/campaigns.js';
 import { onboardingRoutes } from './routes/onboarding.js';
 import { consumptionRoutes } from './routes/consumption.js';
 import { assistantRoutes, autoCreatePipelineConversation } from './routes/assistant.js';
-import { ConversationRepo, ScorecardDbRepo } from '@openagency/memory';
+import { ConversationRepo, ScorecardDbRepo, ClientDataRepo } from '@openagency/memory';
 import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/logger.js';
 import { rateLimiter } from './middleware/rate-limiter.js';
@@ -100,6 +101,7 @@ export async function createApp() {
   let userRepo: UserRepo | null = null;
 
   let meshRunRepo: MeshRunRepo | null = null;
+  let clientDataRepo: ClientDataRepo | null = null;
 
   if (db) {
     log.info('Database connected — repos active');
@@ -112,6 +114,7 @@ export async function createApp() {
     fileRepo = new FileRepo(db);
     userRepo = new UserRepo(db);
     meshRunRepo = new MeshRunRepo(db);
+    clientDataRepo = new ClientDataRepo(db);
     await seedAdminUser(userRepo);
   } else {
     log.warn('No DATABASE_URL — running without persistence');
@@ -278,13 +281,16 @@ export async function createApp() {
   app.route('/', goalRoutes({ goalRepo, decomposer: goalDecomposer, tracker: goalTracker }));
 
   // ─── Mesh routes (with HFL + Scheduler) ────────────────────────
-  app.route('/', meshRoutes(mesh, hflCoordinator, scheduler));
+  app.route('/', meshRoutes(mesh, hflCoordinator, scheduler, connectorInfra, clientDataRepo ?? undefined));
 
   // ─── Connector routes ──────────────────────────────────────────
   app.route('/', connectorRoutes(connectorInfra, eventBus));
 
   // ─── File upload route ──────────────────────────────────────────
-  app.route('/', uploadRoutes());
+  app.route('/', uploadRoutes(clientDataRepo ?? undefined));
+
+  // ─── Storage connectors (Google Drive, OneDrive) ─────────────────
+  app.route('/', storageConnectorRoutes(clientDataRepo ?? undefined));
 
   // ─── Human Feedback Loop routes ────────────────────────────────
   app.route('/', hflRoutes(hflCoordinator));

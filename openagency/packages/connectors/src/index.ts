@@ -20,13 +20,17 @@ export {
   apiToRevenueBridgeInput,
 } from './transforms/api-to-engine.js';
 
-// Platform connectors
+// Platform connectors (ad platforms)
 export { MetaConnector } from './platforms/meta/meta-connector.js';
 export { GoogleAdsConnector } from './platforms/google-ads/google-ads-connector.js';
 export { DV360Connector } from './platforms/dv360/dv360-connector.js';
 export { TikTokAdsConnector } from './platforms/tiktok-ads/tiktok-ads-connector.js';
 export { TikTokShopConnector } from './platforms/tiktok-shop/tiktok-shop-connector.js';
 export { AmazonAdsConnector } from './platforms/amazon-ads/amazon-ads-connector.js';
+
+// Storage connectors (batch file import)
+export { GoogleDriveConnector, type DriveFile } from './platforms/google-drive/google-drive-connector.js';
+export { OneDriveConnector, type OneDriveFile } from './platforms/onedrive/onedrive-connector.js';
 
 // Platform writers (write API)
 export { MetaWriter } from './platforms/meta/meta-writer.js';

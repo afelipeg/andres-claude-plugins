@@ -638,20 +638,40 @@ export interface EngineOutputs {
   client_efficiency_rate?: number;
   leak_detector?: {
     waste_waterfall?: Record<string, unknown>;
+    waste_estimate?: Record<string, unknown>;
+    waste_compare?: Record<string, unknown>;
     media_quality_score?: Record<string, unknown>;
     supply_chain_audit?: Record<string, unknown>;
   };
   media_architect?: {
-    mmm_optimize?: Record<string, unknown>;
+    benchmark_health?: Record<string, unknown>;
+    anomaly_detect?: Record<string, unknown>;
+    channel_optimize?: Record<string, unknown>;
+    channel_scenario?: Record<string, unknown>;
+    mmm_pre_model?: Record<string, unknown>;
     mmm_model?: Record<string, unknown>;
+    mmm_post_model?: Record<string, unknown>;
+    mmm_optimize?: Record<string, unknown>;
+    media_plan?: Record<string, unknown>;
   };
   campaign_ops?: {
+    campaign_create?: Record<string, unknown>;
+    campaign_update_task?: Record<string, unknown>;
+    campaign_summary?: Record<string, unknown>;
+    campaign_next_actions?: Record<string, unknown>;
     optimization_analyze?: Record<string, unknown>;
     optimization_reallocate?: Record<string, unknown>;
   };
   executive_bridge?: {
-    reconcile?: Record<string, unknown>;
     revenue_translate?: Record<string, unknown>;
+    revenue_compare?: Record<string, unknown>;
+    shapley_attribute?: Record<string, unknown>;
+    shapley_compare?: Record<string, unknown>;
+    reconcile?: Record<string, unknown>;
+    integrity?: Record<string, unknown>;
+    geo_lift?: Record<string, unknown>;
+    conversion_lift?: Record<string, unknown>;
+    holdout?: Record<string, unknown>;
   };
 }
 
