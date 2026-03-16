@@ -155,9 +155,14 @@ export function goalRoutes(deps: GoalDeps) {
       return c.json({ error: 'not_found', message: 'Goal not found', status: 404 }, 404);
     }
 
-    const reports = await deps.tracker.checkProgress(goal.agent_id ?? '');
-    const report = reports.find((r) => r.goal_id === goal.id);
-    return c.json(report ?? { goal_id: goal.id, progress_pct: goal.progress_pct });
+    try {
+      const reports = await deps.tracker.checkProgress(goal.agent_id ?? '');
+      const report = reports.find((r) => r.goal_id === goal.id);
+      return c.json(report ?? { goal_id: goal.id, progress_pct: goal.progress_pct ?? 0 });
+    } catch {
+      // Tracker may fail if no outcomes exist yet — return goal's own progress
+      return c.json({ goal_id: goal.id, progress_pct: goal.progress_pct ?? 0, status: goal.status });
+    }
   });
 
   return app;
