@@ -21,6 +21,26 @@ function isValidPlatform(p: string): p is ConnectorPlatform {
   return VALID_PLATFORMS.has(p);
 }
 
+// ─── Per-platform required credential fields ──────────────────────
+const REQUIRED_FIELDS: Record<string, string[]> = {
+  google_ads:   ['developer_token', 'client_id', 'client_secret', 'refresh_token'],
+  meta_ads:     ['access_token', 'account_id', 'app_id', 'app_secret'],
+  dv360:        ['client_id', 'client_secret', 'refresh_token', 'partner_id'],
+  tiktok_ads:   ['access_token', 'advertiser_id', 'app_id', 'app_secret'],
+  tiktok_shop:  ['app_key', 'app_secret', 'access_token', 'shop_id'],
+  amazon_ads:   ['client_id', 'client_secret', 'refresh_token', 'profile_id', 'region'],
+};
+
+function validatePlatformFields(platform: string, body: Record<string, unknown>): string[] {
+  const required = REQUIRED_FIELDS[platform];
+  if (!required) return [];
+  const tokens = (body.tokens ?? {}) as Record<string, unknown>;
+  return required.filter((key) => {
+    const val = body[key] ?? tokens[key];
+    return !val || (typeof val === 'string' && !val.trim());
+  });
+}
+
 export function connectorRoutes(infra: ConnectorInfra, eventBus: EventBus) {
   const app = new Hono();
 
@@ -220,7 +240,7 @@ export function connectorRoutes(infra: ConnectorInfra, eventBus: EventBus) {
     }
   });
 
-  // ─── Connect (store credentials) ──────────────────────────────
+  // ─── Connect (store credentials with per-platform validation) ──
   app.post('/v1/connectors/:platform/connect', authMiddleware(), async (c) => {
     const platform = c.req.param('platform');
     if (!isValidPlatform(platform)) {
@@ -233,11 +253,31 @@ export function connectorRoutes(infra: ConnectorInfra, eventBus: EventBus) {
       manager_id?: string;
       developer_token?: string;
       app_id?: string;
+      app_secret?: string;
+      app_key?: string;
+      client_id?: string;
+      client_secret?: string;
+      refresh_token?: string;
       profile_id?: string;
+      advertiser_id?: string;
+      shop_id?: string;
+      region?: string;
+      partner_id?: string;
     }>();
 
     if (!body.tokens?.access_token) {
       return c.json({ error: 'validation_error', message: 'tokens.access_token is required', status: 400 }, 400);
+    }
+
+    // Validate platform-specific required fields
+    const missingFields = validatePlatformFields(platform, body as unknown as Record<string, unknown>);
+    if (missingFields.length > 0) {
+      return c.json({
+        error: 'missing_credentials',
+        message: `Missing required credentials for ${platform}`,
+        fields: missingFields,
+        status: 400,
+      }, 400);
     }
 
     infra.credentialStore.set({
@@ -247,7 +287,16 @@ export function connectorRoutes(infra: ConnectorInfra, eventBus: EventBus) {
       manager_id: body.manager_id,
       developer_token: body.developer_token,
       app_id: body.app_id,
+      app_secret: body.app_secret,
+      app_key: body.app_key,
+      client_id: body.client_id,
+      client_secret: body.client_secret,
+      refresh_token: body.refresh_token,
       profile_id: body.profile_id,
+      advertiser_id: body.advertiser_id,
+      shop_id: body.shop_id,
+      region: body.region,
+      partner_id: body.partner_id,
       connected_at: new Date().toISOString(),
     });
 

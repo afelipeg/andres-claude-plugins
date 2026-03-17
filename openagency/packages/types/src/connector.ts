@@ -31,11 +31,20 @@ export interface OAuthTokens {
 export interface PlatformCredentials {
   platform: ConnectorPlatform;
   tokens: OAuthTokens;
-  account_id?: string;
-  manager_id?: string;
-  developer_token?: string;
-  app_id?: string;
-  profile_id?: string;
+  account_id?: string;       // Meta: ad_account_id (act_XXX)
+  manager_id?: string;       // Google Ads: login_customer_id (MCC)
+  developer_token?: string;  // Google Ads: developer token
+  app_id?: string;           // Meta/TikTok Ads: app ID
+  app_secret?: string;       // Meta/TikTok Ads: app secret
+  app_key?: string;          // TikTok Shop: app key
+  client_id?: string;        // DV360/Amazon: OAuth client ID
+  client_secret?: string;    // DV360/Amazon: OAuth client secret
+  refresh_token?: string;    // DV360/Amazon/Google: refresh token (also in tokens.refresh_token)
+  profile_id?: string;       // Amazon Ads: profile ID (required header)
+  advertiser_id?: string;    // TikTok Ads: advertiser ID
+  shop_id?: string;          // TikTok Shop: shop ID
+  region?: string;           // Amazon Ads: na | eu | fe
+  partner_id?: string;       // DV360: partner ID
   connected_at: string; // ISO 8601
   last_sync_at?: string; // ISO 8601
 }

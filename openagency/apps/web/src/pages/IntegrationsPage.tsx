@@ -39,7 +39,92 @@ const SYNC_INTERVALS: { value: SyncInterval; label: string }[] = [
   { value: 'manual', label: 'Manual only' },
 ];
 
-// ─── Connection Dialog (OAuth-first + API key fallback) ──────────────
+// ─── Platform-specific auth field definitions ───────────────────────
+
+interface AuthField {
+  key: string;
+  label: string;
+  type: 'text' | 'password' | 'select' | 'textarea';
+  required: boolean;
+  help?: string;
+  link?: string;
+  options?: { value: string; label: string }[];
+}
+
+const PLATFORM_AUTH_FIELDS: Record<string, AuthField[]> = {
+  google_ads: [
+    { key: 'developer_token', label: 'Developer Token', type: 'password', required: true,
+      help: 'Google Ads > Admin > API Center' },
+    { key: 'client_id', label: 'OAuth Client ID', type: 'text', required: true,
+      help: 'Google Cloud Console > Credentials > OAuth 2.0' },
+    { key: 'client_secret', label: 'OAuth Client Secret', type: 'password', required: true,
+      help: 'Google Cloud Console > Credentials > OAuth 2.0' },
+    { key: 'refresh_token', label: 'Refresh Token', type: 'password', required: true,
+      help: 'Generate at OAuth Playground',
+      link: 'https://developers.google.com/oauthplayground' },
+    { key: 'manager_id', label: 'Manager Account ID (MCC)', type: 'text', required: false,
+      help: 'Your MCC ID without dashes (optional)' },
+  ],
+  meta_ads: [
+    { key: 'access_token', label: 'Access Token', type: 'password', required: true,
+      help: 'Meta Business Suite > Settings > API Access > Graph API Explorer' },
+    { key: 'account_id', label: 'Ad Account ID', type: 'text', required: true,
+      help: 'From your Ads Manager URL: act_XXXXXXXXX' },
+    { key: 'app_id', label: 'App ID', type: 'text', required: true,
+      help: 'Meta Developers > App Settings > Basic' },
+    { key: 'app_secret', label: 'App Secret', type: 'password', required: true,
+      help: 'Meta Developers > App Settings > Basic' },
+  ],
+  dv360: [
+    { key: 'client_id', label: 'OAuth Client ID', type: 'text', required: true,
+      help: 'Google Cloud Console > Credentials > OAuth 2.0' },
+    { key: 'client_secret', label: 'OAuth Client Secret', type: 'password', required: true,
+      help: 'Google Cloud Console > Credentials > OAuth 2.0' },
+    { key: 'refresh_token', label: 'Refresh Token', type: 'password', required: true,
+      help: 'Generate at OAuth Playground',
+      link: 'https://developers.google.com/oauthplayground' },
+    { key: 'partner_id', label: 'Partner ID', type: 'text', required: true,
+      help: 'DV360 URL contains /partner/XXXXXXXXX' },
+  ],
+  tiktok_ads: [
+    { key: 'access_token', label: 'Access Token', type: 'password', required: true,
+      help: 'TikTok for Business > My Apps > Access Token (long-lived)' },
+    { key: 'advertiser_id', label: 'Advertiser ID', type: 'text', required: true,
+      help: 'TikTok Ads Manager > Account > Advertiser ID' },
+    { key: 'app_id', label: 'App ID', type: 'text', required: true,
+      help: 'TikTok Marketing API > My Apps' },
+    { key: 'app_secret', label: 'App Secret', type: 'password', required: true,
+      help: 'TikTok Marketing API > My Apps' },
+  ],
+  tiktok_shop: [
+    { key: 'app_key', label: 'App Key', type: 'text', required: true,
+      help: 'TikTok Partner Center > My Apps > App Key' },
+    { key: 'app_secret', label: 'App Secret', type: 'password', required: true,
+      help: 'TikTok Partner Center > My Apps > App Secret' },
+    { key: 'access_token', label: 'Access Token', type: 'password', required: true,
+      help: 'Generated via Partner Center OAuth seller authorization' },
+    { key: 'shop_id', label: 'Shop ID', type: 'text', required: true,
+      help: 'TikTok Seller Center > Settings > Shop ID' },
+  ],
+  amazon_ads: [
+    { key: 'client_id', label: 'LwA Client ID', type: 'text', required: true,
+      help: 'Amazon Developer Console > Login with Amazon' },
+    { key: 'client_secret', label: 'LwA Client Secret', type: 'password', required: true,
+      help: 'Amazon Developer Console > Login with Amazon' },
+    { key: 'refresh_token', label: 'Refresh Token', type: 'password', required: true,
+      help: 'Generated during initial OAuth authorization' },
+    { key: 'profile_id', label: 'Profile ID', type: 'text', required: true,
+      help: 'Amazon Ads Console > Settings > Profile ID' },
+    { key: 'region', label: 'Region', type: 'select', required: true,
+      options: [
+        { value: 'na', label: 'North America (NA)' },
+        { value: 'eu', label: 'Europe (EU)' },
+        { value: 'fe', label: 'Far East (FE)' },
+      ] },
+  ],
+};
+
+// ─── Connection Dialog (OAuth-first + platform-specific fallback) ────
 
 function ConnectDialog({
   config,
@@ -56,8 +141,16 @@ function ConnectDialog({
 }) {
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [apiKey, setApiKey] = useState('');
+  const [showManual, setShowManual] = useState(false);
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
+  const [fieldErrors, setFieldErrors] = useState<string[]>([]);
+
+  const fields = PLATFORM_AUTH_FIELDS[config.platform] ?? [];
+
+  const setField = (key: string, value: string) => {
+    setFieldValues((prev) => ({ ...prev, [key]: value }));
+    setFieldErrors([]);
+  };
 
   const handleOAuth = async () => {
     setConnecting(true);
@@ -70,21 +163,44 @@ function ConnectDialog({
       onConnected();
       onOpenChange(false);
     } catch {
-      // Fallback to API key on ANY error (401, 404, 500, network)
-      setShowApiKey(true);
-      setError('Direct connection unavailable. Enter your API key to connect.');
+      setShowManual(true);
+      setError('Direct connection unavailable. Enter your credentials below.');
     } finally {
       setConnecting(false);
     }
   };
 
-  const handleApiKey = async () => {
-    if (!apiKey.trim()) return;
+  const handleManualConnect = async () => {
+    // Validate required fields
+    const missing = fields
+      .filter((f) => f.required && !fieldValues[f.key]?.trim())
+      .map((f) => f.label);
+    if (missing.length > 0) {
+      setFieldErrors(missing);
+      return;
+    }
+
     setConnecting(true);
     setError(null);
     try {
       if (apiMode) {
-        await connectPlatform(config.platform, { access_token: apiKey.trim() });
+        // Build tokens object — access_token comes from field or a synthetic one
+        const accessToken = fieldValues['access_token'] || fieldValues['refresh_token'] || 'manual_credentials';
+        const tokens = {
+          access_token: accessToken,
+          refresh_token: fieldValues['refresh_token'],
+          expires_at: fieldValues['access_token'] ? undefined : undefined,
+        };
+
+        // Build credentials object with all platform-specific fields
+        const credentials: Record<string, string | undefined> = {};
+        for (const f of fields) {
+          if (fieldValues[f.key]?.trim()) {
+            credentials[f.key] = fieldValues[f.key].trim();
+          }
+        }
+
+        await connectPlatform(config.platform, tokens, credentials);
       }
       onConnected();
       onOpenChange(false);
@@ -96,11 +212,12 @@ function ConnectDialog({
   };
 
   const supportsOAuth = config.authMethod === 'oauth' || config.authMethod === 'both';
-  const supportsApiKey = config.authMethod === 'api_key' || config.authMethod === 'both';
+  const supportsManual = config.authMethod === 'api_key' || config.authMethod === 'both';
+  const hasRequiredFilled = fields.filter((f) => f.required).every((f) => fieldValues[f.key]?.trim());
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-3 mb-1">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-50 border border-gray-100">
@@ -127,7 +244,7 @@ function ConnectDialog({
               disabled={connecting}
               className="w-full flex items-center justify-center gap-2 rounded-lg bg-gray-900 px-4 py-3 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50 transition-colors"
             >
-              {connecting && !showApiKey ? (
+              {connecting && !showManual ? (
                 <>
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                   Connecting...
@@ -141,46 +258,98 @@ function ConnectDialog({
             </button>
           )}
 
-          {/* API key fallback */}
-          {supportsApiKey && supportsOAuth && (
+          {/* Manual credentials toggle */}
+          {supportsManual && supportsOAuth && (
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-gray-200" />
               </div>
               <div className="relative flex justify-center text-xs">
                 <button
-                  onClick={() => setShowApiKey(!showApiKey)}
+                  onClick={() => setShowManual(!showManual)}
                   className="bg-white px-3 text-gray-500 hover:text-gray-700 transition-colors"
                 >
-                  {showApiKey ? 'Hide API key option' : 'Or use API key'}
+                  {showManual ? 'Hide manual setup' : 'Or enter credentials manually'}
                 </button>
               </div>
             </div>
           )}
 
-          {(showApiKey || (supportsApiKey && !supportsOAuth)) && (
+          {/* Platform-specific credential fields */}
+          {(showManual || (supportsManual && !supportsOAuth)) && fields.length > 0 && (
             <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1.5">
-                  API Key
-                </label>
-                <input
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder={`Enter your ${config.name} API key`}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
-                />
-                <p className="mt-1 text-[10px] text-gray-400">
-                  Your API key is encrypted and stored securely on our servers.
-                </p>
-              </div>
+              {fields.map((field) => (
+                <div key={field.key}>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                    {field.label}
+                    {field.required && <span className="text-red-400 ml-0.5">*</span>}
+                  </label>
+
+                  {field.type === 'select' && field.options ? (
+                    <select
+                      value={fieldValues[field.key] ?? ''}
+                      onChange={(e) => setField(field.key, e.target.value)}
+                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                    >
+                      <option value="">Select...</option>
+                      {field.options.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  ) : field.type === 'textarea' ? (
+                    <textarea
+                      value={fieldValues[field.key] ?? ''}
+                      onChange={(e) => setField(field.key, e.target.value)}
+                      placeholder={field.help}
+                      rows={4}
+                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 font-mono text-xs"
+                    />
+                  ) : (
+                    <input
+                      type={field.type === 'password' ? 'password' : 'text'}
+                      value={fieldValues[field.key] ?? ''}
+                      onChange={(e) => setField(field.key, e.target.value)}
+                      placeholder={field.help}
+                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                    />
+                  )}
+
+                  {field.help && (
+                    <p className="mt-1 text-[10px] text-gray-400">
+                      {field.help}
+                      {field.link && (
+                        <>
+                          {' '}
+                          <a
+                            href={field.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-500 hover:underline"
+                          >
+                            Open
+                          </a>
+                        </>
+                      )}
+                    </p>
+                  )}
+                </div>
+              ))}
+
+              {/* Validation errors */}
+              {fieldErrors.length > 0 && (
+                <div className="rounded-lg bg-red-50 border border-red-100 p-3">
+                  <p className="text-xs text-red-700">
+                    Missing required fields: {fieldErrors.join(', ')}
+                  </p>
+                </div>
+              )}
+
               <button
-                onClick={() => void handleApiKey()}
-                disabled={connecting || !apiKey.trim()}
+                onClick={() => void handleManualConnect()}
+                disabled={connecting || !hasRequiredFilled}
                 className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
               >
-                {connecting && showApiKey ? 'Saving...' : 'Save API Key'}
+                {connecting && showManual ? 'Saving...' : 'Save Credentials'}
               </button>
             </div>
           )}
@@ -189,8 +358,8 @@ function ConnectDialog({
           <div className="rounded-lg bg-blue-50 border border-blue-100 p-3">
             <p className="text-[11px] text-blue-700 leading-relaxed">
               {supportsOAuth
-                ? `You'll be redirected to ${config.name}'s authorization page. Plinth requests read-only access. Tokens are encrypted server-side.`
-                : 'Your credentials are encrypted and stored securely. Plinth requests read-only access to your campaign data.'}
+                ? `You'll be redirected to ${config.name}'s authorization page. Plinth requests read-only access. Tokens are encrypted server-side with AES-256-GCM.`
+                : 'Your credentials are encrypted with AES-256-GCM and stored securely. Plinth requests read-only access to your campaign data.'}
             </p>
           </div>
 

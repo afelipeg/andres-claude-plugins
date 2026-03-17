@@ -91,7 +91,7 @@ export const PLATFORMS: PlatformConfig[] = [
     description: 'Programmatic display, video, and audio campaigns',
     Logo: DV360Logo,
     scopes: 'Insertion orders, line items, creatives, and audience data',
-    authMethod: 'oauth',
+    authMethod: 'both',
   },
   {
     platform: 'meta_ads',

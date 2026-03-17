@@ -45,11 +45,11 @@ export async function listConnectors(): Promise<ConnectorStatus[]> {
 export async function connectPlatform(
   platform: string,
   tokens: { access_token: string; refresh_token?: string; expires_at?: string },
-  accountId?: string,
+  credentials?: Record<string, string | undefined>,
 ): Promise<{ status: string; platform: string }> {
   return fetchJson(`/v1/connectors/${platform}/connect`, {
     method: 'POST',
-    body: JSON.stringify({ tokens, account_id: accountId }),
+    body: JSON.stringify({ tokens, ...credentials }),
   });
 }
 
