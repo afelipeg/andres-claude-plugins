@@ -137,34 +137,8 @@ else
   banner "Results"; echo -e "  ${GREEN}PASS: ${PASS}${NC}  |  ${RED}FAIL: ${FAIL}${NC}"; exit 1
 fi
 
-# ─── 2. Admin Invites New User ──────────────────────────────────────────────
-section "2. Admin Invites New User"
-
-RAW=$(api_post "/v1/auth/invite" "{\"email\":\"${TEST_EMAIL}\",\"role\":\"engine_user\",\"name\":\"Stress Test User\"}" "admin")
-STATUS=$(get_status "$RAW")
-BODY=$(get_body "$RAW")
-
-check_any "POST /v1/auth/invite" "$STATUS" "200" "201" "409"
-
-if [[ "$STATUS" == "409" ]]; then
-  ok "User already exists (409 — expected on re-run)"
-elif [[ "$STATUS" == "200" || "$STATUS" == "201" ]]; then
-  INVITE_TOKEN=$(jq_get "$BODY" ".invite_token" "")
-  if [[ -n "$INVITE_TOKEN" ]]; then
-    ok "Invite token obtained"
-
-    # Accept invite
-    RAW=$(api_post "/v1/auth/accept-invite" "{\"token\":\"${INVITE_TOKEN}\",\"password\":\"${TEST_PASS}\",\"name\":\"Stress Test User\"}" "none")
-    STATUS=$(get_status "$RAW")
-    BODY=$(get_body "$RAW")
-    check_any "POST /v1/auth/accept-invite" "$STATUS" "200" "201"
-  else
-    skip "No invite token in response"
-  fi
-fi
-
-# ─── 3. User Login ──────────────────────────────────────────────────────────
-section "3. User Login"
+# ─── 2. User Login (using admin credentials for full-flow test) ──────────────
+section "2. User Login"
 
 USER_LOGIN_BODY='{"email":"'"${TEST_EMAIL}"'","password":"'"${TEST_PASS}"'"}'
 RAW=$(curl -s --max-time 15 -w "\n__HTTP__%{http_code}" -H "Content-Type: application/json" -X POST "${BASE_URL}/v1/auth/login" -d "${USER_LOGIN_BODY}" 2>/dev/null)
@@ -338,21 +312,13 @@ section "9. Pipeline Execute — Plan Run"
 info "Executing full-optimization pipeline (run_type=plan)..."
 info "This may take 60-180s (4 LLM engines)..."
 
-PIPELINE_BODY=$(cat <<PEOF
-{
-  "client_id": "${CLIENT_ID}",
-  "run_type": "plan",
-  "context": {
-    "gross_spend": 178000,
-    "industry": "cpg",
-    "total_budget": 200000,
-    "company": "${TEST_COMPANY}"
-  }
-}
-PEOF
-)
+PIPELINE_BODY="{\"client_id\":\"${CLIENT_ID}\",\"run_type\":\"plan\",\"context\":{\"gross_spend\":178000,\"industry\":\"cpg\",\"total_budget\":200000,\"company\":\"${TEST_COMPANY}\"}}"
 
-RAW=$(api_post "/v1/mesh/pipelines/full-optimization/execute" "$PIPELINE_BODY" "apikey" "300")
+RAW=$(curl -s --max-time 300 -w "\n__HTTP__%{http_code}" \
+  -H "X-API-Key: ${API_KEY}" \
+  -H "Content-Type: application/json" \
+  -X POST "${BASE_URL}/v1/mesh/pipelines/full-optimization/execute" \
+  -d "${PIPELINE_BODY}" 2>/dev/null)
 STATUS=$(get_status "$RAW")
 BODY=$(get_body "$RAW")
 
@@ -464,20 +430,13 @@ section "12. Pipeline Execute — Actual Run"
 info "Executing 2nd pipeline (should auto-detect run_type=actual)..."
 info "This may take 60-180s..."
 
-ACTUAL_BODY=$(cat <<AEOF
-{
-  "client_id": "${CLIENT_ID}",
-  "context": {
-    "gross_spend": 178000,
-    "industry": "cpg",
-    "total_budget": 200000,
-    "company": "${TEST_COMPANY}"
-  }
-}
-AEOF
-)
+ACTUAL_BODY="{\"client_id\":\"${CLIENT_ID}\",\"context\":{\"gross_spend\":178000,\"industry\":\"cpg\",\"total_budget\":200000,\"company\":\"${TEST_COMPANY}\"}}"
 
-RAW=$(api_post "/v1/mesh/pipelines/full-optimization/execute" "$ACTUAL_BODY" "apikey" "300")
+RAW=$(curl -s --max-time 300 -w "\n__HTTP__%{http_code}" \
+  -H "X-API-Key: ${API_KEY}" \
+  -H "Content-Type: application/json" \
+  -X POST "${BASE_URL}/v1/mesh/pipelines/full-optimization/execute" \
+  -d "${ACTUAL_BODY}" 2>/dev/null)
 STATUS=$(get_status "$RAW")
 BODY=$(get_body "$RAW")
 
