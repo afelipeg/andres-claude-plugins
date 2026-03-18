@@ -67,6 +67,7 @@ import { onboardingRoutes } from './routes/onboarding.js';
 import { consumptionRoutes } from './routes/consumption.js';
 import { assistantRoutes, autoCreatePipelineConversation } from './routes/assistant.js';
 import { ConversationRepo, ScorecardDbRepo, ClientDataRepo } from '@openagency/memory';
+import { oauthStorageRoutes } from './routes/oauth-storage.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/logger.js';
 import { rateLimiter } from './middleware/rate-limiter.js';
@@ -407,6 +408,9 @@ export async function createApp() {
 
   // ─── Auth routes ────────────────────────────────────────────────
   app.route('/', authRoutes(userRepo));
+
+  // ─── OAuth Storage (Google Drive, OneDrive) ────────────────────
+  app.route('/', oauthStorageRoutes(db));
 
   // ─── Protected routes ───────────────────────────────────────────
   app.route('/', engineRoutes(agency, eventBus));

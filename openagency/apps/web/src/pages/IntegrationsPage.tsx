@@ -514,64 +514,95 @@ function PlatformCard({ config, apiMode }: { config: PlatformConfig; apiMode: bo
 
 function StorageCard({ config, apiMode }: { config: StorageConfig; apiMode: boolean }) {
   const [connected, setConnected] = useState(false);
-  const [connecting, setConnecting] = useState(false);
+  const [email, setEmail] = useState<string | null>(null);
+  const [connectedAt, setConnectedAt] = useState<string | null>(null);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Detect ?connected=provider in URL (post-OAuth redirect)
+  const apiBase =
+    (import.meta.env.VITE_API_URL as string | undefined) ||
+    'https://polanyi-plinth-production.up.railway.app';
+
+  const authHeaders = (): HeadersInit => {
+    const h: Record<string, string> = { 'Content-Type': 'application/json' };
+    const token = localStorage.getItem('plinth_token');
+    if (token) h['Authorization'] = `Bearer ${token}`;
+    const apiKey = import.meta.env.VITE_API_KEY as string | undefined;
+    if (apiKey) h['X-API-Key'] = apiKey;
+    return h;
+  };
+
+  // Check status on mount + detect ?connected=provider in URL (post-OAuth redirect)
   useEffect(() => {
+    if (!apiMode) return;
+
+    // Post-OAuth detection
     const params = new URLSearchParams(window.location.search);
     if (params.get('connected') === config.id) {
       setConnected(true);
-      // Clean URL
       const url = new URL(window.location.href);
       url.searchParams.delete('connected');
       window.history.replaceState({}, '', url.toString());
     }
-  }, [config.id]);
 
-  const handleConnect = async () => {
+    // Load status from backend
+    if (config.id === 'google_drive') {
+      void fetch(`${apiBase}/auth/google-drive/status`, { headers: authHeaders() })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data: { connected: boolean; email: string | null; connected_at: string | null } | null) => {
+          if (data?.connected) {
+            setConnected(true);
+            setEmail(data.email);
+            setConnectedAt(data.connected_at);
+          }
+        })
+        .catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config.id, apiMode]);
+
+  const handleConnect = () => {
     if (!apiMode) return;
-    setConnecting(true);
-    setError(null);
+    const token = localStorage.getItem('plinth_token');
+    if (!token) {
+      setError('Not authenticated — please log in first');
+      return;
+    }
+    // Direct redirect to backend OAuth init (passes token as query param)
+    window.location.href = `${apiBase}/auth/google-drive?token=${encodeURIComponent(token)}`;
+  };
+
+  const handleDisconnect = async () => {
+    setDisconnecting(true);
     try {
-      const redirectUri = `${window.location.origin}/auth/callback`;
-      const res = await fetch(
-        `${(import.meta.env.VITE_API_URL as string | undefined) || 'https://polanyi-plinth-production.up.railway.app'}/v1/storage/${config.id}/auth-url`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(localStorage.getItem('plinth_token')
-              ? { Authorization: `Bearer ${localStorage.getItem('plinth_token')}` }
-              : {}),
-            ...(import.meta.env.VITE_API_KEY ? { 'X-API-Key': import.meta.env.VITE_API_KEY as string } : {}),
-          },
-          body: JSON.stringify({ redirect_uri: redirectUri, state: config.id }),
-        },
-      );
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { message?: string };
-        throw new Error(body.message || `HTTP ${res.status}: Provider not configured on server`);
-      }
-
-      const data = (await res.json()) as { auth_url: string };
-      // Redirect to OAuth provider (like Claude.ai / Perplexity)
-      window.location.href = data.auth_url;
+      const res = await fetch(`${apiBase}/auth/google-drive/disconnect`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error('Disconnect failed');
+      setConnected(false);
+      setEmail(null);
+      setConnectedAt(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Connection failed');
-      setConnecting(false);
+      setError(err instanceof Error ? err.message : 'Disconnect failed');
+    } finally {
+      setDisconnecting(false);
     }
   };
 
+  // OneDrive placeholder — disabled for now
+  const isDisabled = config.id === 'onedrive';
+
   return (
     <div
-      className={`group rounded-xl border p-5 transition-all cursor-pointer ${
-        connected
-          ? 'border-green-200 bg-green-50/40 hover:shadow-md'
-          : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'
+      className={`group rounded-xl border p-5 transition-all ${
+        isDisabled
+          ? 'border-gray-100 bg-gray-50/50 opacity-60'
+          : connected
+            ? 'border-green-200 bg-green-50/40 hover:shadow-md'
+            : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md cursor-pointer'
       }`}
-      onClick={() => !connected && void handleConnect()}
+      onClick={() => !connected && !isDisabled && handleConnect()}
     >
       <div className="flex items-start justify-between mb-3">
         <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gray-50 border border-gray-100 group-hover:border-gray-200 transition-colors">
@@ -583,29 +614,46 @@ function StorageCard({ config, apiMode }: { config: StorageConfig; apiMode: bool
             Connected
           </span>
         )}
+        {isDisabled && !connected && (
+          <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-400">
+            Coming soon
+          </span>
+        )}
       </div>
 
       <h3 className="text-sm font-semibold text-gray-900 mb-1">{config.name}</h3>
       <p className="text-xs text-gray-500 leading-relaxed mb-1">{config.description}</p>
       <p className="text-[10px] text-gray-400 mb-3">{config.scopes}</p>
 
-      {!connected && (
-        <button
-          onClick={(e) => { e.stopPropagation(); void handleConnect(); }}
-          disabled={connecting}
-          className="w-full flex items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-xs font-medium text-white hover:bg-gray-800 disabled:opacity-50 transition-colors"
-        >
-          {connecting ? (
-            <>
-              <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-              Connecting...
-            </>
-          ) : (
-            <>
-              <config.Logo className="h-4 w-4" />
-              Connect {config.name}
-            </>
+      {connected && (
+        <div className="space-y-2">
+          {email && (
+            <p className="text-[10px] text-gray-500">
+              <span className="font-medium text-gray-700">{email}</span>
+            </p>
           )}
+          {connectedAt && (
+            <p className="text-[10px] text-gray-400">
+              Connected {new Date(connectedAt).toLocaleDateString()}
+            </p>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); void handleDisconnect(); }}
+            disabled={disconnecting}
+            className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-[11px] font-medium text-gray-500 hover:text-red-500 hover:border-red-200 disabled:opacity-50 transition-colors"
+          >
+            {disconnecting ? 'Disconnecting...' : 'Disconnect'}
+          </button>
+        </div>
+      )}
+
+      {!connected && !isDisabled && (
+        <button
+          onClick={(e) => { e.stopPropagation(); handleConnect(); }}
+          className="w-full flex items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-xs font-medium text-white hover:bg-gray-800 transition-colors"
+        >
+          <config.Logo className="h-4 w-4" />
+          Connect {config.name}
         </button>
       )}
 
