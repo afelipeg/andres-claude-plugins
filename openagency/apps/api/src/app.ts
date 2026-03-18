@@ -238,7 +238,47 @@ export async function createApp() {
     return ctx;
   };
 
-  const scheduler = new PipelineScheduler(mesh, eventBus, undefined, schedulerContextBuilder);
+  // ─── Schedule DB Adapter ───────────────────────────────────────────
+  const scheduleRepo = db ? (() => {
+    const sql = db as unknown as { unsafe: (q: string, params?: unknown[]) => Promise<Array<Record<string, unknown>>> };
+    const mapRow = (r: Record<string, unknown>): import('@openagency/types').PipelineSchedule => ({
+      id: r['id'] as string,
+      client_id: r['client_id'] as string,
+      pipeline_id: r['pipeline_id'] as string,
+      cron: r['cron'] as string,
+      auto_approve: r['auto_approve'] as boolean,
+      notify_on_complete: r['notify_on_complete'] as boolean,
+      enabled: r['enabled'] as boolean,
+      created_at: (r['created_at'] as Date)?.toISOString?.() ?? String(r['created_at']),
+      last_run_at: r['last_run_at'] ? ((r['last_run_at'] as Date)?.toISOString?.() ?? String(r['last_run_at'])) : undefined,
+      next_run_at: r['next_run_at'] ? ((r['next_run_at'] as Date)?.toISOString?.() ?? String(r['next_run_at'])) : undefined,
+    });
+    return {
+      async create(schedule: import('@openagency/types').PipelineSchedule) {
+        await sql.unsafe(
+          'INSERT INTO pipeline_schedules (id, client_id, pipeline_id, cron, auto_approve, notify_on_complete, enabled, created_at, next_run_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (id) DO NOTHING',
+          [schedule.id, schedule.client_id, schedule.pipeline_id, schedule.cron, schedule.auto_approve, schedule.notify_on_complete, schedule.enabled, schedule.created_at, schedule.next_run_at ?? null],
+        );
+      },
+      async findAll() {
+        const rows = await sql.unsafe('SELECT * FROM pipeline_schedules WHERE enabled = true ORDER BY created_at DESC');
+        return rows.map(mapRow);
+      },
+      async findById(id: string) {
+        const rows = await sql.unsafe('SELECT * FROM pipeline_schedules WHERE id = $1', [id]);
+        return rows.length > 0 ? mapRow(rows[0]) : null;
+      },
+      async updateLastRun(id: string, lastRunAt: string, nextRunAt: string | null) {
+        await sql.unsafe('UPDATE pipeline_schedules SET last_run_at = $1, next_run_at = $2 WHERE id = $3', [lastRunAt, nextRunAt, id]);
+      },
+      async delete(id: string) {
+        const rows = await sql.unsafe('DELETE FROM pipeline_schedules WHERE id = $1 RETURNING id', [id]);
+        return rows.length > 0;
+      },
+    };
+  })() : undefined;
+
+  const scheduler = new PipelineScheduler(mesh, eventBus, scheduleRepo, schedulerContextBuilder);
   await scheduler.start();
 
   // ─── Human Feedback Loop (agent-to-human escalation) ────────────

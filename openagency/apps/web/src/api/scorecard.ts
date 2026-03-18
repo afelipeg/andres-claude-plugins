@@ -135,3 +135,28 @@ export async function updateScorecardStatus(
 export async function getTierPreview(adSpend: number): Promise<TierRates> {
   return fetchJson<TierRates>(`/v1/scorecard/tier-preview?ad_spend=${adSpend}`);
 }
+
+export interface ScorecardComparison {
+  plan_id: string;
+  actual_id: string;
+  ad_spend_delta: number;
+  recovery_delta: number;
+  lift_delta: number;
+  efficiency_delta: number;
+  total_fee_delta: number;
+  roi_delta: number;
+  real_lift_pct: number;
+  waste_reduction_pct: number;
+  media_driven_sales: { plan: number; actual: number; delta: number };
+  engine_deltas: Record<string, Record<string, unknown>>;
+  plan_summary: Record<string, unknown>;
+  actual_summary: Record<string, unknown>;
+  insights: string[];
+}
+
+export async function compareScorecard(planId: string, actualId: string): Promise<ScorecardComparison> {
+  return fetchJson<ScorecardComparison>('/v1/scorecard/compare', {
+    method: 'POST',
+    body: JSON.stringify({ plan_id: planId, actual_id: actualId }),
+  });
+}

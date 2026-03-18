@@ -154,10 +154,21 @@ export async function listPipelines(): Promise<MeshPipeline[]> {
   return res.pipelines;
 }
 
-export async function executePipeline(pipelineId: string, goalId?: string, clientId?: string): Promise<MeshRunDetail> {
+export async function executePipeline(
+  pipelineId: string,
+  goalId?: string,
+  clientId?: string,
+  runType?: string,
+  context?: Record<string, unknown>,
+): Promise<MeshRunDetail> {
+  const body: Record<string, unknown> = {};
+  if (goalId) body.goal_id = goalId;
+  if (clientId) body.client_id = clientId;
+  if (runType && runType !== 'standard') body.run_type = runType;
+  if (context) body.context = context;
   return fetchJson<MeshRunDetail>(`/v1/mesh/pipelines/${pipelineId}/execute`, {
     method: 'POST',
-    body: JSON.stringify({ goal_id: goalId, client_id: clientId }),
+    body: JSON.stringify(body),
   });
 }
 

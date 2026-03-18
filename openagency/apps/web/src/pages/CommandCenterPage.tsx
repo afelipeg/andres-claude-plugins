@@ -248,7 +248,7 @@ export function CommandCenterPage() {
     if (executing) return;
     setExecuting(true);
     try {
-      const result = await executePipeline('full-optimization');
+      const result = await executePipeline('full-optimization', undefined, undefined, runType);
       setSelectedRunDetail(result);
       setRunTypeMap((prev) => ({ ...prev, [result.id]: runType }));
       await refresh();
