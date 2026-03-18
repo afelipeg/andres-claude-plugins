@@ -694,8 +694,23 @@ export function calculateBillingFromEngines(outputs: EngineOutputs): BillingResu
   const co = outputs.campaign_ops ?? {};
   const eb = outputs.executive_bridge ?? {};
 
+  // Use waste_waterfall primarily; fall back to waste_estimate if waterfall shows 0 waste
+  let wasteSource = ld.waste_waterfall as Record<string, unknown> | undefined;
+  if (wasteSource) {
+    const ws = (wasteSource['waste_summary'] as Record<string, unknown>)?.['total_waste'];
+    if (!ws || Number(ws) === 0) {
+      const estimate = ld.waste_estimate as Record<string, unknown> | undefined;
+      if (estimate) {
+        const estWaste = (estimate['waste_summary'] as Record<string, unknown>)?.['total_waste'];
+        if (estWaste && Number(estWaste) > 0) wasteSource = estimate;
+      }
+    }
+  } else {
+    wasteSource = ld.waste_estimate as Record<string, unknown> | undefined;
+  }
+
   const ldRecovery = extractLeakDetectorRecovery(
-    ld.waste_waterfall,
+    wasteSource,
     ld.media_quality_score,
     ld.supply_chain_audit,
   );
