@@ -65,6 +65,54 @@ export function AmazonAdsLogo({ className }: { className?: string }) {
   );
 }
 
+// ─── Storage Logos ──────────────────────────────────────────────────
+
+export function GoogleDriveLogo({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none">
+      <path d="M8.5 2.5L2 14h5.5l6.5-11.5z" fill="#0F9D58" />
+      <path d="M15.5 2.5L22 14h-5.5L10 2.5z" fill="#FBBC04" />
+      <path d="M2 14l3.25 5.5h13.5L22 14z" fill="#4285F4" />
+    </svg>
+  );
+}
+
+export function OneDriveLogo({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none">
+      <path d="M10 8c2.5-2 5.5-1.5 7 .5l.5.5c2 0 3.5 1.5 3.5 3.5S19.5 16 17.5 16H6c-2.2 0-4-1.8-4-4 0-1.8 1.2-3.3 2.8-3.8C5.5 6.3 7.5 5.5 10 8z" fill="#0078D4" />
+      <path d="M6 16c-2.2 0-4-1.8-4-4 0-1.8 1.2-3.3 2.8-3.8.3-1 .8-1.8 1.5-2.5C4 7 3 9 3 11c0 2.8 2.2 5 5 5h9.5c.3 0 .5 0 .8-.1H6z" fill="#0364B8" />
+    </svg>
+  );
+}
+
+// ─── Storage Config ─────────────────────────────────────────────────
+
+export interface StorageConfig {
+  id: string;
+  name: string;
+  description: string;
+  Logo: React.ComponentType<{ className?: string }>;
+  scopes: string;
+}
+
+export const STORAGE_PROVIDERS: StorageConfig[] = [
+  {
+    id: 'google_drive',
+    name: 'Google Drive',
+    description: 'Import files, reports, and assets directly from Google Drive',
+    Logo: GoogleDriveLogo,
+    scopes: 'Read-only access to files and metadata',
+  },
+  {
+    id: 'onedrive',
+    name: 'Microsoft OneDrive',
+    description: 'Import documents and spreadsheets from OneDrive',
+    Logo: OneDriveLogo,
+    scopes: 'Read-only access to files',
+  },
+];
+
 // ─── Platform Config ─────────────────────────────────────────────────
 
 export interface PlatformConfig {

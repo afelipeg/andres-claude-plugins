@@ -23,7 +23,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '../components/ui/dialog';
-import { PLATFORMS, type PlatformConfig } from '../components/platform-logos';
+import { PLATFORMS, STORAGE_PROVIDERS, type PlatformConfig, type StorageConfig } from '../components/platform-logos';
 
 // ─── Config ──────────────────────────────────────────────────────────
 
@@ -510,6 +510,115 @@ function PlatformCard({ config, apiMode }: { config: PlatformConfig; apiMode: bo
 }
 
 
+// ─── Storage Card (OAuth redirect — no manual fields) ─────────────────
+
+function StorageCard({ config, apiMode }: { config: StorageConfig; apiMode: boolean }) {
+  const [connected, setConnected] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Detect ?connected=provider in URL (post-OAuth redirect)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('connected') === config.id) {
+      setConnected(true);
+      // Clean URL
+      const url = new URL(window.location.href);
+      url.searchParams.delete('connected');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [config.id]);
+
+  const handleConnect = async () => {
+    if (!apiMode) return;
+    setConnecting(true);
+    setError(null);
+    try {
+      const redirectUri = `${window.location.origin}/auth/callback`;
+      const res = await fetch(
+        `${(import.meta.env.VITE_API_URL as string | undefined) || 'https://polanyi-plinth-production.up.railway.app'}/v1/storage/${config.id}/auth-url`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(localStorage.getItem('plinth_token')
+              ? { Authorization: `Bearer ${localStorage.getItem('plinth_token')}` }
+              : {}),
+            ...(import.meta.env.VITE_API_KEY ? { 'X-API-Key': import.meta.env.VITE_API_KEY as string } : {}),
+          },
+          body: JSON.stringify({ redirect_uri: redirectUri, state: config.id }),
+        },
+      );
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { message?: string };
+        throw new Error(body.message || `HTTP ${res.status}: Provider not configured on server`);
+      }
+
+      const data = (await res.json()) as { auth_url: string };
+      // Redirect to OAuth provider (like Claude.ai / Perplexity)
+      window.location.href = data.auth_url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Connection failed');
+      setConnecting(false);
+    }
+  };
+
+  return (
+    <div
+      className={`group rounded-xl border p-5 transition-all cursor-pointer ${
+        connected
+          ? 'border-green-200 bg-green-50/40 hover:shadow-md'
+          : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'
+      }`}
+      onClick={() => !connected && void handleConnect()}
+    >
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gray-50 border border-gray-100 group-hover:border-gray-200 transition-colors">
+          <config.Logo className="h-7 w-7" />
+        </div>
+        {connected && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+            Connected
+          </span>
+        )}
+      </div>
+
+      <h3 className="text-sm font-semibold text-gray-900 mb-1">{config.name}</h3>
+      <p className="text-xs text-gray-500 leading-relaxed mb-1">{config.description}</p>
+      <p className="text-[10px] text-gray-400 mb-3">{config.scopes}</p>
+
+      {!connected && (
+        <button
+          onClick={(e) => { e.stopPropagation(); void handleConnect(); }}
+          disabled={connecting}
+          className="w-full flex items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-xs font-medium text-white hover:bg-gray-800 disabled:opacity-50 transition-colors"
+        >
+          {connecting ? (
+            <>
+              <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              Connecting...
+            </>
+          ) : (
+            <>
+              <config.Logo className="h-4 w-4" />
+              Connect {config.name}
+            </>
+          )}
+        </button>
+      )}
+
+      {error && (
+        <div className="mt-2 rounded-lg bg-red-50 border border-red-100 p-2">
+          <p className="text-[10px] text-red-600">{error}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 // ─── Main Page ────────────────────────────────────────────────────────
 
 export function IntegrationsPage() {
@@ -559,6 +668,24 @@ export function IntegrationsPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {PLATFORMS.map((config) => (
             <PlatformCard key={config.platform} config={config} apiMode={apiMode} />
+          ))}
+        </div>
+      </div>
+
+      {/* Cloud Storage (OAuth redirect — like Claude.ai / Perplexity) */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <h3 className="text-sm font-semibold text-gray-900">Cloud Storage</h3>
+          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
+            OAuth
+          </span>
+        </div>
+        <p className="text-xs text-gray-500 mb-4">
+          Connect cloud storage to import files directly into Plinth. One click — no credentials needed.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {STORAGE_PROVIDERS.map((config) => (
+            <StorageCard key={config.id} config={config} apiMode={apiMode} />
           ))}
         </div>
       </div>
