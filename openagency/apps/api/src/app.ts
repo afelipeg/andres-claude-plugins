@@ -229,6 +229,12 @@ export async function createApp() {
       } catch { /* non-blocking */ }
     }
 
+    // Validate assembled context
+    const { validateSkillContext } = await import('./connectors/context-assembler.js');
+    const validation = validateSkillContext(ctx);
+    log.info({ client_id: clientId, ...validation }, 'Scheduled pipeline context validation');
+    ctx._context_validation = validation;
+
     return ctx;
   };
 
@@ -316,11 +322,28 @@ export async function createApp() {
   const mcpConnectionRepo = db ? new McpConnectionRepo(db) : undefined;
   const mcpClientRegistry = new McpClientRegistry(mcpConnectionRepo, mcpProcessManager);
 
-  // Load persisted MCP connections from DB (marks stale if process dead)
+  // Load persisted MCP connections from DB (marks stale if process dead, auto-respawns)
+  const encryptionKey = process.env['ENCRYPTION_KEY'] ?? '';
   if (mcpConnectionRepo) {
-    mcpClientRegistry.loadFromDb().catch((err) => {
+    let respawnOpts: import('@openagency/agent').RespawnOpts | undefined;
+    if (encryptionKey) {
+      const { decrypt } = await import('@openagency/memory');
+      const { buildEnvFromAuthFields } = await import('./routes/mcp-marketplace.js');
+      respawnOpts = {
+        decryptFn: (token: string) => decrypt(token, encryptionKey),
+        envMapperFn: buildEnvFromAuthFields,
+      };
+    }
+
+    mcpClientRegistry.loadFromDb(undefined, respawnOpts).catch((err) => {
       log.warn({ err }, 'Failed to load MCP connections from DB');
     });
+
+    // Start periodic health monitor (every 5 minutes)
+    if (respawnOpts) {
+      mcpClientRegistry.startHealthMonitor(300_000, respawnOpts);
+      log.info('MCP health monitor started (5 min interval, 12s timeout, 2-failure threshold)');
+    }
   }
 
   // ─── Skill Marketplace (dynamic skill registration) ──────────

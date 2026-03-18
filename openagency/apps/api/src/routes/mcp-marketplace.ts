@@ -155,7 +155,7 @@ const ENV_MAPS: Record<string, Record<string, string>> = {
   },
 };
 
-function buildEnvFromAuthFields(catalogId: string, fields: Record<string, string>): Record<string, string> {
+export function buildEnvFromAuthFields(catalogId: string, fields: Record<string, string>): Record<string, string> {
   const map = ENV_MAPS[catalogId] ?? {};
   return Object.fromEntries(
     Object.entries(fields)

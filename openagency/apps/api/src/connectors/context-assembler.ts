@@ -64,7 +64,8 @@ export function assembleContextFromSync(
   }
 
   if (allRows.length === 0 && !explicitContext) {
-    return {}; // No data available
+    log.warn('assembleContextFromSync: no platform data and no explicit context — returning empty');
+    return {};
   }
 
   // ─── Aggregate by channel (platform) ─────────────────────────────
@@ -264,11 +265,78 @@ export async function mergeMcpData(
     }
   }
 
+  if (Object.keys(mcpData).length === 0 && mcpErrors.length > 0) {
+    log.warn({ errors: mcpErrors }, 'All MCP data-fetch tool calls failed — no MCP data injected');
+  }
+
   return {
     ...ctx,
     mcp_data: mcpData,
     _has_mcp_data: Object.keys(mcpData).length > 0,
     _mcp_sources: servers.map((s) => s.name),
     _mcp_errors: mcpErrors.length > 0 ? mcpErrors : undefined,
+  };
+}
+
+// ─── Context Validation ─────────────────────────────────────────────
+
+export interface ContextValidationResult {
+  has_sync_data: boolean;
+  has_batch_data: boolean;
+  has_mcp_data: boolean;
+  source_count: number;
+  warnings: string[];
+  sync_platforms: string[];
+  batch_types: string[];
+  mcp_servers: string[];
+  gross_spend: number;
+}
+
+/**
+ * Validate assembled skillContext before pipeline execution.
+ * Returns audit of which data sources contributed + warnings.
+ */
+export function validateSkillContext(ctx: Record<string, unknown>): ContextValidationResult {
+  const syncSources = (ctx._sync_sources as Array<{ platform: string }>) ?? [];
+  const hasBatch = ctx._has_client_batch === true;
+  const hasMcp = ctx._has_mcp_data === true;
+  const hasSync = syncSources.length > 0;
+
+  const warnings: string[] = [];
+  const sourceCount = [hasSync, hasBatch, hasMcp].filter(Boolean).length;
+
+  if (sourceCount === 0) {
+    warnings.push('NO_DATA_SOURCES: Pipeline will run with empty/explicit-only context');
+  }
+  if (!hasSync) {
+    warnings.push('NO_SYNC_DATA: No platform connectors provided data');
+  }
+  if (!hasBatch) {
+    warnings.push('NO_BATCH_DATA: No human-uploaded batch data available');
+  }
+  if (!hasMcp) {
+    warnings.push('NO_MCP_DATA: No MCP server data injected');
+  }
+
+  const grossSpend = (ctx.gross_spend as number) ?? 0;
+  if (grossSpend === 0 && hasSync) {
+    warnings.push('ZERO_SPEND: Sync data present but gross_spend is $0');
+  }
+
+  const mcpErrors = ctx._mcp_errors as string[] | undefined;
+  if (mcpErrors && mcpErrors.length > 0) {
+    warnings.push(`MCP_ERRORS: ${mcpErrors.length} MCP tool calls failed`);
+  }
+
+  return {
+    has_sync_data: hasSync,
+    has_batch_data: hasBatch,
+    has_mcp_data: hasMcp,
+    source_count: sourceCount,
+    warnings,
+    sync_platforms: syncSources.map((s) => s.platform),
+    batch_types: hasBatch ? Object.keys((ctx.client_data as Record<string, unknown>) ?? {}) : [],
+    mcp_servers: (ctx._mcp_sources as string[]) ?? [],
+    gross_spend: grossSpend,
   };
 }

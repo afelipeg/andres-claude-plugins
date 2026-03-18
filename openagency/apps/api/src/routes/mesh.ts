@@ -15,9 +15,12 @@ import type { PipelineScheduler } from '@openagency/agent';
 import type { HFLCoordinator, MeshRunSummary } from '@openagency/hfl';
 import { createScorecardFromMeshRun } from './scorecard.js';
 import type { ConnectorInfra } from '../connectors/setup.js';
-import { assembleContextFromSync, mergeClientBatchData, mergeMcpData } from '../connectors/context-assembler.js';
+import { assembleContextFromSync, mergeClientBatchData, mergeMcpData, validateSkillContext } from '../connectors/context-assembler.js';
+import { createLogger } from '@openagency/core';
 import type { ClientDataRepo, ScorecardDbRepo } from '@openagency/memory';
 import type { McpClientRegistry } from '@openagency/agent';
+
+const meshLog = createLogger('mesh-routes');
 
 export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, scheduler?: PipelineScheduler, connectorInfra?: ConnectorInfra, clientDataRepo?: ClientDataRepo, mcpClientRegistry?: McpClientRegistry, scorecardDbRepo?: ScorecardDbRepo) {
   const app = new Hono();
@@ -92,6 +95,30 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, schedule
       }
     }
 
+    // ─── Validate context has data sources ───────────────────────────
+    const validation = validateSkillContext(skillContext);
+    meshLog.info({
+      pipeline: pipelineId,
+      client_id: clientId,
+      sources: validation.source_count,
+      sync: validation.sync_platforms,
+      batch: validation.has_batch_data,
+      mcp: validation.mcp_servers,
+      gross_spend: validation.gross_spend,
+      warnings: validation.warnings,
+    }, 'Pipeline context validation');
+
+    // Hard stop: do NOT execute pipeline with zero data sources
+    if (validation.source_count === 0) {
+      return c.json({
+        error: 'NO_DATA_SOURCES',
+        message: 'Pipeline cannot execute with empty context. Connect a platform (API/MCP) or upload batch data first.',
+        context_validation: validation,
+      }, 422);
+    }
+
+    skillContext._context_validation = validation;
+
     // Auto-detect run_type: first run = 'plan', subsequent = 'actual'
     if (clientId && scorecardDbRepo && runType === 'standard') {
       try {
@@ -163,10 +190,11 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, schedule
         }
       }
 
+      serialized.context_validation = validation;
       return c.json(serialized, 201);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      return c.json({ error: 'execution_failed', message }, 500);
+      return c.json({ error: 'execution_failed', message, context_validation: validation }, 500);
     }
   });
 
