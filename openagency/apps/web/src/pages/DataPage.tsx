@@ -97,13 +97,13 @@ function UploadZone({
             <p className="text-sm text-gray-600">
               <span className="font-medium text-gray-900">Click to upload</span> or drag and drop
             </p>
-            <p className="text-xs text-gray-400 mt-1">CSV, XLSX, XLS (max 50MB)</p>
+            <p className="text-xs text-gray-400 mt-1">CSV, Excel, PDF, Word (max 50MB)</p>
           </>
         )}
         <input
           ref={inputRef}
           type="file"
-          accept=".csv,.xlsx,.xls"
+          accept=".csv,.xlsx,.xls,.pdf,.docx,.doc"
           className="hidden"
           onChange={handleFileSelect}
         />

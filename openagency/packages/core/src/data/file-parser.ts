@@ -5,7 +5,7 @@
 
 import { parseInput, type ParseResult } from './parser.js';
 
-export type FileFormat = 'csv' | 'json' | 'xlsx' | 'pdf';
+export type FileFormat = 'csv' | 'json' | 'xlsx' | 'pdf' | 'docx';
 
 export interface FileParseResult {
   format: FileFormat;
@@ -16,6 +16,7 @@ export interface FileParseResult {
 const TEXT_EXTENSIONS = new Set(['.csv', '.tsv', '.txt', '.json']);
 const EXCEL_EXTENSIONS = new Set(['.xlsx', '.xls']);
 const PDF_EXTENSIONS = new Set(['.pdf']);
+const WORD_EXTENSIONS = new Set(['.docx', '.doc']);
 
 function getExtension(filename: string): string {
   const dot = filename.lastIndexOf('.');
@@ -50,8 +51,12 @@ export async function parseFile(
     return parsePdf(buffer);
   }
 
+  if (WORD_EXTENSIONS.has(ext)) {
+    return parseWord(buffer);
+  }
+
   throw new Error(
-    `Unsupported file type: ${ext || 'unknown'}. Supported: .csv, .tsv, .json, .xlsx, .xls, .pdf`,
+    `Unsupported file type: ${ext || 'unknown'}. Supported: .csv, .tsv, .json, .xlsx, .xls, .pdf, .docx`,
   );
 }
 
@@ -182,4 +187,47 @@ async function parsePdf(buffer: ArrayBuffer): Promise<FileParseResult> {
   }
 
   return { format: 'pdf', data, columns };
+}
+
+/**
+ * Parse Word documents (.docx) using mammoth.
+ * Extracts raw text and splits into paragraphs as rows.
+ */
+async function parseWord(buffer: ArrayBuffer): Promise<FileParseResult> {
+  const mammoth = await import('mammoth');
+  const result = await mammoth.extractRawText({ buffer: Buffer.from(buffer) });
+  const text = result.value ?? '';
+
+  // Split into non-empty paragraphs
+  const paragraphs = text.split(/\n+/).map((p) => p.trim()).filter(Boolean);
+
+  if (paragraphs.length === 0) {
+    return { format: 'docx', data: [], columns: [] };
+  }
+
+  // Try to detect tabular data (tab-separated or pipe-separated)
+  const firstLine = paragraphs[0];
+  const separator = firstLine.includes('\t') ? '\t' : firstLine.includes('|') ? '|' : null;
+
+  if (separator && paragraphs.length > 1) {
+    const columns = firstLine.split(separator).map((c) => c.trim()).filter(Boolean);
+    const data: Record<string, unknown>[] = [];
+    for (let i = 1; i < paragraphs.length; i++) {
+      const values = paragraphs[i].split(separator).map((v) => v.trim());
+      if (values.length === 0 || values.join('') === '') continue;
+      const row: Record<string, unknown> = {};
+      for (let j = 0; j < columns.length; j++) {
+        row[columns[j]] = cleanCellValue(values[j] ?? '');
+      }
+      data.push(row);
+    }
+    if (data.length > 0) return { format: 'docx', data, columns };
+  }
+
+  // Unstructured text — return as paragraphs
+  return {
+    format: 'docx',
+    data: paragraphs.map((p) => ({ text: p })),
+    columns: ['text'],
+  };
 }
