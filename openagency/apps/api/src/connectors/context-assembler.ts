@@ -284,6 +284,7 @@ export interface ContextValidationResult {
   has_sync_data: boolean;
   has_batch_data: boolean;
   has_mcp_data: boolean;
+  has_explicit_context: boolean;
   source_count: number;
   warnings: string[];
   sync_platforms: string[];
@@ -295,6 +296,7 @@ export interface ContextValidationResult {
 /**
  * Validate assembled skillContext before pipeline execution.
  * Returns audit of which data sources contributed + warnings.
+ * Counts 4 possible sources: sync, batch, MCP, and explicit context (POST body).
  */
 export function validateSkillContext(ctx: Record<string, unknown>): ContextValidationResult {
   const syncSources = (ctx._sync_sources as Array<{ platform: string }>) ?? [];
@@ -302,11 +304,15 @@ export function validateSkillContext(ctx: Record<string, unknown>): ContextValid
   const hasMcp = ctx._has_mcp_data === true;
   const hasSync = syncSources.length > 0;
 
+  // Explicit context: user provided gross_spend, channels, or campaigns directly in POST body
+  const grossSpend = (ctx.gross_spend as number) ?? 0;
+  const hasExplicit = grossSpend > 0 || Array.isArray(ctx.channels) || Array.isArray(ctx.campaigns);
+
   const warnings: string[] = [];
-  const sourceCount = [hasSync, hasBatch, hasMcp].filter(Boolean).length;
+  const sourceCount = [hasSync, hasBatch, hasMcp, hasExplicit].filter(Boolean).length;
 
   if (sourceCount === 0) {
-    warnings.push('NO_DATA_SOURCES: Pipeline will run with empty/explicit-only context');
+    warnings.push('NO_DATA_SOURCES: No data sources available — provide context, connect a platform, or upload batch data');
   }
   if (!hasSync) {
     warnings.push('NO_SYNC_DATA: No platform connectors provided data');
@@ -318,7 +324,6 @@ export function validateSkillContext(ctx: Record<string, unknown>): ContextValid
     warnings.push('NO_MCP_DATA: No MCP server data injected');
   }
 
-  const grossSpend = (ctx.gross_spend as number) ?? 0;
   if (grossSpend === 0 && hasSync) {
     warnings.push('ZERO_SPEND: Sync data present but gross_spend is $0');
   }
@@ -332,6 +337,7 @@ export function validateSkillContext(ctx: Record<string, unknown>): ContextValid
     has_sync_data: hasSync,
     has_batch_data: hasBatch,
     has_mcp_data: hasMcp,
+    has_explicit_context: hasExplicit,
     source_count: sourceCount,
     warnings,
     sync_platforms: syncSources.map((s) => s.platform),
