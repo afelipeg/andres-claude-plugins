@@ -9,6 +9,7 @@
 // DELETE /v1/mesh/schedules/:id       — delete schedule
 
 import { Hono } from 'hono';
+import { authMiddleware } from '@openagency/auth';
 import type { MeshCoordinator, MeshRun } from '@openagency/agent';
 import { computePipelineScore, HFL_SCORE_THRESHOLD } from '@openagency/agent';
 import type { PipelineScheduler } from '@openagency/agent';
@@ -49,7 +50,7 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, schedule
   });
 
   // ─── Execute pipeline ────────────────────────────────────────────
-  app.post('/v1/mesh/pipelines/:id/execute', async (c) => {
+  app.post('/v1/mesh/pipelines/:id/execute', authMiddleware(), async (c) => {
     const pipelineId = c.req.param('id');
     const pipeline = mesh.getPipeline(pipelineId);
     if (!pipeline) {
