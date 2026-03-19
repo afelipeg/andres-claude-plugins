@@ -48,36 +48,79 @@ SKIP_MCP_SPAWN=true
 
 ## Next Session Priorities
 
-### 1. Verify Email Delivery Chain
+### 1. Super Admin Dashboard (`/admin` — dedalo@polanyi.tech only)
+
+**Backend** — `apps/api/src/routes/admin.ts` (NEW), gated with `requireRole('super_admin')`
+
+| Endpoint | Returns |
+|----------|---------|
+| `GET /v1/admin/overview` | KPI aggregates: agencies, users, runs today, LLM cost MTD, outcome fees MTD, stale connectors |
+| `GET /v1/admin/agencies` | Agency list with user_count, advertiser_count, runs, cost, connectors, status |
+| `GET /v1/admin/agencies/:id` | Full detail: users[], advertiser_scopes[], connections[], run history[], billing |
+| `GET /v1/admin/users` | All users with role, agency, status, last_login, total_runs |
+| `GET /v1/admin/runs` | Pipeline runs with filters (agency, status, run_type, date range) |
+| `GET /v1/admin/tokens` | LLM usage: by_agency[], by_model[], by_engine[], by_day[] (30d) |
+| `GET /v1/admin/connectors` | All agency_connections with status, last_sync, advertiser_count |
+| `POST /v1/admin/users/:id/deactivate` | Deactivate user |
+| `POST /v1/admin/users/:id/reactivate` | Reactivate user |
+| `DELETE /v1/admin/agencies/:id` | Hard delete + cascade |
+| `POST /v1/admin/agencies/:id/impersonate` | Short-lived token (15-min TTL) scoped to agency |
+
+**Frontend** — `apps/web/src/pages/SuperAdminDashboard.tsx` (NEW)
+
+6 sections:
+1. **Overview KPI bar** — 6 stat cards: Total Agencies, Total Users, Runs Today, LLM Cost MTD, Outcome Fees MTD, Stale Connectors
+2. **Agencies table** — Agency · Admin · Users · Advertisers · Connectors · Last Run · Runs · Cost · Actions (View/Impersonate/Delete)
+3. **Users table** — Name · Email · Role · Agency · Status · Last Login · Runs — filters by role/agency/status
+4. **Pipeline Runs log** — Run ID · Agency · Advertiser · Type · Status · Started · Duration · Tokens · Cost · Fee — click → detail drawer
+5. **Token & Cost monitor** — Line chart (daily tokens 30d, stacked by agency) + Bar chart (cost by model) + table breakdown
+6. **Connectors health** — Agency · Platform · Type · Status · Last Sync · Advertisers — bulk "Trigger respawn on stale"
+
+**Impersonate flow:**
+- `POST /v1/admin/agencies/:id/impersonate` → `{ impersonate_token, expires_at }`
+- Store admin token in sessionStorage, set impersonate as active
+- Red banner: "Viewing as [Agency Name] — Exit impersonation"
+- Exit → restore admin token, redirect to /admin
+
+**Sidebar:** `/admin` link visible ONLY for `super_admin` role
+
+**Additional considerations based on Plinth context:**
+- LLM cost tracking: query `execution_log` table for token counts, map to per-model pricing (Claude Sonnet = $3/$15 per 1M input/output)
+- Outcome fees: aggregate from `scorecards.billing.total_fee` per agency
+- Connector health: cross-reference `agency_connections.status` + `mcp_connections.status`
+- Run duration trends: useful for detecting LLM latency spikes
+- Agency onboarding funnel: invited → accepted → first_connector → first_run → first_scorecard (conversion tracking)
+
+### 2. Verify Email Delivery Chain
 - [ ] Demo request form → email arrives at hello@polanyi.tech
 - [ ] Pipeline completed → email arrives at ADMIN_EMAIL
 - [ ] HFL decision → email arrives at ADMIN_EMAIL
-- [ ] Santiago (santiago@cerebrosm.com) accepted invite?
+- [ ] Santiago (santiago@cerebrosm.com) accepted invite + feedback
 
-### 2. Connect First Real Ad Platform
+### 3. Connect First Real Ad Platform
 - [ ] Google Ads MCC: real developer_token + client_id + client_secret + refresh_token
 - [ ] Save via agency connector dialog → fetch customer IDs
 - [ ] Select advertiser → sync → verify data in pipeline context
 - [ ] OR Meta BM: real system_user_token + business_manager_id
 
-### 3. Full Pipeline E2E with Real Data
+### 4. Full Pipeline E2E with Real Data
 - [ ] Upload real campaign data (CSV/Excel from client)
 - [ ] Run pipeline with real connector data + batch data
 - [ ] Verify scorecard persists to DB with billing
 - [ ] Verify plan vs actual comparison works
 - [ ] HFL approval → email notification
 
-### 4. Scorecard Persistence Fix Verification
+### 5. Scorecard Persistence Fix Verification
 - [ ] Run pipeline → check `GET /v1/scorecard` returns data
 - [ ] Check Railway logs for `[scorecard] DB save failed` errors
 - [ ] If failing: debug the DB save (likely JSONB serialization issue)
 
-### 5. Cross-Client Benchmarking (if time)
+### 6. Cross-Client Benchmarking (if time)
 - New API: compare waste/lift across multiple clients
 - New UI: benchmark dashboard
 - Requires: at least 2 clients with pipeline runs
 
-### 6. Onboarding Wizard
+### 7. Onboarding Wizard (deferred)
 - Step-by-step guided flow for new agencies
 - Connect platform → upload data → run first pipeline → review scorecard
 
