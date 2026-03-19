@@ -364,21 +364,65 @@ async function fetchSubAccounts(
 ): Promise<PlatformAccount[]> {
   switch (platform) {
     case 'google_ads': {
-      // Use connector's listAccounts — returns customers under MCC
-      if (!hasConnector(platform)) throw new Error('Google Ads connector not registered');
-      const connector = getConnector(platform);
-      const tokens: OAuthTokens = {
-        access_token: creds.access_token ?? '',
-        refresh_token: creds.refresh_token,
-        token_type: 'Bearer',
-        expires_at: Date.now() + 3_600_000,
-      };
-      // If tokens need refreshing, use the connector
-      if (!tokens.access_token && creds.refresh_token) {
-        const refreshed = await connector.refreshTokens(tokens);
-        tokens.access_token = refreshed.access_token;
+      // Get access token — refresh if needed
+      let accessToken = creds.access_token ?? '';
+      if (!accessToken && creds.refresh_token && creds.client_id && creds.client_secret) {
+        const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            grant_type: 'refresh_token',
+            refresh_token: creds.refresh_token,
+            client_id: creds.client_id,
+            client_secret: creds.client_secret,
+          }),
+        });
+        if (!tokenRes.ok) throw new Error(`Token refresh failed (${tokenRes.status}): ${await tokenRes.text()}`);
+        const tokenData = (await tokenRes.json()) as { access_token: string };
+        accessToken = tokenData.access_token;
       }
-      return connector.listAccounts(tokens);
+      if (!accessToken) throw new Error('No access_token and cannot refresh — check client_id/client_secret/refresh_token');
+
+      // List accessible customers under MCC
+      const devToken = creds.developer_token ?? '';
+      const mccId = creds.login_customer_id ?? '';
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${accessToken}`,
+        'developer-token': devToken,
+      };
+      if (mccId) headers['login-customer-id'] = mccId.replace(/-/g, '');
+
+      const listRes = await fetch('https://googleads.googleapis.com/v17/customers:listAccessibleCustomers', { headers });
+      if (!listRes.ok) throw new Error(`Google Ads API error (${listRes.status}): ${await listRes.text()}`);
+      const listData = (await listRes.json()) as { resourceNames?: string[] };
+      const customerIds = (listData.resourceNames ?? []).map((r: string) => r.replace('customers/', ''));
+
+      // Fetch names for each customer
+      const accounts: PlatformAccount[] = [];
+      for (const custId of customerIds) {
+        try {
+          const q = `SELECT customer.id, customer.descriptive_name, customer.status FROM customer LIMIT 1`;
+          const qRes = await fetch(`https://googleads.googleapis.com/v17/customers/${custId}/googleAds:searchStream`, {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: q }),
+          });
+          if (qRes.ok) {
+            const qData = (await qRes.json()) as Array<{ results?: Array<{ customer?: { id?: string; descriptiveName?: string; status?: string } }> }>;
+            const cust = qData?.[0]?.results?.[0]?.customer;
+            accounts.push({
+              id: custId,
+              name: cust?.descriptiveName ?? custId,
+              status: (cust?.status === 'ENABLED' ? 'active' : 'inactive') as 'active' | 'inactive',
+            });
+          } else {
+            accounts.push({ id: custId, name: custId, status: 'active' as const });
+          }
+        } catch {
+          accounts.push({ id: custId, name: custId, status: 'active' as const });
+        }
+      }
+      return accounts;
     }
 
     case 'meta_ads': {
@@ -408,14 +452,22 @@ async function fetchSubAccounts(
       const token = creds.access_token ?? '';
       if (!partnerId) throw new Error('partner_id required');
 
-      // Need fresh token — use connector if available
+      // Refresh token if needed — direct API call (no connector dependency)
       let accessToken = token;
-      if (!accessToken && creds.refresh_token && hasConnector(platform)) {
-        const connector = getConnector(platform);
-        const refreshed = await connector.refreshTokens({
-          access_token: '', refresh_token: creds.refresh_token, token_type: 'Bearer', expires_at: 0,
+      if (!accessToken && creds.refresh_token && creds.client_id && creds.client_secret) {
+        const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            grant_type: 'refresh_token',
+            refresh_token: creds.refresh_token,
+            client_id: creds.client_id,
+            client_secret: creds.client_secret,
+          }),
         });
-        accessToken = refreshed.access_token;
+        if (!tokenRes.ok) throw new Error(`DV360 token refresh failed (${tokenRes.status})`);
+        const tokenData = (await tokenRes.json()) as { access_token: string };
+        accessToken = tokenData.access_token;
       }
 
       const url = `https://displayvideo.googleapis.com/v3/advertisers?partnerId=${partnerId}&pageSize=200`;
@@ -464,27 +516,56 @@ async function fetchSubAccounts(
     }
 
     case 'amazon_ads': {
-      // Use connector's listAccounts — returns profiles
-      if (!hasConnector(platform)) throw new Error('Amazon Ads connector not registered');
-      const connector = getConnector(platform);
-      const tokens: OAuthTokens = {
-        access_token: creds.access_token ?? '',
-        refresh_token: creds.refresh_token,
-        token_type: 'Bearer',
-        expires_at: Date.now() + 3_600_000,
-      };
-      if (!tokens.access_token && creds.refresh_token) {
-        const refreshed = await connector.refreshTokens(tokens);
-        tokens.access_token = refreshed.access_token;
+      // Refresh token if needed — direct Amazon LwA API
+      let accessToken = creds.access_token ?? '';
+      const region = creds.region ?? 'na';
+      const amazonBaseUrl = region === 'eu' ? 'https://advertising-api-eu.amazon.com'
+        : region === 'fe' ? 'https://advertising-api-fe.amazon.com'
+        : 'https://advertising-api.amazon.com';
+
+      if (!accessToken && creds.refresh_token && creds.client_id && creds.client_secret) {
+        const tokenRes = await fetch('https://api.amazon.com/auth/o2/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            grant_type: 'refresh_token',
+            refresh_token: creds.refresh_token,
+            client_id: creds.client_id,
+            client_secret: creds.client_secret,
+          }),
+        });
+        if (!tokenRes.ok) throw new Error(`Amazon token refresh failed (${tokenRes.status})`);
+        const tokenData = (await tokenRes.json()) as { access_token: string };
+        accessToken = tokenData.access_token;
       }
-      return connector.listAccounts(tokens);
+      if (!accessToken) throw new Error('No access_token and cannot refresh');
+
+      const profilesRes = await fetch(`${amazonBaseUrl}/v3/profiles`, {
+        headers: { Authorization: `Bearer ${accessToken}`, 'Amazon-Advertising-API-ClientId': creds.client_id ?? '' },
+      });
+      if (!profilesRes.ok) throw new Error(`Amazon API error (${profilesRes.status}): ${await profilesRes.text()}`);
+      const profiles = (await profilesRes.json()) as Array<{ profileId: number; accountInfo?: { name?: string }; countryCode?: string }>;
+      return profiles.map((p) => ({
+        id: String(p.profileId),
+        name: p.accountInfo?.name ?? String(p.profileId),
+        status: 'active' as const,
+      }));
     }
 
     case 'tiktok_shop': {
-      if (!hasConnector(platform)) throw new Error('TikTok Shop connector not registered');
-      return getConnector(platform).listAccounts({
-        access_token: creds.access_token ?? '', token_type: 'Bearer', expires_at: Date.now() + 86_400_000,
+      // Direct API — no connector dependency needed
+      const shopToken = creds.access_token ?? '';
+      if (!shopToken) throw new Error('access_token required');
+      const shopRes = await fetch('https://open-api.tiktokglobalshop.com/api/shop/get_authorized_shop', {
+        headers: { 'x-tts-access-token': shopToken },
       });
+      if (!shopRes.ok) throw new Error(`TikTok Shop API error (${shopRes.status})`);
+      const shopData = (await shopRes.json()) as { data?: { shop_list?: Array<{ shop_id: string; shop_name: string }> } };
+      return (shopData.data?.shop_list ?? []).map((s) => ({
+        id: s.shop_id,
+        name: s.shop_name,
+        status: 'active' as const,
+      }));
     }
 
     default:
