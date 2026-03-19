@@ -20,6 +20,7 @@ COPY packages/events/package.json packages/events/
 COPY packages/memory/package.json packages/memory/
 COPY packages/agent/package.json packages/agent/
 COPY packages/hfl/package.json packages/hfl/
+COPY packages/email/package.json packages/email/
 COPY apps/api/package.json apps/api/
 
 RUN pnpm install --frozen-lockfile
@@ -35,11 +36,6 @@ RUN pnpm run build --filter=@openagency/api...
 FROM node:20-alpine AS runtime
 
 RUN corepack enable && corepack prepare pnpm@10.30.0 --activate
-
-# Python for MCP managed servers (Google Ads, Meta, TikTok, DV360)
-RUN apk add --no-cache python3 py3-pip pipx \
-    && pipx install google-ads-mcp 2>/dev/null || true \
-    && pip3 install --break-system-packages facebook-ads-mcp adsmcp-tiktok 2>/dev/null || true
 
 WORKDIR /app
 
