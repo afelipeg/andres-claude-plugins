@@ -69,6 +69,7 @@ import { assistantRoutes, autoCreatePipelineConversation } from './routes/assist
 import { ConversationRepo, ScorecardDbRepo, ClientDataRepo } from '@openagency/memory';
 import { oauthStorageRoutes } from './routes/oauth-storage.js';
 import { agencyConnectorRoutes } from './routes/agency-connectors.js';
+import { demoRequestRoutes } from './routes/demo-request.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/logger.js';
 import { rateLimiter } from './middleware/rate-limiter.js';
@@ -410,6 +411,7 @@ export async function createApp() {
   app.route('/', healthRoutes(startTime, agency));
   app.route('/', schemaRoutes());
   app.route('/', a2aDiscoveryRoute());
+  app.route('/', demoRequestRoutes());
 
   // ─── Auth routes ────────────────────────────────────────────────
   app.route('/', authRoutes(userRepo));
