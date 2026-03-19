@@ -377,14 +377,18 @@ export async function createApp() {
       };
     }
 
-    mcpClientRegistry.loadFromDb(undefined, respawnOpts).catch((err) => {
+    const skipSpawn = process.env['SKIP_MCP_SPAWN'] === 'true';
+
+    mcpClientRegistry.loadFromDb(undefined, skipSpawn ? undefined : respawnOpts).catch((err) => {
       log.warn({ err }, 'Failed to load MCP connections from DB');
     });
 
-    // Start periodic health monitor (every 5 minutes)
-    if (respawnOpts) {
+    // Start periodic health monitor (every 5 minutes) — skip if spawn disabled
+    if (respawnOpts && !skipSpawn) {
       mcpClientRegistry.startHealthMonitor(300_000, respawnOpts);
       log.info('MCP health monitor started (5 min interval, 12s timeout, 2-failure threshold)');
+    } else if (skipSpawn) {
+      log.info('MCP self-hosted spawning disabled (SKIP_MCP_SPAWN=true) — health monitor skipped');
     }
   }
 

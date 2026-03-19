@@ -228,6 +228,12 @@ export function mcpMarketplaceRoutes(
       if (catalog.hosted && catalog.endpoint) {
         // Hosted (e.g., Amazon) — connect directly
         mcpUrl = catalog.endpoint;
+      } else if (process.env['SKIP_MCP_SPAWN'] === 'true') {
+        // Railway / hosted environment — self-hosted MCPs not supported
+        return c.json({
+          error: 'self_hosted_not_available',
+          message: `${catalog.name} requires local spawning which is not available on hosted environments. Use a hosted MCP or provide a custom endpoint URL.`,
+        }, 400);
       } else {
         // Self-hosted — Plinth spawns the process
         const envVars = buildEnvFromAuthFields(catalog.id, body.auth_fields ?? {});
