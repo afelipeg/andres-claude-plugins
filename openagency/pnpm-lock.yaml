@@ -345,6 +345,12 @@ importers:
       '@react-email/components':
         specifier: ^0.0.30
         version: 0.0.30(react-dom@19.2.4(react@18.3.1))(react@18.3.1)
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.33
+      '@types/react':
+        specifier: 18.3.18
+        version: 18.3.18
       react:
         specifier: ^18.3.0
         version: 18.3.1
@@ -352,12 +358,6 @@ importers:
         specifier: ^4.0.0
         version: 4.8.0(react-dom@19.2.4(react@18.3.1))(react@18.3.1)
     devDependencies:
-      '@types/node':
-        specifier: ^20.0.0
-        version: 20.19.33
-      '@types/react':
-        specifier: 18.3.18
-        version: 18.3.18
       typescript:
         specifier: ^5.4.0
         version: 5.9.3
