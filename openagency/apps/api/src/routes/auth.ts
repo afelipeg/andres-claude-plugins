@@ -34,8 +34,8 @@ const ADMIN_USER: UserRecord = {
   email: 'dedalo@polanyi.tech',
   password_hash: '300759c8039cf1fca0823a2461ffae9cbcc56490547439ede784855943e5ce5e',
   name: 'Andrés',
-  role: 'admin',
-  scopes: ['admin:*', 'engine:*'],
+  role: 'super_admin',
+  scopes: ['*'],
   status: 'active',
 };
 
@@ -73,9 +73,12 @@ function rowToRecord(row: UserRow): UserRecord {
 
 function roleScopesMap(role: string): string[] {
   switch (role) {
-    case 'admin': return ['admin:*', 'engine:*'];
-    case 'engine_user': return ['engine:*'];
-    case 'viewer': return ['engine:read'];
+    case 'super_admin': return ['*'];
+    case 'agency_admin':
+    case 'admin': return ['admin:*', 'engine:*', 'connectors:*'];
+    case 'account_manager':
+    case 'engine_user': return ['engine:*', 'connectors:read', 'hfl:*', 'pipeline:*'];
+    case 'viewer': return ['dashboard:read', 'scorecard:read', 'billing:read'];
     default: return [];
   }
 }
@@ -95,10 +98,10 @@ export async function seedAdminUser(repo: UserRepo): Promise<void> {
       status: 'active',
       invite_token: null,
     });
-    // Ensure role is admin regardless of what was in DB before
+    // Ensure role is super_admin regardless of what was in DB before
     const existing = await repo.getByEmail(ADMIN_USER.email);
-    if (existing && existing.role !== 'admin') {
-      await repo.updateRole(existing.id, 'admin', ADMIN_USER.scopes);
+    if (existing && existing.role !== 'super_admin') {
+      await repo.updateRole(existing.id, 'super_admin', ['*']);
     }
     // Report seed status for debugging
     const user = await repo.getByEmail(ADMIN_USER.email);
@@ -260,7 +263,7 @@ export function authRoutes(userRepo?: UserRepo | null) {
 
   // Invite a new user
   app.post('/v1/auth/invite', authMiddleware('admin:*'), async (c) => {
-    const body = await c.req.json<{ email: string; role?: string; name?: string }>();
+    const body = await c.req.json<{ email: string; role?: string; name?: string; job_title?: string; advertiser_access?: string[] }>();
 
     if (!body.email?.trim()) {
       return c.json({ error: 'validation_error', message: 'email is required', status: 400 }, 400);
@@ -288,6 +291,14 @@ export function authRoutes(userRepo?: UserRepo | null) {
         status: 'invited',
         invite_token: inviteToken,
       });
+      // Store job_title + advertiser_access for account_manager/engine_user
+      if (body.job_title || body.advertiser_access) {
+        const db = (repo as unknown as { sql: unknown }).sql as { unsafe: (q: string, p?: unknown[]) => Promise<unknown[]> };
+        await db.unsafe(
+          'UPDATE users SET job_title = $1, advertiser_access = $2 WHERE id = $3',
+          [body.job_title ?? '', JSON.stringify(body.advertiser_access ?? []), userId],
+        );
+      }
     } else {
       if (memoryStore.has(email)) {
         return c.json({ error: 'conflict', message: 'User already exists', status: 409 }, 409);

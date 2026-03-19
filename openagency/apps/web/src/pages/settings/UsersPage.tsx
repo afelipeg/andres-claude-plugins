@@ -35,8 +35,25 @@ function statusVariant(status: string) {
 }
 
 function roleLabel(role: string) {
-  return role.replace(/_/g, ' ');
+  const labels: Record<string, string> = {
+    super_admin: 'Super Admin',
+    agency_admin: 'Admin',
+    account_manager: 'Engine User',
+    viewer: 'Viewer',
+    admin: 'Admin',
+    engine_user: 'Engine User',
+  };
+  return labels[role] ?? role.replace(/_/g, ' ');
 }
+
+const JOB_TITLES = [
+  'Account Director',
+  'AdOps',
+  'Strategist',
+  'Trader',
+  'Analyst',
+  'Custom',
+];
 
 export function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -45,6 +62,9 @@ export function UsersPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('viewer');
   const [inviteName, setInviteName] = useState('');
+  const [inviteJobTitle, setInviteJobTitle] = useState('');
+  const [inviteAdvAccess, setInviteAdvAccess] = useState<string[]>([]);
+  const [availableAdvertisers, setAvailableAdvertisers] = useState<Array<{ id: string; name: string }>>([]);
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
   const [inviteLink, setInviteLink] = useState('');
@@ -66,12 +86,42 @@ export function UsersPage() {
 
   useEffect(() => { loadUsers(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Load available advertisers when role changes to account_manager/engine_user
+  useEffect(() => {
+    if (inviteRole !== 'account_manager' && inviteRole !== 'engine_user') return;
+    // Fetch all advertiser scopes across platforms
+    void fetch(`${API_URL}/v1/agency/connections`, { headers })
+      .then((r) => r.ok ? r.json() : null)
+      .then(async (data: { connections: Array<{ platform: string }> } | null) => {
+        if (!data?.connections) return;
+        const all: Array<{ id: string; name: string }> = [];
+        for (const conn of data.connections) {
+          try {
+            const res = await fetch(`${API_URL}/v1/agency/connections/${conn.platform}/advertisers`, { headers });
+            if (res.ok) {
+              const d = (await res.json()) as { advertisers: Array<{ advertiser_id: string; advertiser_name: string }> };
+              for (const a of d.advertisers ?? []) {
+                all.push({ id: `${conn.platform}:${a.advertiser_id}`, name: `${a.advertiser_name || a.advertiser_id} (${conn.platform})` });
+              }
+            }
+          } catch { /* skip */ }
+        }
+        setAvailableAdvertisers(all);
+      })
+      .catch(() => {});
+  }, [inviteRole]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function handleInvite(e: FormEvent) {
     e.preventDefault();
     setMsg(''); setError(''); setInviteLink('');
+    const payload: Record<string, unknown> = { email: inviteEmail, role: inviteRole, name: inviteName };
+    if (inviteRole === 'account_manager' || inviteRole === 'engine_user') {
+      if (inviteJobTitle) payload.job_title = inviteJobTitle;
+      if (inviteAdvAccess.length > 0) payload.advertiser_access = inviteAdvAccess;
+    }
     const res = await fetch(`${API_URL}/v1/auth/invite`, {
       method: 'POST', headers,
-      body: JSON.stringify({ email: inviteEmail, role: inviteRole, name: inviteName }),
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
     if (res.ok) {
@@ -193,14 +243,51 @@ export function UsersPage() {
                 <label className="block text-xs font-medium text-zinc-500 mb-1.5">Role</label>
                 <Select
                   value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value)}
+                  onChange={(e) => { setInviteRole(e.target.value); setInviteJobTitle(''); setInviteAdvAccess([]); }}
                 >
-                  <option value="viewer">Viewer</option>
-                  <option value="engine_user">Engine User</option>
-                  <option value="admin">Admin</option>
+                  <option value="viewer">Viewer (read-only)</option>
+                  <option value="account_manager">Engine User</option>
+                  <option value="agency_admin">Admin</option>
                 </Select>
               </div>
             </div>
+
+            {/* Job title + advertiser access — shown for Engine User role */}
+            {(inviteRole === 'account_manager' || inviteRole === 'engine_user') && (
+              <div className="grid grid-cols-2 gap-4 border-t border-zinc-100 pt-4">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-500 mb-1.5">Job Title</label>
+                  <Select value={inviteJobTitle} onChange={(e) => setInviteJobTitle(e.target.value)}>
+                    <option value="">Select...</option>
+                    {JOB_TITLES.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-500 mb-1.5">Advertiser Access</label>
+                  {availableAdvertisers.length > 0 ? (
+                    <div className="max-h-32 overflow-y-auto rounded-lg border border-zinc-200 p-2 space-y-1">
+                      {availableAdvertisers.map((adv) => (
+                        <label key={adv.id} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-zinc-50 rounded px-1 py-0.5">
+                          <input
+                            type="checkbox"
+                            checked={inviteAdvAccess.includes(adv.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) setInviteAdvAccess([...inviteAdvAccess, adv.id]);
+                              else setInviteAdvAccess(inviteAdvAccess.filter((a) => a !== adv.id));
+                            }}
+                            className="h-3.5 w-3.5 rounded border-zinc-300"
+                          />
+                          <span className="text-zinc-700 truncate">{adv.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-zinc-400 py-2">No advertisers configured yet. Connect a platform first.</p>
+                  )}
+                </div>
+              </div>
+            )}
+
             <Button type="submit" variant="dark" size="sm">
               Send Invite
             </Button>

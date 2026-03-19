@@ -2,7 +2,7 @@
 
 export type AuthMethod = 'jwt' | 'api_key' | 'm2m_oauth2';
 
-export type Role = 'admin' | 'engine_user' | 'readonly' | 'agent';
+export type Role = 'super_admin' | 'agency_admin' | 'account_manager' | 'viewer' | 'admin' | 'engine_user' | 'readonly' | 'agent';
 
 export interface AuthPayload {
   sub: string;

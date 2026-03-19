@@ -4,6 +4,11 @@ import type { Role } from '@openagency/types';
 
 /** Scope hierarchy - which scopes each role gets by default */
 const ROLE_SCOPES: Record<Role, string[]> = {
+  super_admin: ['*'],
+  agency_admin: ['admin:*', 'engine:*', 'connectors:*'],
+  account_manager: ['engine:*', 'connectors:read', 'hfl:*', 'pipeline:*'],
+  viewer: ['dashboard:read', 'scorecard:read', 'billing:read'],
+  // Legacy roles (backward compat)
   admin: ['*'],
   engine_user: ['engine:*', 'connectors:read'],
   readonly: ['engine:*:read', 'connectors:read'],
