@@ -29,6 +29,7 @@ import {
   Upload,
   ShoppingBag,
   Shield,
+  Gauge,
 } from 'lucide-react';
 import { SyncStatus } from './SyncStatus';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -114,6 +115,7 @@ const NAV_STRUCTURE: NavEntry[] = [
     ],
   },
   // Standalone items
+  { path: '/agency-dashboard', label: 'Agency Dashboard', Icon: Gauge },
   { path: '/consumption', label: 'Usage & Runs', Icon: Activity },
   { path: '/billing', label: 'Outcome Base Fee', Icon: CreditCard },
   { path: '/admin', label: 'Super Admin', Icon: Shield },
@@ -139,6 +141,7 @@ function getPageTitle(pathname: string): string {
     data: 'Data',
     marketplace: 'MCP Marketplace',
     admin: 'Super Admin',
+    'agency-dashboard': 'Agency Dashboard',
     settings: 'Settings',
   };
   return (segment !== undefined ? titles[segment] : undefined) ?? 'Dashboard';
@@ -688,6 +691,11 @@ export function Layout() {
               }
               // Super Admin nav item — visible only for super_admin role
               if ('path' in entry && entry.path === '/admin' && user?.role !== 'super_admin') return null;
+              // Agency Dashboard — visible for agency_admin + account_manager (NOT super_admin, NOT viewer)
+              if ('path' in entry && entry.path === '/agency-dashboard') {
+                const agencyRoles = new Set(['agency_admin', 'admin', 'account_manager']);
+                if (!user?.role || !agencyRoles.has(user.role)) return null;
+              }
               return renderNavItem(entry);
             })}
           </TooltipProvider>

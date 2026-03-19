@@ -22,4 +22,6 @@ export { ClientDataRepo, type ClientDataRecord } from './repos/client-data.js';
 export { McpConnectionRepo, type McpConnectionRow } from './repositories/mcp-connection-repo.js';
 export { DailyMetricsRepo, type DailyMetricRow } from './repos/daily-metrics.js';
 export { FederationLogRepo, type FederationLogRow } from './repos/federation-log.js';
+export { AgencyRepo, type AgencyRow } from './repos/agency.js';
+export { QuotaRepo, type QuotaCheckResult, type AgencyQuotaUsageRow, type QuotaRequestRow, currentMonth, computeMonthlyRunLimit, computeRunTypeLimit } from './repos/quota.js';
 export { encrypt, decrypt } from './utils/encrypt.js';

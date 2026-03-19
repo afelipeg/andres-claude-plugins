@@ -19,6 +19,7 @@ import {
   Trash2,
   Eye,
   RefreshCw,
+  Gauge,
 } from 'lucide-react';
 import {
   Table,
@@ -41,6 +42,9 @@ import {
   reactivateUser,
   deleteAgency,
   impersonateAgency,
+  getQuotaRequests as getAdminQuotaRequests,
+  approveQuotaRequest,
+  denyQuotaRequest,
   type AdminOverview,
   type AgencySummary,
   type AdminUser,
@@ -48,6 +52,7 @@ import {
   type TokenData,
   type AdminConnector,
   type FederationData,
+  type AdminQuotaRequest,
 } from '../api/admin';
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -99,6 +104,7 @@ const TABS = [
   { id: 'tokens', label: 'Token & Cost', Icon: DollarSign },
   { id: 'connectors', label: 'Connectors', Icon: Plug },
   { id: 'federation', label: 'Federation', Icon: Globe },
+  { id: 'quotas', label: 'Quotas', Icon: Gauge },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -645,6 +651,72 @@ function EmptyState({ msg }: { msg: string }) {
   );
 }
 
+// ─── Quotas Tab ──────────────────────────────────────────────────────
+
+function QuotasTab({ requests, onRefresh }: { requests: AdminQuotaRequest[]; onRefresh: () => void }) {
+  const [grantInput, setGrantInput] = useState<Record<string, number>>({});
+
+  const handleApprove = async (id: string) => {
+    const amount = grantInput[id] ?? (requests.find((r) => r.id === id)?.extra_runs_requested ?? 8);
+    await approveQuotaRequest(id, amount);
+    onRefresh();
+  };
+
+  const handleDeny = async (id: string) => {
+    await denyQuotaRequest(id);
+    onRefresh();
+  };
+
+  return (
+    <div className="space-y-6">
+      <h3 className="text-sm font-semibold text-gray-700">Pending Quota Requests ({requests.length})</h3>
+      {requests.length === 0 ? (
+        <p className="text-sm text-gray-400 py-8 text-center">No pending requests</p>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Agency</TableHead>
+              <TableHead>Requester</TableHead>
+              <TableHead>Month</TableHead>
+              <TableHead>Requested</TableHead>
+              <TableHead>Reason</TableHead>
+              <TableHead>Grant</TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {requests.map((r) => (
+              <TableRow key={r.id}>
+                <TableCell className="font-medium">{r.agency_name ?? r.agency_id}</TableCell>
+                <TableCell className="text-xs">{r.requester_email ?? r.requested_by}</TableCell>
+                <TableCell className="text-xs">{r.month}</TableCell>
+                <TableCell>{r.extra_runs_requested}</TableCell>
+                <TableCell className="text-xs text-gray-500 max-w-48 truncate">{r.reason ?? '—'}</TableCell>
+                <TableCell>
+                  <input
+                    type="number"
+                    min={1}
+                    value={grantInput[r.id] ?? r.extra_runs_requested}
+                    onChange={(e) => setGrantInput({ ...grantInput, [r.id]: Number(e.target.value) })}
+                    className="w-16 rounded border border-gray-200 px-2 py-1 text-sm text-center"
+                  />
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    <button onClick={() => void handleApprove(r.id)} className="rounded bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700">Approve</button>
+                    <button onClick={() => void handleDeny(r.id)} className="rounded bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-200">Deny</button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </div>
+  );
+}
+
 // ─── Impersonate Banner ──────────────────────────────────────────────
 
 function ImpersonateBanner({ agencyId, onExit }: { agencyId: string; onExit: () => void }) {
@@ -668,6 +740,8 @@ export function SuperAdminDashboard() {
   const [runs, setRuns] = useState<AdminRun[]>([]);
   const [tokens, setTokens] = useState<TokenData | null>(null);
   const [connectors, setConnectors] = useState<AdminConnector[]>([]);
+  const [quotaRequests, setQuotaRequests] = useState<AdminQuotaRequest[]>([]);
+  const [pendingQuotaCount, setPendingQuotaCount] = useState(0);
   const [federation, setFederation] = useState<FederationData | null>(null);
   const [impersonating, setImpersonating] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -719,6 +793,12 @@ export function SuperAdminDashboard() {
         case 'federation': {
           const data = await getFederation();
           setFederation(data);
+          break;
+        }
+        case 'quotas': {
+          const data = await getAdminQuotaRequests();
+          setQuotaRequests(data.requests);
+          setPendingQuotaCount(data.pending_count);
           break;
         }
       }
@@ -810,6 +890,11 @@ export function SuperAdminDashboard() {
           >
             <t.Icon className="h-4 w-4" />
             {t.label}
+            {t.id === 'quotas' && pendingQuotaCount > 0 && (
+              <span className="ml-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                {pendingQuotaCount}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -823,6 +908,7 @@ export function SuperAdminDashboard() {
         {tab === 'tokens' && <TokensTab data={tokens} />}
         {tab === 'connectors' && (loading ? <LoadingState /> : <ConnectorsTab connectors={connectors} />)}
         {tab === 'federation' && <FederationTab data={federation} />}
+        {tab === 'quotas' && <QuotasTab requests={quotaRequests} onRefresh={() => void loadData()} />}
       </div>
     </div>
   );

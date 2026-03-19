@@ -169,3 +169,45 @@ export async function deleteAgency(id: string): Promise<void> {
 export async function impersonateAgency(id: string): Promise<ImpersonateResult> {
   return fetchJson(`/v1/admin/agencies/${id}/impersonate`, { method: 'POST' });
 }
+
+// ─── Quota Management (Super Admin) ─────────────────────────────
+
+export interface AdminQuotaRequest {
+  id: string;
+  agency_id: string;
+  requested_by: string;
+  month: string;
+  extra_runs_requested: number;
+  reason: string | null;
+  status: string;
+  created_at: string;
+  agency_name?: string;
+  requester_email?: string;
+  requester_name?: string;
+}
+
+export async function getQuotaRequests(): Promise<{ requests: AdminQuotaRequest[]; pending_count: number }> {
+  return fetchJson('/v1/admin/quota/requests');
+}
+
+export async function approveQuotaRequest(id: string, extra_runs_granted: number): Promise<void> {
+  await fetchJson(`/v1/admin/quota/requests/${id}/approve`, {
+    method: 'POST',
+    body: JSON.stringify({ extra_runs_granted }),
+  });
+}
+
+export async function denyQuotaRequest(id: string): Promise<void> {
+  await fetchJson(`/v1/admin/quota/requests/${id}/deny`, { method: 'POST' });
+}
+
+export async function getAgencyQuota(id: string): Promise<{ agency: Record<string, unknown>; usage_history: Array<Record<string, unknown>> }> {
+  return fetchJson(`/v1/admin/agencies/${id}/quota`);
+}
+
+export async function updateAgency(id: string, data: { brand_count?: number; name?: string }): Promise<void> {
+  await fetchJson(`/v1/admin/agencies/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}

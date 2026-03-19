@@ -27,6 +27,8 @@ import { UsersPage } from './pages/settings/UsersPage';
 import { BillingSettingsPage } from './pages/settings/BillingSettingsPage';
 import { NotificationsPage } from './pages/settings/NotificationsPage';
 import { SuperAdminDashboard } from './pages/SuperAdminDashboard';
+import { AgencyDashboard } from './pages/AgencyDashboard';
+import { UsageLimitsPage } from './pages/settings/UsageLimitsPage';
 
 // ─── Demo pages (from landing-scorecard_Plinth, hardcoded investor data) ─────
 import DemoCommandCenter from './pages/demo/CommandCenter';
@@ -63,12 +65,14 @@ function AppRoutes() {
       <Route path="architecture" element={<ArchitecturePage />} />
       <Route path="consumption" element={<ConsumptionPage />} />
       <Route path="admin" element={<SuperAdminDashboard />} />
+      <Route path="agency-dashboard" element={<AgencyDashboard />} />
       <Route path="settings" element={<SettingsLayout />}>
         <Route index element={<Navigate to="profile" replace />} />
         <Route path="profile" element={<ProfilePage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="billing" element={<BillingSettingsPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
+        <Route path="usage" element={<UsageLimitsPage />} />
       </Route>
     </Route>
   );

@@ -5,3 +5,7 @@ export { PipelineCompleted } from './templates/PipelineCompleted.js';
 export { HFLDecisionPending } from './templates/HFLDecisionPending.js';
 export { ConnectorDisconnected } from './templates/ConnectorDisconnected.js';
 export { DemoRequest } from './templates/DemoRequest.js';
+export { QuotaExceeded } from './templates/QuotaExceeded.js';
+export { QuotaRequestReceived } from './templates/QuotaRequestReceived.js';
+export { QuotaRequestApproved } from './templates/QuotaRequestApproved.js';
+export { QuotaRequestDenied } from './templates/QuotaRequestDenied.js';

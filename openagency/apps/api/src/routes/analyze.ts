@@ -15,8 +15,10 @@ import { calculateBillingFromEngines } from '@openagency/core';
 import { parseFile } from '@openagency/core/data/file-parser';
 import { detectPlatform } from '@openagency/core/data/platform-detect';
 import type { EngineOutputs } from '@openagency/core';
+import type { AgencyRepo, QuotaRepo } from '@openagency/memory';
+import type { AuthPayload } from '@openagency/types';
 
-export function analyzeRoutes(agency: OpenAgency) {
+export function analyzeRoutes(agency: OpenAgency, agencyRepo?: AgencyRepo, quotaRepo?: QuotaRepo) {
   const app = new Hono();
 
   // ─── Analyze JSON data directly ───────────────────────────────────
@@ -42,7 +44,40 @@ export function analyzeRoutes(agency: OpenAgency) {
         );
       }
 
+      // Quota check (if auth is present — analyze can be unauthenticated for demos)
+      let quotaAgencyId: string | null = null;
+      if (agencyRepo && quotaRepo) {
+        const auth = c.get('auth') as AuthPayload | undefined;
+        if (auth?.sub) {
+          quotaAgencyId = await agencyRepo.resolveForUser(auth.sub);
+          if (quotaAgencyId) {
+            const ag = await agencyRepo.findById(quotaAgencyId);
+            if (ag) {
+              const runType = body.data?.['_previous_run'] ? 'optimization' : 'initial';
+              const quota = await quotaRepo.checkRunQuota(quotaAgencyId, ag.brand_count, runType);
+              if (!quota.allowed) {
+                return c.json({
+                  error: 'QUOTA_EXCEEDED',
+                  run_type: runType,
+                  used: quota.used,
+                  limit: quota.limit,
+                  month: quota.month,
+                  message: quota.reason,
+                }, 429);
+              }
+            }
+          }
+        }
+      }
+
       const result = await runEngines(agency, body.ad_spend, body.data, body.engines);
+
+      // Increment quota after successful execution
+      if (quotaAgencyId && quotaRepo) {
+        const runType = body.data?.['_previous_run'] ? 'optimization' : 'initial';
+        quotaRepo.incrementRunUsage(quotaAgencyId, runType).catch(() => {});
+      }
+
       return c.json(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

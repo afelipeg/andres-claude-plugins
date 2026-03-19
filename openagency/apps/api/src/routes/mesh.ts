@@ -17,13 +17,14 @@ import { createScorecardFromMeshRun } from './scorecard.js';
 import type { ConnectorInfra } from '../connectors/setup.js';
 import { assembleContextFromSync, mergeClientBatchData, mergeMcpData, validateSkillContext } from '../connectors/context-assembler.js';
 import { createLogger } from '@openagency/core';
-import type { ClientDataRepo, ScorecardDbRepo } from '@openagency/memory';
+import type { ClientDataRepo, ScorecardDbRepo, AgencyRepo, QuotaRepo } from '@openagency/memory';
 import type { McpClientRegistry } from '@openagency/agent';
 import { sendEmail, PipelineCompleted, HFLDecisionPending } from '@polanyi/email';
+import type { AuthPayload } from '@openagency/types';
 
 const meshLog = createLogger('mesh-routes');
 
-export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, scheduler?: PipelineScheduler, connectorInfra?: ConnectorInfra, clientDataRepo?: ClientDataRepo, mcpClientRegistry?: McpClientRegistry, scorecardDbRepo?: ScorecardDbRepo) {
+export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, scheduler?: PipelineScheduler, connectorInfra?: ConnectorInfra, clientDataRepo?: ClientDataRepo, mcpClientRegistry?: McpClientRegistry, scorecardDbRepo?: ScorecardDbRepo, agencyRepo?: AgencyRepo, quotaRepo?: QuotaRepo) {
   const app = new Hono();
 
   // ─── List pipelines ──────────────────────────────────────────────
@@ -157,6 +158,42 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, schedule
       }
     }
 
+    // ─── Quota check before execution ───────────────────────────────
+    let quotaRunType: 'initial' | 'optimization' = 'initial';
+    if (agencyRepo && quotaRepo) {
+      const auth = c.get('auth') as AuthPayload | undefined;
+      const agencyId = auth ? await agencyRepo.resolveForUser(auth.sub) : null;
+      if (agencyId) {
+        const agency = await agencyRepo.findById(agencyId);
+        if (agency) {
+          quotaRunType = skillContext._previous_run ? 'optimization' : 'initial';
+          const quota = await quotaRepo.checkRunQuota(agencyId, agency.brand_count, quotaRunType);
+          if (!quota.allowed) {
+            // Notify super_admin via email when quota is hit
+            try {
+              const { sendEmail: send, QuotaExceeded: QE } = await import('@polanyi/email');
+              const adminEmail = process.env['ADMIN_EMAIL'] ?? 'dedalo@polanyi.tech';
+              const appUrl = process.env['APP_URL'] ?? 'https://plinth.polanyi.tech';
+              void send({
+                to: adminEmail,
+                subject: `Quota exceeded — ${agency.name}`,
+                template: QE({ agencyName: agency.name, month: quota.month, runType: quotaRunType, used: quota.used, limit: quota.limit, appUrl, isAdmin: true }),
+              }).catch(() => {});
+            } catch { /* email optional */ }
+
+            return c.json({
+              error: 'QUOTA_EXCEEDED',
+              run_type: quotaRunType,
+              used: quota.used,
+              limit: quota.limit,
+              month: quota.month,
+              message: quota.reason ?? `Monthly ${quotaRunType} run limit reached (${quota.used}/${quota.limit}). Request additional runs in Settings.`,
+            }, 429);
+          }
+        }
+      }
+    }
+
     try {
       const run = await mesh.executePipeline(pipelineId, goalId, clientId, skillContext);
       const serialized = mesh.serializeRun(run) as Record<string, unknown>;
@@ -214,6 +251,15 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, schedule
           } catch {
             // Scorecard creation failure doesn't block pipeline response
           }
+        }
+      }
+
+      // ─── Increment quota after successful completion ───────────────
+      if (run.status === 'completed' && agencyRepo && quotaRepo) {
+        const auth = c.get('auth') as AuthPayload | undefined;
+        const agencyId = auth ? await agencyRepo.resolveForUser(auth.sub) : null;
+        if (agencyId) {
+          quotaRepo.incrementRunUsage(agencyId, quotaRunType).catch(() => {});
         }
       }
 

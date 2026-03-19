@@ -66,11 +66,13 @@ import { campaignRoutes } from './routes/campaigns.js';
 import { onboardingRoutes } from './routes/onboarding.js';
 import { consumptionRoutes } from './routes/consumption.js';
 import { assistantRoutes, autoCreatePipelineConversation } from './routes/assistant.js';
-import { ConversationRepo, ScorecardDbRepo, ClientDataRepo, DailyMetricsRepo, FederationLogRepo } from '@openagency/memory';
+import { ConversationRepo, ScorecardDbRepo, ClientDataRepo, DailyMetricsRepo, FederationLogRepo, AgencyRepo, QuotaRepo } from '@openagency/memory';
 import { oauthStorageRoutes } from './routes/oauth-storage.js';
 import { agencyConnectorRoutes } from './routes/agency-connectors.js';
 import { demoRequestRoutes } from './routes/demo-request.js';
 import { adminRoutes } from './routes/admin.js';
+import { quotaRoutes } from './routes/quota.js';
+import { agencyDashboardRoutes } from './routes/agency-dashboard.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/logger.js';
 import { rateLimiter } from './middleware/rate-limiter.js';
@@ -112,6 +114,8 @@ export async function createApp() {
   let scorecardDbRepo: ScorecardDbRepo | null = null;
   let dailyMetricsRepo: DailyMetricsRepo | null = null;
   let federationLogRepo: FederationLogRepo | null = null;
+  let agencyRepo: AgencyRepo | null = null;
+  let quotaRepo: QuotaRepo | null = null;
 
   if (db) {
     log.info('Database connected — repos active');
@@ -128,6 +132,8 @@ export async function createApp() {
     scorecardDbRepo = new ScorecardDbRepo(db);
     dailyMetricsRepo = new DailyMetricsRepo(db);
     federationLogRepo = new FederationLogRepo(db);
+    agencyRepo = new AgencyRepo(db);
+    quotaRepo = new QuotaRepo(db);
     await seedAdminUser(userRepo);
   } else {
     log.warn('No DATABASE_URL — running without persistence');
@@ -469,7 +475,7 @@ export async function createApp() {
   app.route('/', goalRoutes({ goalRepo, decomposer: goalDecomposer, tracker: goalTracker }));
 
   // ─── Mesh routes (with HFL + Scheduler) ────────────────────────
-  app.route('/', meshRoutes(mesh, hflCoordinator, scheduler, connectorInfra, clientDataRepo ?? undefined, mcpClientRegistry, scorecardDbRepo ?? undefined));
+  app.route('/', meshRoutes(mesh, hflCoordinator, scheduler, connectorInfra, clientDataRepo ?? undefined, mcpClientRegistry, scorecardDbRepo ?? undefined, agencyRepo ?? undefined, quotaRepo ?? undefined));
 
   // ─── Connector routes ──────────────────────────────────────────
   app.route('/', connectorRoutes(connectorInfra, eventBus));
@@ -490,7 +496,7 @@ export async function createApp() {
   app.route('/', scorecardRoutes(agency, mesh, connectorInfra, scorecardDbRepo ?? undefined));
 
   // ─── Analyze pipeline (upload → engines → scorecard) ──────────
-  app.route('/', analyzeRoutes(agency));
+  app.route('/', analyzeRoutes(agency, agencyRepo ?? undefined, quotaRepo ?? undefined));
 
   // ─── SSE event stream ──────────────────────────────────────────
   app.route('/', eventStreamRoutes(eventBus));
@@ -512,6 +518,12 @@ export async function createApp() {
   // ─── Super Admin Dashboard ──────────────────────────────────
   app.route('/', adminRoutes({ db, dailyMetricsRepo, federationLogRepo, a2aClient }));
 
+  // ─── Quota routes ─────────────────────────────────────────────
+  app.route('/', quotaRoutes({ agencyRepo, quotaRepo }));
+
+  // ─── Agency Dashboard ─────────────────────────────────────────
+  app.route('/', agencyDashboardRoutes({ db, agencyRepo, quotaRepo, dailyMetricsRepo }));
+
   // ─── Campaign routes ─────────────────────────────────────────
   app.route('/', campaignRoutes(connectorInfra));
 
@@ -525,7 +537,7 @@ export async function createApp() {
   app.route('/', deliveryRoutes(agency, fileRepo));
 
   // ─── AI Assistant routes ──────────────────────────────────────
-  app.route('/', assistantRoutes(llmConfig, mesh, hflCoordinator, connectorInfra, agency, db ? new ConversationRepo(db) : undefined));
+  app.route('/', assistantRoutes(llmConfig, mesh, hflCoordinator, connectorInfra, agency, db ? new ConversationRepo(db) : undefined, quotaRepo ?? undefined));
 
   // ─── MCP endpoint ───────────────────────────────────────────────
   app.route('/', mcpRoute(agency, agentMap, mesh, connectorInfra, a2aClient, mcpClientRegistry, dynamicSkillRegistry, hflCoordinator, scheduler, fileRepo));

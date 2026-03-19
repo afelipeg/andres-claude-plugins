@@ -341,5 +341,151 @@ export function adminRoutes(deps: AdminRouteDeps) {
     });
   });
 
+  // ─── GET /v1/admin/quota/requests ────────────────────────────
+  app.get('/v1/admin/quota/requests', async (c) => {
+    const rows = await sql.unsafe(
+      `SELECT qr.*, a.name AS agency_name, u.email AS requester_email, u.name AS requester_name
+       FROM quota_requests qr
+       LEFT JOIN agencies a ON a.id = qr.agency_id
+       LEFT JOIN users u ON u.id = qr.requested_by
+       WHERE qr.status = 'pending'
+       ORDER BY qr.created_at DESC`,
+      [],
+    );
+    const countRows = await sql.unsafe("SELECT COUNT(*)::int AS cnt FROM quota_requests WHERE status = 'pending'", []);
+    const pending_count = Number((countRows as Array<Record<string, unknown>>)[0]?.['cnt'] ?? 0);
+    return c.json({ requests: rows, pending_count });
+  });
+
+  // ─── POST /v1/admin/quota/requests/:id/approve ─────────────────
+  app.post('/v1/admin/quota/requests/:id/approve', async (c) => {
+    const requestId = c.req.param('id');
+    const auth = c.get('auth') as AuthPayload;
+    const body = await c.req.json<{ extra_runs_granted: number }>();
+
+    if (!body.extra_runs_granted || body.extra_runs_granted < 1) {
+      return c.json({ error: 'invalid', message: 'extra_runs_granted must be >= 1' }, 400);
+    }
+
+    // Get request details
+    const reqRows = await sql.unsafe('SELECT * FROM quota_requests WHERE id = $1', [requestId]);
+    const req = (reqRows as Array<Record<string, unknown>>)[0];
+    if (!req) return c.json({ error: 'not_found' }, 404);
+
+    // Update request status
+    await sql.unsafe(
+      `UPDATE quota_requests SET status = 'approved', reviewed_by = $1, reviewed_at = now() WHERE id = $2`,
+      [auth.sub, requestId],
+    );
+
+    // Grant extra runs via UPSERT
+    const { ulid } = await import('ulid');
+    await sql.unsafe(
+      `INSERT INTO agency_quota_usage (id, agency_id, month, extra_runs_granted)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (agency_id, month) DO UPDATE SET
+         extra_runs_granted = agency_quota_usage.extra_runs_granted + $4,
+         updated_at = now()`,
+      [ulid(), req['agency_id'], req['month'], body.extra_runs_granted],
+    );
+
+    // Email agency admin about approval
+    try {
+      const { sendEmail, QuotaRequestApproved } = await import('@polanyi/email');
+      const userRows = await sql.unsafe('SELECT email FROM users WHERE id = $1', [req['requested_by']]);
+      const requesterEmail = (userRows as Array<Record<string, unknown>>)[0]?.['email'] as string | undefined;
+      const agencyRows2 = await sql.unsafe('SELECT name FROM agencies WHERE id = $1', [req['agency_id']]);
+      const agencyName = (agencyRows2 as Array<Record<string, unknown>>)[0]?.['name'] as string ?? String(req['agency_id']);
+      if (requesterEmail) {
+        void sendEmail({
+          to: requesterEmail,
+          subject: `Extra runs approved — ${body.extra_runs_granted} runs added`,
+          template: QuotaRequestApproved({ agencyName, month: String(req['month']), extraRunsGranted: body.extra_runs_granted }),
+        }).catch(() => {});
+      }
+    } catch { /* email optional */ }
+
+    return c.json({ approved: true, request_id: requestId, extra_runs_granted: body.extra_runs_granted });
+  });
+
+  // ─── POST /v1/admin/quota/requests/:id/deny ────────────────────
+  app.post('/v1/admin/quota/requests/:id/deny', async (c) => {
+    const requestId = c.req.param('id');
+    const auth = c.get('auth') as AuthPayload;
+    const body = await c.req.json<{ reason?: string }>().catch(() => ({}));
+
+    // Verify request exists
+    const reqRows = await sql.unsafe('SELECT * FROM quota_requests WHERE id = $1', [requestId]);
+    const req = (reqRows as Array<Record<string, unknown>>)[0];
+    if (!req) return c.json({ error: 'not_found' }, 404);
+
+    await sql.unsafe(
+      `UPDATE quota_requests SET status = 'denied', reviewed_by = $1, reviewed_at = now() WHERE id = $2`,
+      [auth.sub, requestId],
+    );
+
+    // Email agency admin about denial
+    try {
+      const { sendEmail, QuotaRequestDenied } = await import('@polanyi/email');
+      const userRows = await sql.unsafe('SELECT email FROM users WHERE id = $1', [req['requested_by']]);
+      const requesterEmail = (userRows as Array<Record<string, unknown>>)[0]?.['email'] as string | undefined;
+      const agencyRows2 = await sql.unsafe('SELECT name FROM agencies WHERE id = $1', [req['agency_id']]);
+      const agencyName = (agencyRows2 as Array<Record<string, unknown>>)[0]?.['name'] as string ?? String(req['agency_id']);
+      if (requesterEmail) {
+        void sendEmail({
+          to: requesterEmail,
+          subject: `Quota request denied — ${agencyName}`,
+          template: QuotaRequestDenied({ agencyName, month: String(req['month']), reason: (body as Record<string, unknown>).reason as string | undefined }),
+        }).catch(() => {});
+      }
+    } catch { /* email optional */ }
+
+    return c.json({ denied: true, request_id: requestId });
+  });
+
+  // ─── GET /v1/admin/agencies/:id/quota ──────────────────────────
+  app.get('/v1/admin/agencies/:id/quota', async (c) => {
+    const agencyId = c.req.param('id');
+
+    const [agencyRows, usageRows] = await Promise.all([
+      sql.unsafe('SELECT * FROM agencies WHERE id = $1', [agencyId]),
+      sql.unsafe(
+        'SELECT * FROM agency_quota_usage WHERE agency_id = $1 ORDER BY month DESC LIMIT 6',
+        [agencyId],
+      ),
+    ]);
+
+    const agency = (agencyRows as Array<Record<string, unknown>>)[0];
+    if (!agency) return c.json({ error: 'not_found' }, 404);
+
+    return c.json({ agency, usage_history: usageRows });
+  });
+
+  // ─── PATCH /v1/admin/agencies/:id ──────────────────────────────
+  app.patch('/v1/admin/agencies/:id', async (c) => {
+    const agencyId = c.req.param('id');
+    const body = await c.req.json<{ brand_count?: number; name?: string }>();
+
+    const updates: string[] = [];
+    const params: unknown[] = [];
+
+    if (body.brand_count !== undefined) {
+      params.push(body.brand_count);
+      updates.push(`brand_count = $${params.length}`);
+    }
+    if (body.name !== undefined) {
+      params.push(body.name);
+      updates.push(`name = $${params.length}`);
+    }
+
+    if (updates.length === 0) return c.json({ error: 'no_updates' }, 400);
+
+    updates.push('updated_at = now()');
+    params.push(agencyId);
+    await sql.unsafe(`UPDATE agencies SET ${updates.join(', ')} WHERE id = $${params.length}`, params);
+
+    return c.json({ updated: true, agency_id: agencyId });
+  });
+
   return app;
 }

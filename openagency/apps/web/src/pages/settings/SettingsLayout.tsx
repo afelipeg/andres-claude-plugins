@@ -6,6 +6,7 @@ import { Outlet, NavLink } from 'react-router-dom';
 const SETTINGS_NAV = [
   { path: 'profile', label: 'Profile' },
   { path: 'users', label: 'Users' },
+  { path: 'usage', label: 'Usage & Limits' },
   { path: 'billing', label: 'Billing' },
   { path: 'notifications', label: 'Notifications' },
 ];

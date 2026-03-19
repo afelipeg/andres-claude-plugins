@@ -10,7 +10,9 @@ import { callLLM } from '@openagency/core';
 import type { MeshCoordinator, MeshRun } from '@openagency/agent';
 import type { HFLCoordinator, HFLDecision } from '@openagency/hfl';
 import { ConversationRepo, type ConversationRecord, type ConvMessage } from '@openagency/memory';
+import type { QuotaRepo } from '@openagency/memory';
 import type { OpenAgency } from '@openagency/core';
+import type { AuthPayload } from '@openagency/types';
 
 // ─── Anthropic tool use types ─────────────────────────────────────────
 
@@ -697,6 +699,7 @@ export function assistantRoutes(
   connectorInfra: ConnectorInfraLike,
   agencyRef?: OpenAgency,
   convRepoInstance?: ConversationRepo,
+  quotaRepo?: QuotaRepo,
 ) {
   if (convRepoInstance) setConversationRepo(convRepoInstance);
   const app = new Hono();
@@ -717,6 +720,25 @@ export function assistantRoutes(
         ? await getConv(body.conversation_id)
         : null;
       if (!conv) {
+        // ─── Assistant quota check (new conversation only) ─────────
+        if (quotaRepo) {
+          const auth = c.get('auth') as AuthPayload | undefined;
+          if (auth?.sub) {
+            const quota = await quotaRepo.checkAssistantQuota(auth.sub);
+            if (!quota.allowed) {
+              return c.json({
+                error: 'ASSISTANT_QUOTA_EXCEEDED',
+                used: quota.used,
+                limit: quota.limit,
+                month: quota.month,
+                message: quota.reason ?? `You have used all ${quota.limit} Assistant sessions for this month. Sessions reset on the 1st of next month.`,
+              }, 429);
+            }
+            // Increment after creating new conversation
+            quotaRepo.incrementAssistantUsage(auth.sub).catch(() => {});
+          }
+        }
+
         conv = {
           id: ulid(),
           title: body.message.slice(0, 60),
