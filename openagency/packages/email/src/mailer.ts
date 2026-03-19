@@ -5,8 +5,9 @@ import type { ReactElement } from 'react';
 let resend: Resend | null = null;
 
 function getResend(): Resend | null {
-  if (!process.env['RESEND_API_KEY']) return null;
-  if (!resend) resend = new Resend(process.env['RESEND_API_KEY']);
+  const key = process.env['RESEND_API_KEY'];
+  if (!key) return null;
+  if (!resend) resend = new Resend(key);
   return resend;
 }
 
@@ -25,14 +26,23 @@ export async function sendEmail({
     return;
   }
   try {
-    await client.emails.send({
-      from: process.env['FROM_EMAIL'] ?? 'no-reply@polanyi.tech',
+    const from = process.env['FROM_EMAIL'] ?? 'Plinth <onboarding@resend.dev>';
+    console.log(`[mailer] Sending "${subject}" to ${to} from ${from}...`);
+
+    const { data, error } = await client.emails.send({
+      from,
       to,
       subject,
       react: template,
     });
-    console.log(`[mailer] Sent "${subject}" to ${to}`);
+
+    if (error) {
+      console.error('[mailer] Resend API error:', JSON.stringify(error));
+      return;
+    }
+
+    console.log(`[mailer] Sent "${subject}" to ${to} — id: ${data?.id}`);
   } catch (err) {
-    console.error('[mailer] Failed to send email:', err instanceof Error ? err.message : err);
+    console.error('[mailer] Exception:', err instanceof Error ? err.message : err);
   }
 }
