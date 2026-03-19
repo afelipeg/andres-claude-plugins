@@ -3,14 +3,28 @@
 // Level 2: advertiser_scopes — per-client advertiser selection
 
 import { Hono } from 'hono';
+import type { Context, Next } from 'hono';
 import { ulid } from 'ulid';
 import { authMiddleware } from '@openagency/auth';
 import { encrypt, decrypt } from '@openagency/memory';
 import { getConnector, hasConnector } from '@openagency/connectors';
-import type { ConnectorPlatform, OAuthTokens, PlatformAccount } from '@openagency/types';
+import type { ConnectorPlatform, OAuthTokens, PlatformAccount, AuthPayload } from '@openagency/types';
 import type { ConnectorInfra } from '../connectors/setup.js';
 
 type Db = { unsafe: (q: string, params?: unknown[]) => Promise<unknown[]> };
+
+const ADMIN_ROLES = new Set(['super_admin', 'agency_admin', 'admin']);
+
+/** Middleware: require agency_admin or super_admin role */
+function requireAdminRole() {
+  return async (c: Context, next: Next) => {
+    const auth = c.get('auth') as AuthPayload;
+    if (!auth || !ADMIN_ROLES.has(auth.role)) {
+      return c.json({ error: 'forbidden', message: 'Connector management requires Admin role', status: 403 }, 403);
+    }
+    await next();
+  };
+}
 
 const VALID_PLATFORMS = new Set([
   'google_ads', 'meta_ads', 'dv360', 'tiktok_ads', 'tiktok_shop', 'amazon_ads',
@@ -64,8 +78,11 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra) {
   const sql = db as Db;
   const encKey = process.env['ENCRYPTION_KEY'] ?? '';
 
+  // All agency connector routes require admin role
+  app.use('/v1/agency/*', authMiddleware(), requireAdminRole());
+
   // ─── POST /v1/agency/connections — Save Level 1 credentials ────
-  app.post('/v1/agency/connections', authMiddleware(), async (c) => {
+  app.post('/v1/agency/connections', async (c) => {
     const auth = c.get('auth');
     const agencyId = auth.sub;
     const body = await c.req.json<{
@@ -109,7 +126,7 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra) {
   });
 
   // ─── GET /v1/agency/connections — List all ─────────────────────
-  app.get('/v1/agency/connections', authMiddleware(), async (c) => {
+  app.get('/v1/agency/connections', async (c) => {
     const agencyId = c.get('auth').sub;
     const rows = await sql.unsafe(
       `SELECT ac.id, ac.platform, ac.connection_type, ac.status, ac.connected_at, ac.updated_at,
@@ -124,7 +141,7 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra) {
   });
 
   // ─── GET /v1/agency/connections/:platform — Detail ─────────────
-  app.get('/v1/agency/connections/:platform', authMiddleware(), async (c) => {
+  app.get('/v1/agency/connections/:platform', async (c) => {
     const agencyId = c.get('auth').sub;
     const platform = c.req.param('platform');
 
@@ -146,7 +163,7 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra) {
   });
 
   // ─── DELETE /v1/agency/connections/:platform — Disconnect ──────
-  app.delete('/v1/agency/connections/:platform', authMiddleware(), async (c) => {
+  app.delete('/v1/agency/connections/:platform', async (c) => {
     const agencyId = c.get('auth').sub;
     const platform = c.req.param('platform');
 
@@ -160,7 +177,7 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra) {
 
   // ─── GET /v1/agency/connections/:platform/sub-accounts ─────────
   // Fetches available sub-accounts from platform API using stored creds
-  app.get('/v1/agency/connections/:platform/sub-accounts', authMiddleware(), async (c) => {
+  app.get('/v1/agency/connections/:platform/sub-accounts', async (c) => {
     const agencyId = c.get('auth').sub;
     const platform = c.req.param('platform');
 
@@ -195,7 +212,7 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra) {
   });
 
   // ─── POST /v1/agency/connections/:platform/advertisers ─────────
-  app.post('/v1/agency/connections/:platform/advertisers', authMiddleware(), async (c) => {
+  app.post('/v1/agency/connections/:platform/advertisers', async (c) => {
     const agencyId = c.get('auth').sub;
     const platform = c.req.param('platform');
     const body = await c.req.json<{
@@ -230,7 +247,7 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra) {
   });
 
   // ─── GET /v1/agency/connections/:platform/advertisers ──────────
-  app.get('/v1/agency/connections/:platform/advertisers', authMiddleware(), async (c) => {
+  app.get('/v1/agency/connections/:platform/advertisers', async (c) => {
     const agencyId = c.get('auth').sub;
     const platform = c.req.param('platform');
 
@@ -247,7 +264,7 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra) {
   });
 
   // ─── DELETE /v1/agency/connections/:platform/advertisers/:id ───
-  app.delete('/v1/agency/connections/:platform/advertisers/:advertiserId', authMiddleware(), async (c) => {
+  app.delete('/v1/agency/connections/:platform/advertisers/:advertiserId', async (c) => {
     const agencyId = c.get('auth').sub;
     const platform = c.req.param('platform');
     const advertiserId = c.req.param('advertiserId');
@@ -264,7 +281,7 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra) {
 
   // ─── POST /v1/agency/connections/:platform/sync ────────────────
   // Sync data for a specific advertiser
-  app.post('/v1/agency/connections/:platform/sync', authMiddleware(), async (c) => {
+  app.post('/v1/agency/connections/:platform/sync', async (c) => {
     const agencyId = c.get('auth').sub;
     const platform = c.req.param('platform');
     const body = await c.req.json<{ advertiser_id: string; date_range_days?: number }>();

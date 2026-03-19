@@ -663,21 +663,28 @@ export function Layout() {
             {/* Assistant — expandable with conversation list */}
             <AssistantNav pathname={pathname} collapsed={collapsed} />
 
-            {/* Grouped nav structure */}
-            {NAV_STRUCTURE.map((entry) =>
-              isNavGroup(entry) ? (
-                <NavGroupSection
-                  key={entry.label}
-                  group={entry}
-                  pathname={pathname}
-                  collapsed={collapsed}
-                  base={base}
-                  renderChild={renderNavItem}
-                />
-              ) : (
-                renderNavItem(entry)
-              ),
-            )}
+            {/* Grouped nav structure (role-filtered) */}
+            {NAV_STRUCTURE.map((entry) => {
+              if (isNavGroup(entry)) {
+                // Hide Connectors from sidebar for non-admin roles
+                const isAdmin = !user?.role || user.role === 'super_admin' || user.role === 'agency_admin' || user.role === 'admin';
+                const filtered = entry.label === 'Integrations' && !isAdmin
+                  ? { ...entry, children: entry.children.filter((c) => c.path !== '/integrations') }
+                  : entry;
+                if (isNavGroup(filtered) && filtered.children.length === 0) return null;
+                return (
+                  <NavGroupSection
+                    key={filtered.label}
+                    group={filtered as NavGroup}
+                    pathname={pathname}
+                    collapsed={collapsed}
+                    base={base}
+                    renderChild={renderNavItem}
+                  />
+                );
+              }
+              return renderNavItem(entry);
+            })}
           </TooltipProvider>
         </nav>
 
