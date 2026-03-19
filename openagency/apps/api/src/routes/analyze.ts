@@ -126,6 +126,10 @@ async function runEngines(
   const engineOutputs: EngineOutputs = { ad_spend: adSpend };
   const engineResults: Record<string, unknown> = {};
 
+  // Ensure gross_spend is always in the data (engines need it)
+  if (!data.gross_spend && adSpend) data.gross_spend = adSpend;
+  if (!data.ad_spend && adSpend) data.ad_spend = adSpend;
+
   for (const engineId of engineIds) {
     try {
       const skillId = getPrimarySkill(engineId);

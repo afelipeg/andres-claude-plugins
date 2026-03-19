@@ -139,7 +139,9 @@ export function createScorecardFromMeshRun(
       feedback: record.feedback,
       created_at: record.created_at,
       updated_at: record.created_at,
-    }).catch(() => {});
+    }).catch((err) => {
+      console.error('[scorecard] DB save failed:', err instanceof Error ? err.message : err);
+    });
   }
   latestScorecardId = id;
 
@@ -448,7 +450,7 @@ export function scorecardRoutes(
       insights: [
         realLiftPct > 0 ? `Performance lifted ${realLiftPct.toFixed(1)}% vs plan` : realLiftPct < 0 ? `Performance declined ${Math.abs(realLiftPct).toFixed(1)}% vs plan` : null,
         wasteReductionPct > 0 ? `Waste reduced by ${wasteReductionPct.toFixed(1)}% from plan` : wasteReductionPct < 0 ? `Waste increased ${Math.abs(wasteReductionPct).toFixed(1)}% from plan` : null,
-        actualMDS > planMDS ? `Media-driven sales exceeded plan by $${(actualMDS - planMDS).toLocaleString()}` : null,
+        actualMDS > planMDS ? `Media-driven sales exceeded plan by $${((actualMDS ?? 0) - (planMDS ?? 0)).toLocaleString()}` : null,
       ].filter(Boolean),
     };
 

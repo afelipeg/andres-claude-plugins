@@ -25,7 +25,8 @@ function sumCategory(data: Record<string, number> | number | undefined): number 
 type StageInfo = [string, string, number];
 
 export function analyze(data: WasteWaterfallInput): WasteWaterfallOutput | { error: string } {
-  const gross = data.gross_spend;
+  const gross = data.gross_spend ?? 0;
+  if (gross <= 0) return { error: 'gross_spend must be positive' };
   const industry: Industry = data.industry ?? 'retail';
   const actualRevenue = data.actual_revenue ?? 0;
 
@@ -116,9 +117,12 @@ export function analyze(data: WasteWaterfallInput): WasteWaterfallOutput | { err
   const productivePct = gross > 0 ? (productive / gross) * 100 : 0;
   const totalRecoverable = roadmap.reduce((s, r) => s + r.estimated_savings, 0);
 
+  const fmt = (n: number | undefined | null) => (n ?? 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
+  const safePct = (n: number, d: number) => d > 0 ? Math.round((n / d) * 100) : 0;
+
   const csuite = {
-    ceo: `Of $${gross.toLocaleString('en-US', { maximumFractionDigits: 0 })} invested, $${productive.toLocaleString('en-US', { maximumFractionDigits: 0 })} (${Math.round(productivePct)}%) reached consumers productively. $${totalRecoverable.toLocaleString('en-US', { maximumFractionDigits: 0 })} is recoverable through governance improvements, directly increasing marketing effectiveness.`,
-    cfo: `Total waste: $${totalWaste.toLocaleString('en-US', { maximumFractionDigits: 0 })} (${Math.round(totalWaste / gross * 100)}% of spend). Recovery roadmap identifies $${totalRecoverable.toLocaleString('en-US', { maximumFractionDigits: 0 })} in savings. Current ROAS would improve by ${Math.round(totalRecoverable / gross * 100)}% if waste is eliminated.`,
+    ceo: `Of $${fmt(gross)} invested, $${fmt(productive)} (${Math.round(productivePct)}%) reached consumers productively. $${fmt(totalRecoverable)} is recoverable through governance improvements, directly increasing marketing effectiveness.`,
+    cfo: `Total waste: $${fmt(totalWaste)} (${safePct(totalWaste, gross)}% of spend). Recovery roadmap identifies $${fmt(totalRecoverable)} in savings. Current ROAS would improve by ${safePct(totalRecoverable, gross)}% if waste is eliminated.`,
     cmo: `Productive spend: ${Math.round(productivePct)}% (industry benchmark: ${Math.round((benchmarks.non_working ?? 0.15) * 100)}% non-working). Top waste categories: ${stages.sort((a, b) => b[2] - a[2]).slice(0, 3).map((s) => s[0]).join(', ')}.`,
   };
 
