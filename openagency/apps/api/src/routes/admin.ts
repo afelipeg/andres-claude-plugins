@@ -120,8 +120,8 @@ export function adminRoutes(deps: AdminRouteDeps) {
 
     const [connections, advertisers, runs, scorecards] = await Promise.all([
       sql.unsafe(
-        `SELECT id, platform, connection_type, status, created_at, updated_at
-         FROM agency_connections WHERE agency_id = $1 ORDER BY created_at DESC`,
+        `SELECT id, platform, connection_type, status, connected_at, updated_at
+         FROM agency_connections WHERE agency_id = $1 ORDER BY connected_at DESC`,
         [agencyId],
       ),
       sql.unsafe(
@@ -255,18 +255,19 @@ export function adminRoutes(deps: AdminRouteDeps) {
 
   // ─── GET /v1/admin/connectors ──────────────────────────────────
   app.get('/v1/admin/connectors', async (c) => {
-    const rows = await sql.unsafe(
-      `SELECT ac.id, ac.agency_id, ac.platform, ac.connection_type, ac.status,
-              ac.created_at, ac.updated_at,
-              COUNT(ads.id)::int AS advertiser_count
-       FROM agency_connections ac
-       LEFT JOIN advertiser_scopes ads ON ads.agency_connection_id = ac.id
-       GROUP BY ac.id
-       ORDER BY ac.updated_at DESC`,
-      [],
-    );
-
-    return c.json({ connectors: rows });
+    try {
+      const rows = await sql.unsafe(
+        `SELECT ac.id, ac.agency_id, ac.platform, ac.connection_type, ac.status,
+                ac.connected_at, ac.updated_at,
+                (SELECT COUNT(*)::int FROM advertiser_scopes ads WHERE ads.agency_connection_id = ac.id) AS advertiser_count
+         FROM agency_connections ac
+         ORDER BY ac.updated_at DESC`,
+        [],
+      );
+      return c.json({ connectors: rows });
+    } catch (err) {
+      return c.json({ error: 'query_failed', message: err instanceof Error ? err.message : String(err) }, 500);
+    }
   });
 
   // ─── GET /v1/admin/federation ──────────────────────────────────
