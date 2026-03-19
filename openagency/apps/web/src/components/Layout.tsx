@@ -28,6 +28,7 @@ import {
   Cpu,
   Upload,
   ShoppingBag,
+  Shield,
 } from 'lucide-react';
 import { SyncStatus } from './SyncStatus';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -115,6 +116,7 @@ const NAV_STRUCTURE: NavEntry[] = [
   // Standalone items
   { path: '/consumption', label: 'Usage & Runs', Icon: Activity },
   { path: '/billing', label: 'Outcome Base Fee', Icon: CreditCard },
+  { path: '/admin', label: 'Super Admin', Icon: Shield },
   { path: '/settings', label: 'Settings', Icon: Settings },
 ];
 
@@ -136,6 +138,7 @@ function getPageTitle(pathname: string): string {
     history: 'History',
     data: 'Data',
     marketplace: 'MCP Marketplace',
+    admin: 'Super Admin',
     settings: 'Settings',
   };
   return (segment !== undefined ? titles[segment] : undefined) ?? 'Dashboard';
@@ -683,6 +686,8 @@ export function Layout() {
                   />
                 );
               }
+              // Super Admin nav item — visible only for super_admin role
+              if ('path' in entry && entry.path === '/admin' && user?.role !== 'super_admin') return null;
               return renderNavItem(entry);
             })}
           </TooltipProvider>

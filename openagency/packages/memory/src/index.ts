@@ -20,4 +20,6 @@ export { ScorecardDbRepo, type ScorecardDbRecord } from './repos/scorecard-db.js
 export { MeshRunRepo } from './repos/mesh-run.js';
 export { ClientDataRepo, type ClientDataRecord } from './repos/client-data.js';
 export { McpConnectionRepo, type McpConnectionRow } from './repositories/mcp-connection-repo.js';
+export { DailyMetricsRepo, type DailyMetricRow } from './repos/daily-metrics.js';
+export { FederationLogRepo, type FederationLogRow } from './repos/federation-log.js';
 export { encrypt, decrypt } from './utils/encrypt.js';

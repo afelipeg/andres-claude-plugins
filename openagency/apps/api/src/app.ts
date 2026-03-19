@@ -66,10 +66,11 @@ import { campaignRoutes } from './routes/campaigns.js';
 import { onboardingRoutes } from './routes/onboarding.js';
 import { consumptionRoutes } from './routes/consumption.js';
 import { assistantRoutes, autoCreatePipelineConversation } from './routes/assistant.js';
-import { ConversationRepo, ScorecardDbRepo, ClientDataRepo } from '@openagency/memory';
+import { ConversationRepo, ScorecardDbRepo, ClientDataRepo, DailyMetricsRepo, FederationLogRepo } from '@openagency/memory';
 import { oauthStorageRoutes } from './routes/oauth-storage.js';
 import { agencyConnectorRoutes } from './routes/agency-connectors.js';
 import { demoRequestRoutes } from './routes/demo-request.js';
+import { adminRoutes } from './routes/admin.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/logger.js';
 import { rateLimiter } from './middleware/rate-limiter.js';
@@ -109,6 +110,8 @@ export async function createApp() {
   let meshRunRepo: MeshRunRepo | null = null;
   let clientDataRepo: ClientDataRepo | null = null;
   let scorecardDbRepo: ScorecardDbRepo | null = null;
+  let dailyMetricsRepo: DailyMetricsRepo | null = null;
+  let federationLogRepo: FederationLogRepo | null = null;
 
   if (db) {
     log.info('Database connected — repos active');
@@ -123,6 +126,8 @@ export async function createApp() {
     meshRunRepo = new MeshRunRepo(db);
     clientDataRepo = new ClientDataRepo(db);
     scorecardDbRepo = new ScorecardDbRepo(db);
+    dailyMetricsRepo = new DailyMetricsRepo(db);
+    federationLogRepo = new FederationLogRepo(db);
     await seedAdminUser(userRepo);
   } else {
     log.warn('No DATABASE_URL — running without persistence');
@@ -359,6 +364,43 @@ export async function createApp() {
     }, 500); // small delay so HFL decision is registered first
   });
 
+  // ─── Metrics persistence (event bus → daily_metrics) ───────────
+  if (dailyMetricsRepo) {
+    const today = () => new Date().toISOString().slice(0, 10);
+
+    eventBus.subscribe('engine.skill.completed', async (event) => {
+      const p = event.payload as Record<string, unknown>;
+      dailyMetricsRepo!.increment({
+        date: today(),
+        engine_id: (p['engine_id'] as string) ?? undefined,
+        model: (p['model'] as string) ?? undefined,
+        skills_invoked: 1,
+        tokens_prompt: Number(p['tokens_prompt'] ?? 0),
+        tokens_completion: Number(p['tokens_completion'] ?? 0),
+        llm_cost_usd: Number(p['llm_cost_usd'] ?? 0),
+      }).catch(() => {});
+    });
+
+    eventBus.subscribe('mesh.pipeline.completed', async (event) => {
+      const p = event.payload as Record<string, unknown>;
+      dailyMetricsRepo!.increment({
+        date: today(),
+        agency_id: (p['client_id'] as string) ?? undefined,
+        runs_completed: 1,
+      }).catch(() => {});
+    });
+
+    eventBus.subscribe('mesh.pipeline.started', async () => {
+      dailyMetricsRepo!.increment({ date: today(), runs_started: 1 }).catch(() => {});
+    });
+
+    eventBus.subscribe('mesh.pipeline.failed', async () => {
+      dailyMetricsRepo!.increment({ date: today(), runs_failed: 1 }).catch(() => {});
+    });
+
+    log.info('Admin metrics persistence active (event bus → daily_metrics)');
+  }
+
   // ─── Federation (external agent consumption) ──────────────────
   const a2aClient = new A2AClient();
   const mcpProcessManager = new McpProcessManager();
@@ -466,6 +508,9 @@ export async function createApp() {
 
   // ─── Dashboard (aggregated KPIs for Command Center) ──────────
   app.route('/', dashboardRoutes({ mesh, connectorInfra, registry, hfl: hflCoordinator }));
+
+  // ─── Super Admin Dashboard ──────────────────────────────────
+  app.route('/', adminRoutes({ db, dailyMetricsRepo, federationLogRepo, a2aClient }));
 
   // ─── Campaign routes ─────────────────────────────────────────
   app.route('/', campaignRoutes(connectorInfra));

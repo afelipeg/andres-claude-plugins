@@ -175,6 +175,12 @@ importers:
       framer-motion:
         specifier: ^12.0.0
         version: 12.35.1(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      highcharts:
+        specifier: ^12.5.0
+        version: 12.5.0(jspdf@4.1.0)
+      highcharts-react-official:
+        specifier: ^3.2.3
+        version: 3.2.3(highcharts@12.5.0(jspdf@4.1.0))(react@19.2.4)
       jspdf:
         specifier: ^4.1.0
         version: 4.1.0
@@ -3114,6 +3120,23 @@ packages:
 
   help-me@5.0.0:
     resolution: {integrity: sha512-7xgomUX6ADmcYzFik0HzAxh/73YlKR9bmFzf51CZwR+b6YtzU2m0u49hQCqV6SvlqIqsaxovfwdvbnsw3b/zpg==}
+
+  highcharts-react-official@3.2.3:
+    resolution: {integrity: sha512-2gL8bVGe6Pf75tSe6IB5Ucd0nIOJX7ZrpttQBZVrjN2J9StdVZ12aOinXHIOFvlc6EzP8CbN13WS8NUq+9mptA==}
+    peerDependencies:
+      highcharts: '>=6.0.0'
+      react: '>=16.8.0'
+
+  highcharts@12.5.0:
+    resolution: {integrity: sha512-uNSSv1KqRLNvkyXlf1FbeGWB1mJ/8/IYpVeqYiTIop5Wo8peUvNyzUfLa58vILsmXyz+XrETtgKIEOcSgBBKuQ==}
+    peerDependencies:
+      jspdf: ^3.0.0
+      svg2pdf.js: ^2.6.0
+    peerDependenciesMeta:
+      jspdf:
+        optional: true
+      svg2pdf.js:
+        optional: true
 
   hono@4.12.3:
     resolution: {integrity: sha512-SFsVSjp8sj5UumXOOFlkZOG6XS9SJDKw0TbwFeV+AJ8xlST8kxK5Z/5EYa111UY8732lK2S/xB653ceuaoGwpg==}
@@ -7482,6 +7505,15 @@ snapshots:
       function-bind: 1.1.2
 
   help-me@5.0.0: {}
+
+  highcharts-react-official@3.2.3(highcharts@12.5.0(jspdf@4.1.0))(react@19.2.4):
+    dependencies:
+      highcharts: 12.5.0(jspdf@4.1.0)
+      react: 19.2.4
+
+  highcharts@12.5.0(jspdf@4.1.0):
+    optionalDependencies:
+      jspdf: 4.1.0
 
   hono@4.12.3: {}
 

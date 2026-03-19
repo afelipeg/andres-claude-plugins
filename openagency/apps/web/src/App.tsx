@@ -26,6 +26,7 @@ import { ProfilePage } from './pages/settings/ProfilePage';
 import { UsersPage } from './pages/settings/UsersPage';
 import { BillingSettingsPage } from './pages/settings/BillingSettingsPage';
 import { NotificationsPage } from './pages/settings/NotificationsPage';
+import { SuperAdminDashboard } from './pages/SuperAdminDashboard';
 
 // ─── Demo pages (from landing-scorecard_Plinth, hardcoded investor data) ─────
 import DemoCommandCenter from './pages/demo/CommandCenter';
@@ -61,6 +62,7 @@ function AppRoutes() {
       <Route path="marketplace" element={<McpMarketplacePage />} />
       <Route path="architecture" element={<ArchitecturePage />} />
       <Route path="consumption" element={<ConsumptionPage />} />
+      <Route path="admin" element={<SuperAdminDashboard />} />
       <Route path="settings" element={<SettingsLayout />}>
         <Route index element={<Navigate to="profile" replace />} />
         <Route path="profile" element={<ProfilePage />} />
