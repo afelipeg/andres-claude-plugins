@@ -39,6 +39,7 @@
     "@openagency/memory": "workspace:*",
     "@openagency/schemas": "workspace:*",
     "@openagency/types": "workspace:*",
+    "@polanyi/email": "workspace:*",
     "googleapis": "^171.4.0",
     "hono": "^4.0.0",
     "pino": "^9.0.0",

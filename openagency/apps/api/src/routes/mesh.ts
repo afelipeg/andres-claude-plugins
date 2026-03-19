@@ -19,6 +19,7 @@ import { assembleContextFromSync, mergeClientBatchData, mergeMcpData, validateSk
 import { createLogger } from '@openagency/core';
 import type { ClientDataRepo, ScorecardDbRepo } from '@openagency/memory';
 import type { McpClientRegistry } from '@openagency/agent';
+import { sendEmail, PipelineCompleted, HFLDecisionPending } from '@polanyi/email';
 
 const meshLog = createLogger('mesh-routes');
 
@@ -164,6 +165,32 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, schedule
       if (hfl && run.status === 'completed') {
         const hflResult = await evaluateHFL(hfl, run, mesh, clientId);
         serialized.hfl_decision = hflResult;
+
+        // Email: HFL decision pending
+        if (hflResult && (hflResult as Record<string, unknown>).status === 'escalated') {
+          const appUrl = process.env['APP_URL'] ?? 'https://plinth.polanyi.tech';
+          const adminEmail = process.env['ADMIN_EMAIL'] ?? 'dedalo@polanyi.tech';
+          void sendEmail({
+            to: adminEmail,
+            subject: 'Action required: Decision pending approval',
+            template: HFLDecisionPending({
+              decisionId: (hflResult as Record<string, unknown>).id as string ?? run.id,
+              summary: (hflResult as Record<string, unknown>).reason as string ?? 'Pipeline completed — review required',
+              appUrl,
+            }),
+          });
+        }
+      }
+
+      // Email: pipeline completed
+      if (run.status === 'completed') {
+        const appUrl = process.env['APP_URL'] ?? 'https://plinth.polanyi.tech';
+        const adminEmail = process.env['ADMIN_EMAIL'] ?? 'dedalo@polanyi.tech';
+        void sendEmail({
+          to: adminEmail,
+          subject: `Pipeline completed — ${clientId || 'unknown client'}`,
+          template: PipelineCompleted({ runId: run.id, clientName: clientId || 'unknown', runType: runType || 'standard', appUrl }),
+        });
       }
 
       // ─── Auto-create scorecard from completed pipeline ───────────

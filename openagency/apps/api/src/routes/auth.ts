@@ -9,6 +9,7 @@ import { createApiKeyRecord, revokeApiKey, listApiKeys } from '@openagency/auth'
 import { authMiddleware } from '@openagency/auth/middleware';
 import type { Role, AuthPayload } from '@openagency/types';
 import type { UserRepo, UserRow } from '@openagency/memory';
+import { sendEmail, UserInvitation, WelcomeEmail } from '@polanyi/email';
 
 // ─── In-memory fallback (when no DB) ────────────────────────────────
 interface UserRecord {
@@ -311,6 +312,17 @@ export function authRoutes(userRepo?: UserRepo | null) {
       memoryById.set(userId, user);
     }
 
+    // Send invitation email (non-blocking)
+    const appUrl = process.env['APP_URL'] ?? 'https://plinth.polanyi.tech';
+    const acceptUrl = `${appUrl}/accept-invite?token=${inviteToken}`;
+    const inviterAuth = c.get('auth') as AuthPayload | undefined;
+    const inviterName = inviterAuth?.sub ? (await getUserById(repo, inviterAuth.sub))?.name ?? 'Admin' : 'Admin';
+    void sendEmail({
+      to: email,
+      subject: `You've been invited to join Plinth`,
+      template: UserInvitation({ inviterName, agencyName: 'Plinth', role, acceptUrl }),
+    });
+
     return c.json({
       user_id: userId, email, role, invite_token: inviteToken,
       invite_url: `/accept-invite?token=${inviteToken}`,
@@ -335,6 +347,14 @@ export function authRoutes(userRepo?: UserRepo | null) {
     }
 
     await repo.activate(user.id, hashPassword(body.password), body.name ?? user.name);
+
+    // Send welcome email (non-blocking)
+    const appUrl = process.env['APP_URL'] ?? 'https://plinth.polanyi.tech';
+    void sendEmail({
+      to: user.email,
+      subject: 'Welcome to Plinth',
+      template: WelcomeEmail({ name: body.name ?? user.name, appUrl }),
+    });
 
     const token = await signToken({ sub: user.id, role: user.role as Role, scopes: user.scopes });
 
