@@ -68,6 +68,7 @@ import { consumptionRoutes } from './routes/consumption.js';
 import { assistantRoutes, autoCreatePipelineConversation } from './routes/assistant.js';
 import { ConversationRepo, ScorecardDbRepo, ClientDataRepo } from '@openagency/memory';
 import { oauthStorageRoutes } from './routes/oauth-storage.js';
+import { agencyConnectorRoutes } from './routes/agency-connectors.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/logger.js';
 import { rateLimiter } from './middleware/rate-limiter.js';
@@ -424,6 +425,9 @@ export async function createApp() {
 
   // ─── Connector routes ──────────────────────────────────────────
   app.route('/', connectorRoutes(connectorInfra, eventBus));
+
+  // ─── Agency connector routes (multi-advertiser) ────────────────
+  app.route('/', agencyConnectorRoutes(db, connectorInfra));
 
   // ─── File upload route ──────────────────────────────────────────
   app.route('/', uploadRoutes(clientDataRepo ?? undefined));

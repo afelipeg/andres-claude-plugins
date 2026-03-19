@@ -1,0 +1,552 @@
+// ─── Agency Connector Routes (Multi-Advertiser Model) ───────────────
+// Level 1: agency_connections — master credentials per platform
+// Level 2: advertiser_scopes — per-client advertiser selection
+
+import { Hono } from 'hono';
+import { ulid } from 'ulid';
+import { authMiddleware } from '@openagency/auth';
+import { encrypt, decrypt } from '@openagency/memory';
+import { getConnector, hasConnector } from '@openagency/connectors';
+import type { ConnectorPlatform, OAuthTokens, PlatformAccount } from '@openagency/types';
+import type { ConnectorInfra } from '../connectors/setup.js';
+
+type Db = { unsafe: (q: string, params?: unknown[]) => Promise<unknown[]> };
+
+const VALID_PLATFORMS = new Set([
+  'google_ads', 'meta_ads', 'dv360', 'tiktok_ads', 'tiktok_shop', 'amazon_ads',
+]);
+
+const CONNECTION_TYPES: Record<string, string[]> = {
+  google_ads: ['mcc', 'direct'],
+  meta_ads: ['system_user', 'oauth_user'],
+  dv360: ['service_account', 'oauth2'],
+  tiktok_ads: ['business_center', 'direct'],
+  tiktok_shop: ['direct'],
+  amazon_ads: ['agency', 'direct'],
+};
+
+// Per-platform required fields by connection_type
+const REQUIRED_BY_TYPE: Record<string, Record<string, string[]>> = {
+  google_ads: {
+    mcc: ['developer_token', 'client_id', 'client_secret', 'refresh_token', 'login_customer_id'],
+    direct: ['developer_token', 'client_id', 'client_secret', 'refresh_token'],
+  },
+  meta_ads: {
+    system_user: ['business_manager_id', 'app_id', 'app_secret', 'system_user_token'],
+    oauth_user: ['business_manager_id', 'app_id', 'app_secret', 'access_token'],
+  },
+  dv360: {
+    service_account: ['service_account_json', 'partner_id'],
+    oauth2: ['client_id', 'client_secret', 'refresh_token', 'partner_id'],
+  },
+  tiktok_ads: {
+    business_center: ['bc_id', 'app_id', 'app_secret', 'access_token'],
+    direct: ['app_id', 'app_secret', 'access_token'],
+  },
+  tiktok_shop: {
+    direct: ['app_key', 'app_secret', 'access_token', 'shop_id'],
+  },
+  amazon_ads: {
+    agency: ['client_id', 'client_secret', 'refresh_token', 'region'],
+    direct: ['client_id', 'client_secret', 'refresh_token', 'region'],
+  },
+};
+
+function isValidPlatform(p: string): p is ConnectorPlatform {
+  return VALID_PLATFORMS.has(p);
+}
+
+export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra) {
+  const app = new Hono();
+
+  if (!db) return app;
+
+  const sql = db as Db;
+  const encKey = process.env['ENCRYPTION_KEY'] ?? '';
+
+  // ─── POST /v1/agency/connections — Save Level 1 credentials ────
+  app.post('/v1/agency/connections', authMiddleware(), async (c) => {
+    const auth = c.get('auth');
+    const agencyId = auth.sub;
+    const body = await c.req.json<{
+      platform: string;
+      connection_type: string;
+      credentials: Record<string, unknown>;
+    }>();
+
+    if (!body.platform || !isValidPlatform(body.platform)) {
+      return c.json({ error: 'invalid_platform', message: `Invalid platform: ${body.platform}` }, 400);
+    }
+
+    const validTypes = CONNECTION_TYPES[body.platform];
+    if (!validTypes?.includes(body.connection_type)) {
+      return c.json({ error: 'invalid_connection_type', message: `Valid types: ${validTypes?.join(', ')}` }, 400);
+    }
+
+    // Validate required fields
+    const requiredFields = REQUIRED_BY_TYPE[body.platform]?.[body.connection_type] ?? [];
+    const missing = requiredFields.filter((f) => {
+      const val = body.credentials[f];
+      return !val || (typeof val === 'string' && !val.trim());
+    });
+    if (missing.length > 0) {
+      return c.json({ error: 'missing_fields', message: `Missing: ${missing.join(', ')}` }, 400);
+    }
+
+    // Encrypt credentials JSON
+    const encCredentials = encrypt(JSON.stringify(body.credentials), encKey);
+
+    const id = ulid();
+    await sql.unsafe(
+      `INSERT INTO agency_connections (id, agency_id, platform, connection_type, credentials, status, connected_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, 'connected', NOW(), NOW())
+       ON CONFLICT (agency_id, platform)
+       DO UPDATE SET connection_type = $4, credentials = $5, status = 'connected', updated_at = NOW()`,
+      [id, agencyId, body.platform, body.connection_type, encCredentials],
+    );
+
+    return c.json({ status: 'connected', platform: body.platform, connection_type: body.connection_type }, 201);
+  });
+
+  // ─── GET /v1/agency/connections — List all ─────────────────────
+  app.get('/v1/agency/connections', authMiddleware(), async (c) => {
+    const agencyId = c.get('auth').sub;
+    const rows = await sql.unsafe(
+      `SELECT ac.id, ac.platform, ac.connection_type, ac.status, ac.connected_at, ac.updated_at,
+              COUNT(s.id)::int AS advertiser_count
+       FROM agency_connections ac
+       LEFT JOIN advertiser_scopes s ON s.agency_connection_id = ac.id AND s.status = 'active'
+       WHERE ac.agency_id = $1
+       GROUP BY ac.id`,
+      [agencyId],
+    );
+    return c.json({ connections: rows });
+  });
+
+  // ─── GET /v1/agency/connections/:platform — Detail ─────────────
+  app.get('/v1/agency/connections/:platform', authMiddleware(), async (c) => {
+    const agencyId = c.get('auth').sub;
+    const platform = c.req.param('platform');
+
+    const rows = await sql.unsafe(
+      `SELECT id, platform, connection_type, status, connected_at, updated_at
+       FROM agency_connections WHERE agency_id = $1 AND platform = $2`,
+      [agencyId, platform],
+    );
+    if (rows.length === 0) return c.json({ error: 'not_found' }, 404);
+
+    const conn = rows[0] as { id: string };
+    const scopes = await sql.unsafe(
+      `SELECT id, advertiser_id, advertiser_name, status, created_at
+       FROM advertiser_scopes WHERE agency_connection_id = $1 ORDER BY created_at`,
+      [conn.id],
+    );
+
+    return c.json({ connection: rows[0], advertisers: scopes });
+  });
+
+  // ─── DELETE /v1/agency/connections/:platform — Disconnect ──────
+  app.delete('/v1/agency/connections/:platform', authMiddleware(), async (c) => {
+    const agencyId = c.get('auth').sub;
+    const platform = c.req.param('platform');
+
+    await sql.unsafe(
+      `DELETE FROM agency_connections WHERE agency_id = $1 AND platform = $2`,
+      [agencyId, platform],
+    );
+
+    return c.json({ disconnected: true, platform });
+  });
+
+  // ─── GET /v1/agency/connections/:platform/sub-accounts ─────────
+  // Fetches available sub-accounts from platform API using stored creds
+  app.get('/v1/agency/connections/:platform/sub-accounts', authMiddleware(), async (c) => {
+    const agencyId = c.get('auth').sub;
+    const platform = c.req.param('platform');
+
+    if (!isValidPlatform(platform)) {
+      return c.json({ error: 'invalid_platform' }, 400);
+    }
+
+    // Load & decrypt credentials
+    const rows = await sql.unsafe(
+      `SELECT id, credentials, connection_type FROM agency_connections WHERE agency_id = $1 AND platform = $2`,
+      [agencyId, platform],
+    );
+    if (rows.length === 0) return c.json({ error: 'not_connected', message: 'Save credentials first' }, 404);
+
+    const row = rows[0] as { id: string; credentials: string; connection_type: string };
+    let creds: Record<string, string>;
+    try {
+      creds = JSON.parse(decrypt(row.credentials, encKey)) as Record<string, string>;
+    } catch {
+      return c.json({ error: 'decrypt_failed', message: 'Failed to decrypt credentials' }, 500);
+    }
+
+    try {
+      const accounts = await fetchSubAccounts(platform, row.connection_type, creds, infra);
+      return c.json({ platform, accounts });
+    } catch (err) {
+      return c.json({
+        error: 'fetch_failed',
+        message: err instanceof Error ? err.message : String(err),
+      }, 500);
+    }
+  });
+
+  // ─── POST /v1/agency/connections/:platform/advertisers ─────────
+  app.post('/v1/agency/connections/:platform/advertisers', authMiddleware(), async (c) => {
+    const agencyId = c.get('auth').sub;
+    const platform = c.req.param('platform');
+    const body = await c.req.json<{
+      advertisers: Array<{ id: string; name?: string }>;
+    }>();
+
+    if (!body.advertisers?.length) {
+      return c.json({ error: 'missing_advertisers' }, 400);
+    }
+
+    // Get agency connection ID
+    const connRows = await sql.unsafe(
+      `SELECT id FROM agency_connections WHERE agency_id = $1 AND platform = $2`,
+      [agencyId, platform],
+    );
+    if (connRows.length === 0) return c.json({ error: 'not_connected' }, 404);
+    const connectionId = (connRows[0] as { id: string }).id;
+
+    // Upsert each advertiser
+    for (const adv of body.advertisers) {
+      const id = ulid();
+      await sql.unsafe(
+        `INSERT INTO advertiser_scopes (id, agency_connection_id, platform, advertiser_id, advertiser_name, status, created_at)
+         VALUES ($1, $2, $3, $4, $5, 'active', NOW())
+         ON CONFLICT (agency_connection_id, advertiser_id)
+         DO UPDATE SET advertiser_name = $5, status = 'active'`,
+        [id, connectionId, platform, adv.id, adv.name ?? ''],
+      );
+    }
+
+    return c.json({ saved: body.advertisers.length, platform }, 201);
+  });
+
+  // ─── GET /v1/agency/connections/:platform/advertisers ──────────
+  app.get('/v1/agency/connections/:platform/advertisers', authMiddleware(), async (c) => {
+    const agencyId = c.get('auth').sub;
+    const platform = c.req.param('platform');
+
+    const rows = await sql.unsafe(
+      `SELECT s.id, s.advertiser_id, s.advertiser_name, s.status, s.created_at
+       FROM advertiser_scopes s
+       JOIN agency_connections ac ON ac.id = s.agency_connection_id
+       WHERE ac.agency_id = $1 AND ac.platform = $2 AND s.status = 'active'
+       ORDER BY s.created_at`,
+      [agencyId, platform],
+    );
+
+    return c.json({ platform, advertisers: rows });
+  });
+
+  // ─── DELETE /v1/agency/connections/:platform/advertisers/:id ───
+  app.delete('/v1/agency/connections/:platform/advertisers/:advertiserId', authMiddleware(), async (c) => {
+    const agencyId = c.get('auth').sub;
+    const platform = c.req.param('platform');
+    const advertiserId = c.req.param('advertiserId');
+
+    await sql.unsafe(
+      `UPDATE advertiser_scopes SET status = 'inactive'
+       WHERE advertiser_id = $1 AND platform = $2
+         AND agency_connection_id IN (SELECT id FROM agency_connections WHERE agency_id = $3 AND platform = $2)`,
+      [advertiserId, platform, agencyId],
+    );
+
+    return c.json({ removed: true, advertiser_id: advertiserId });
+  });
+
+  // ─── POST /v1/agency/connections/:platform/sync ────────────────
+  // Sync data for a specific advertiser
+  app.post('/v1/agency/connections/:platform/sync', authMiddleware(), async (c) => {
+    const agencyId = c.get('auth').sub;
+    const platform = c.req.param('platform');
+    const body = await c.req.json<{ advertiser_id: string; date_range_days?: number }>();
+
+    if (!isValidPlatform(platform)) return c.json({ error: 'invalid_platform' }, 400);
+    if (!body.advertiser_id) return c.json({ error: 'missing_advertiser_id' }, 400);
+
+    // Load agency credentials
+    const connRows = await sql.unsafe(
+      `SELECT credentials, connection_type FROM agency_connections WHERE agency_id = $1 AND platform = $2`,
+      [agencyId, platform],
+    );
+    if (connRows.length === 0) return c.json({ error: 'not_connected' }, 404);
+
+    const row = connRows[0] as { credentials: string; connection_type: string };
+    let creds: Record<string, string>;
+    try {
+      creds = JSON.parse(decrypt(row.credentials, encKey)) as Record<string, string>;
+    } catch {
+      return c.json({ error: 'decrypt_failed' }, 500);
+    }
+
+    if (!hasConnector(platform)) {
+      return c.json({ error: 'no_connector', message: `No connector for ${platform}` }, 404);
+    }
+
+    // Build PlatformCredentials with advertiser-scoped ID
+    const platformCreds = buildPlatformCredentials(platform, row.connection_type, creds, body.advertiser_id);
+
+    const connector = getConnector(platform);
+    const days = body.date_range_days ?? 30;
+    const end = new Date();
+    const start = new Date(end.getTime() - days * 86_400_000);
+
+    try {
+      const rows = await connector.fetchCampaigns(platformCreds, {
+        start: start.toISOString().slice(0, 10),
+        end: end.toISOString().slice(0, 10),
+      });
+
+      // Cache the sync result for context assembly
+      infra.syncResultCache.set(platform, {
+        platform,
+        status: 'success',
+        rows,
+        row_count: rows.length,
+        date_range: { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) },
+        synced_at: new Date().toISOString(),
+      });
+
+      return c.json({
+        platform,
+        advertiser_id: body.advertiser_id,
+        status: 'success',
+        row_count: rows.length,
+        synced_at: new Date().toISOString(),
+      });
+    } catch (err) {
+      return c.json({
+        error: 'sync_failed',
+        message: err instanceof Error ? err.message : String(err),
+      }, 500);
+    }
+  });
+
+  return app;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Fetch sub-accounts from platform API using decrypted agency credentials.
+ * Each platform has different APIs for listing child accounts.
+ */
+async function fetchSubAccounts(
+  platform: ConnectorPlatform,
+  connectionType: string,
+  creds: Record<string, string>,
+  infra: ConnectorInfra,
+): Promise<PlatformAccount[]> {
+  switch (platform) {
+    case 'google_ads': {
+      // Use connector's listAccounts — returns customers under MCC
+      if (!hasConnector(platform)) throw new Error('Google Ads connector not registered');
+      const connector = getConnector(platform);
+      const tokens: OAuthTokens = {
+        access_token: creds.access_token ?? '',
+        refresh_token: creds.refresh_token,
+        token_type: 'Bearer',
+        expires_at: Date.now() + 3_600_000,
+      };
+      // If tokens need refreshing, use the connector
+      if (!tokens.access_token && creds.refresh_token) {
+        const refreshed = await connector.refreshTokens(tokens);
+        tokens.access_token = refreshed.access_token;
+      }
+      return connector.listAccounts(tokens);
+    }
+
+    case 'meta_ads': {
+      // BM client ad accounts: GET /{bm_id}/client_ad_accounts
+      const bmId = creds.business_manager_id;
+      const token = creds.system_user_token ?? creds.access_token;
+      if (!bmId || !token) throw new Error('business_manager_id and token required');
+
+      const url = `https://graph.facebook.com/v21.0/${bmId}/client_ad_accounts?fields=name,currency,timezone_name,account_status&access_token=${token}&limit=500`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Meta API error (${res.status}): ${await res.text()}`);
+      const data = (await res.json()) as {
+        data: Array<{ id: string; name: string; currency?: string; timezone_name?: string; account_status?: number }>;
+      };
+      return data.data.map((a) => ({
+        id: a.id.replace('act_', ''),
+        name: a.name,
+        currency: a.currency,
+        timezone: a.timezone_name,
+        status: a.account_status === 1 ? 'active' as const : 'inactive' as const,
+      }));
+    }
+
+    case 'dv360': {
+      // Advertisers under partner: GET /v3/advertisers?partnerId={partner_id}
+      const partnerId = creds.partner_id;
+      const token = creds.access_token ?? '';
+      if (!partnerId) throw new Error('partner_id required');
+
+      // Need fresh token — use connector if available
+      let accessToken = token;
+      if (!accessToken && creds.refresh_token && hasConnector(platform)) {
+        const connector = getConnector(platform);
+        const refreshed = await connector.refreshTokens({
+          access_token: '', refresh_token: creds.refresh_token, token_type: 'Bearer', expires_at: 0,
+        });
+        accessToken = refreshed.access_token;
+      }
+
+      const url = `https://displayvideo.googleapis.com/v3/advertisers?partnerId=${partnerId}&pageSize=200`;
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) throw new Error(`DV360 API error (${res.status}): ${await res.text()}`);
+      const data = (await res.json()) as {
+        advertisers?: Array<{ advertiserId: string; displayName: string; entityStatus: string }>;
+      };
+      return (data.advertisers ?? []).map((a) => ({
+        id: a.advertiserId,
+        name: a.displayName,
+        status: a.entityStatus === 'ENTITY_STATUS_ACTIVE' ? 'active' as const : 'inactive' as const,
+      }));
+    }
+
+    case 'tiktok_ads': {
+      // Advertiser list from BC: GET /oauth2/advertiser/get/?bc_id={bc_id}
+      const bcId = creds.bc_id;
+      const token = creds.access_token;
+      if (!token) throw new Error('access_token required');
+
+      if (bcId && connectionType === 'business_center') {
+        const url = `https://business-api.tiktok.com/open_api/v1.3/bc/advertiser/get/?bc_id=${bcId}&page_size=100`;
+        const res = await fetch(url, {
+          headers: { 'Access-Token': token },
+        });
+        if (!res.ok) throw new Error(`TikTok API error (${res.status}): ${await res.text()}`);
+        const data = (await res.json()) as {
+          data?: { list?: Array<{ advertiser_id: string; advertiser_name: string }> };
+        };
+        return (data.data?.list ?? []).map((a) => ({
+          id: String(a.advertiser_id),
+          name: a.advertiser_name,
+          status: 'active' as const,
+        }));
+      }
+      // Direct — use connector's listAccounts
+      if (hasConnector(platform)) {
+        return getConnector(platform).listAccounts({
+          access_token: token, token_type: 'Bearer', expires_at: Date.now() + 86_400_000,
+        });
+      }
+      return [];
+    }
+
+    case 'amazon_ads': {
+      // Use connector's listAccounts — returns profiles
+      if (!hasConnector(platform)) throw new Error('Amazon Ads connector not registered');
+      const connector = getConnector(platform);
+      const tokens: OAuthTokens = {
+        access_token: creds.access_token ?? '',
+        refresh_token: creds.refresh_token,
+        token_type: 'Bearer',
+        expires_at: Date.now() + 3_600_000,
+      };
+      if (!tokens.access_token && creds.refresh_token) {
+        const refreshed = await connector.refreshTokens(tokens);
+        tokens.access_token = refreshed.access_token;
+      }
+      return connector.listAccounts(tokens);
+    }
+
+    case 'tiktok_shop': {
+      if (!hasConnector(platform)) throw new Error('TikTok Shop connector not registered');
+      return getConnector(platform).listAccounts({
+        access_token: creds.access_token ?? '', token_type: 'Bearer', expires_at: Date.now() + 86_400_000,
+      });
+    }
+
+    default:
+      return [];
+  }
+}
+
+/**
+ * Build PlatformCredentials from agency credentials + specific advertiser ID.
+ * Maps the advertiser_id to the correct field per platform.
+ */
+function buildPlatformCredentials(
+  platform: ConnectorPlatform,
+  connectionType: string,
+  creds: Record<string, string>,
+  advertiserId: string,
+): import('@openagency/types').PlatformCredentials {
+  const base = {
+    platform,
+    tokens: {
+      access_token: creds.system_user_token ?? creds.access_token ?? '',
+      refresh_token: creds.refresh_token,
+      token_type: 'Bearer',
+      expires_at: Date.now() + 3_600_000,
+    } as OAuthTokens,
+    connected_at: new Date().toISOString(),
+  };
+
+  switch (platform) {
+    case 'google_ads':
+      return {
+        ...base,
+        account_id: advertiserId, // customer_id scoped to this advertiser
+        manager_id: creds.login_customer_id, // MCC as login-customer-id header
+        developer_token: creds.developer_token,
+        client_id: creds.client_id,
+        client_secret: creds.client_secret,
+        refresh_token: creds.refresh_token,
+      };
+    case 'meta_ads':
+      return {
+        ...base,
+        account_id: advertiserId, // ad_account_id
+        app_id: creds.app_id,
+        app_secret: creds.app_secret,
+      };
+    case 'dv360':
+      return {
+        ...base,
+        account_id: advertiserId, // advertiser_id for DV360
+        partner_id: creds.partner_id,
+        client_id: creds.client_id,
+        client_secret: creds.client_secret,
+        refresh_token: creds.refresh_token,
+      };
+    case 'tiktok_ads':
+      return {
+        ...base,
+        advertiser_id: advertiserId,
+        app_id: creds.app_id,
+        app_secret: creds.app_secret,
+      };
+    case 'tiktok_shop':
+      return {
+        ...base,
+        shop_id: advertiserId,
+        app_key: creds.app_key,
+        app_secret: creds.app_secret,
+      };
+    case 'amazon_ads':
+      return {
+        ...base,
+        profile_id: advertiserId,
+        client_id: creds.client_id,
+        client_secret: creds.client_secret,
+        refresh_token: creds.refresh_token,
+        region: creds.region,
+      };
+    default:
+      return base;
+  }
+}
