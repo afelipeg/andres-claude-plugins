@@ -14,7 +14,7 @@ import type {
 import { GoogleAdsConnector, type GoogleAdsConnectorConfig } from './google-ads-connector.js';
 import { withRetry } from '../../utils/retry.js';
 
-const API_VERSION = 'v17';
+const API_VERSION = 'v18';
 const BASE_URL = `https://googleads.googleapis.com/${API_VERSION}`;
 
 export class GoogleAdsWriter extends GoogleAdsConnector implements WritablePlatformConnector {

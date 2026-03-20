@@ -16,7 +16,7 @@ import { createGoogleOAuth, googleTokensToOAuth } from '../google-shared/google-
 import { RateLimiter, PLATFORM_RATE_LIMITS } from '../../utils/rate-limiter.js';
 import { withRetry } from '../../utils/retry.js';
 
-const API_VERSION = 'v17';
+const API_VERSION = 'v18';
 const BASE_URL = `https://googleads.googleapis.com/${API_VERSION}`;
 const SCOPES = ['https://www.googleapis.com/auth/adwords'];
 

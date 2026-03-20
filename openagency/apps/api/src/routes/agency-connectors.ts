@@ -418,7 +418,7 @@ async function fetchSubAccounts(
       if (mccId) headers['login-customer-id'] = mccId.replace(/-/g, '');
 
       console.log(`[google_ads] listAccessibleCustomers — devToken: ${devToken.slice(0, 6)}..., mccId: ${mccId || '(none)'}`);
-      const listRes = await fetch('https://googleads.googleapis.com/v17/customers:listAccessibleCustomers', { headers });
+      const listRes = await fetch('https://googleads.googleapis.com/v18/customers:listAccessibleCustomers', { headers });
       if (!listRes.ok) {
         const errText = await listRes.text();
         console.error(`[google_ads] listAccessibleCustomers failed (${listRes.status}):`, errText);
@@ -433,7 +433,7 @@ async function fetchSubAccounts(
       for (const custId of customerIds) {
         try {
           const q = `SELECT customer.id, customer.descriptive_name, customer.status FROM customer LIMIT 1`;
-          const qRes = await fetch(`https://googleads.googleapis.com/v17/customers/${custId}/googleAds:searchStream`, {
+          const qRes = await fetch(`https://googleads.googleapis.com/v18/customers/${custId}/googleAds:searchStream`, {
             method: 'POST',
             headers: { ...headers, 'Content-Type': 'application/json' },
             body: JSON.stringify({ query: q }),
