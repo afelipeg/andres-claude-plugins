@@ -25,8 +25,8 @@ export async function getAuthUrl(platform: string, redirectUri: string): Promise
     { headers: headers() },
   );
   if (!res.ok) throw new Error(`Failed to get auth URL for ${platform}`);
-  const data = await res.json() as { url: string };
-  return data.url;
+  const data = await res.json() as { auth_url: string; url?: string };
+  return data.auth_url ?? data.url;
 }
 
 export async function getConnectorStatus(): Promise<Array<{ platform: string; connected: boolean; last_sync?: string }>> {

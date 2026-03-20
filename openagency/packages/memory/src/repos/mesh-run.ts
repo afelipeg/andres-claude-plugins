@@ -94,14 +94,14 @@ export class MeshRunRepo {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(private db: any) {}
 
-  async save(run: MeshRunRow): Promise<void> {
+  async save(run: MeshRunRow, agencyId?: string): Promise<void> {
     const db = this.db as { unsafe: (q: string, p: unknown[]) => Promise<unknown[]> };
     const stageResults = serializeStageResults(run);
     await db.unsafe(
       `INSERT INTO mesh_runs
          (id, pipeline_id, status, started_at, completed_at, total_duration_ms,
-          goal_id, client_id, stage_results, usage)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb)
+          goal_id, client_id, stage_results, usage, agency_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11)
        ON CONFLICT (id) DO UPDATE SET
          status            = EXCLUDED.status,
          completed_at      = EXCLUDED.completed_at,
@@ -119,6 +119,7 @@ export class MeshRunRepo {
         run.usage?.agent_client_id ?? null,
         JSON.stringify(stageResults),
         run.usage ? JSON.stringify(run.usage) : null,
+        agencyId ?? null,
       ],
     );
   }
@@ -130,17 +131,23 @@ export class MeshRunRepo {
     return reconstructRun(rows[0]);
   }
 
-  async list(opts?: { limit?: number; status?: string; offset?: number }): Promise<MeshRunRow[]> {
+  async list(opts?: { limit?: number; status?: string; offset?: number; agencyId?: string }): Promise<MeshRunRow[]> {
     const db = this.db as { unsafe: (q: string, p: unknown[]) => Promise<DbRow[]> };
     const limit = opts?.limit ?? 100;
     const offset = opts?.offset ?? 0;
     const parts: string[] = ['SELECT * FROM mesh_runs'];
     const params: unknown[] = [];
+    const where: string[] = [];
 
     if (opts?.status) {
       params.push(opts.status);
-      parts.push(`WHERE status = $${params.length}`);
+      where.push(`status = $${params.length}`);
     }
+    if (opts?.agencyId) {
+      params.push(opts.agencyId);
+      where.push(`agency_id = $${params.length}`);
+    }
+    if (where.length) parts.push('WHERE ' + where.join(' AND '));
 
     parts.push('ORDER BY started_at DESC');
     params.push(limit);
@@ -152,14 +159,20 @@ export class MeshRunRepo {
     return rows.map(reconstructRun);
   }
 
-  async count(opts?: { status?: string }): Promise<number> {
+  async count(opts?: { status?: string; agencyId?: string }): Promise<number> {
     const db = this.db as { unsafe: (q: string, p: unknown[]) => Promise<Array<{ count: string }>> };
     const parts = ['SELECT COUNT(*) as count FROM mesh_runs'];
     const params: unknown[] = [];
+    const where: string[] = [];
     if (opts?.status) {
       params.push(opts.status);
-      parts.push(`WHERE status = $${params.length}`);
+      where.push(`status = $${params.length}`);
     }
+    if (opts?.agencyId) {
+      params.push(opts.agencyId);
+      where.push(`agency_id = $${params.length}`);
+    }
+    if (where.length) parts.push('WHERE ' + where.join(' AND '));
     const rows = await db.unsafe(parts.join(' '), params);
     return parseInt(rows[0]?.count ?? '0', 10);
   }

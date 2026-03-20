@@ -77,6 +77,9 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra) {
 
   const sql = db as Db;
   const encKey = process.env['ENCRYPTION_KEY'] ?? '';
+  if (!encKey || encKey.length < 32) {
+    console.warn('[SECURITY] ENCRYPTION_KEY is missing or too short — credential encryption will be weak');
+  }
 
   // All agency connector routes require admin role
   app.use('/v1/agency/*', authMiddleware(), requireAdminRole());

@@ -41,17 +41,19 @@ const inMemoryKeys = new Map<string, ApiKeyRecord>();
 const DEV_KEY = `${TEST_PREFIX}dev_default_key_for_local_testing`;
 const DEV_KEY_HASH = hashApiKey(DEV_KEY);
 
-// Seed dev key
-inMemoryKeys.set(DEV_KEY_HASH, {
-  id: 'dev-default',
-  prefix: extractPrefix(DEV_KEY),
-  hash: DEV_KEY_HASH,
-  name: 'Development default',
-  role: 'admin',
-  scopes: ['*'],
-  created_at: new Date().toISOString(),
-  revoked: false,
-});
+// Seed dev key — ONLY in non-production environments
+if (process.env['NODE_ENV'] !== 'production') {
+  inMemoryKeys.set(DEV_KEY_HASH, {
+    id: 'dev-default',
+    prefix: extractPrefix(DEV_KEY),
+    hash: DEV_KEY_HASH,
+    name: 'Development default',
+    role: 'admin',
+    scopes: ['*'],
+    created_at: new Date().toISOString(),
+    revoked: false,
+  });
+}
 
 export function createApiKeyRecord(
   name: string,

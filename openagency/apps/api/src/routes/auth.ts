@@ -2,8 +2,8 @@
 // Endpoints for user login, session, API key management, and user management.
 
 import { Hono } from 'hono';
-import { randomUUID } from 'node:crypto';
-import { createHash } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
+import { hashSync, compareSync } from 'bcryptjs';
 import { signToken, clientCredentialsGrant } from '@openagency/auth';
 import { createApiKeyRecord, revokeApiKey, listApiKeys } from '@openagency/auth';
 import { authMiddleware } from '@openagency/auth/middleware';
@@ -25,15 +25,26 @@ interface UserRecord {
 const memoryStore = new Map<string, UserRecord>(); // email → user
 const memoryById = new Map<string, UserRecord>();  // id → user
 
+const BCRYPT_ROUNDS = 12;
+
 function hashPassword(password: string): string {
-  return createHash('sha256').update(password).digest('hex');
+  return hashSync(password, BCRYPT_ROUNDS);
+}
+
+function verifyPassword(password: string, hash: string): boolean {
+  // Support legacy SHA-256 hashes (64 hex chars) for migration
+  if (/^[a-f0-9]{64}$/.test(hash)) {
+    return createHash('sha256').update(password).digest('hex') === hash;
+  }
+  return compareSync(password, hash);
 }
 
 // ─── Seed admin user ────────────────────────────────────────────────
+const ADMIN_PASSWORD = process.env['ADMIN_INITIAL_PASSWORD'] ?? (process.env['NODE_ENV'] !== 'production' ? 'Morchis1512*' : '');
 const ADMIN_USER: UserRecord = {
   id: 'c1a2b3d4-0000-0000-0000-dedalo000001',
   email: 'dedalo@polanyi.tech',
-  password_hash: '300759c8039cf1fca0823a2461ffae9cbcc56490547439ede784855943e5ce5e',
+  password_hash: ADMIN_PASSWORD ? hashPassword(ADMIN_PASSWORD) : '',
   name: 'Andrés',
   role: 'super_admin',
   scopes: ['*'],
@@ -146,7 +157,7 @@ export function authRoutes(userRepo?: UserRepo | null) {
       const email = body.email.trim().toLowerCase();
       const user = await getUser(repo, email);
 
-      if (!user || user.password_hash !== hashPassword(body.password)) {
+      if (!user || !verifyPassword(body.password, user.password_hash)) {
         return c.json(
           { error: 'unauthorized', message: 'Invalid email or password', status: 401 },
           401,
@@ -337,6 +348,10 @@ export function authRoutes(userRepo?: UserRepo | null) {
       return c.json({ error: 'validation_error', message: 'token and password are required', status: 400 }, 400);
     }
 
+    if (body.password.length < 8 || !/[A-Z]/.test(body.password) || !/[0-9]/.test(body.password)) {
+      return c.json({ error: 'validation_error', message: 'Password must be at least 8 characters with 1 uppercase and 1 number', status: 400 }, 400);
+    }
+
     if (!repo) {
       return c.json({ error: 'not_implemented', message: 'Invite system requires database', status: 501 }, 501);
     }
@@ -424,7 +439,7 @@ export function authRoutes(userRepo?: UserRepo | null) {
     const user = await getUserById(repo, auth.sub);
     if (!user) return c.json({ error: 'not_found', message: 'User not found', status: 404 }, 404);
 
-    if (user.password_hash !== hashPassword(body.current_password)) {
+    if (!verifyPassword(body.current_password, user.password_hash)) {
       return c.json({ error: 'unauthorized', message: 'Current password is incorrect', status: 401 }, 401);
     }
 

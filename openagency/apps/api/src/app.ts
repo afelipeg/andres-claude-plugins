@@ -2,6 +2,7 @@
 
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { authMiddleware } from '@openagency/auth/middleware';
 import { OpenAgency, detectLLMConfig, createLogger } from '@openagency/core';
 import { LeakDetectorEngine } from '@openagency/engines';
 import { MediaArchitectEngine } from '@openagency/engines';
@@ -449,7 +450,7 @@ export async function createApp() {
   app.use(
     '*',
     cors({
-      origin: process.env['CORS_ORIGIN'] ?? '*',
+      origin: process.env['CORS_ORIGIN'] ?? (process.env['NODE_ENV'] === 'production' ? 'https://plinth.polanyi.tech' : '*'),
       allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
     }),
@@ -461,11 +462,14 @@ export async function createApp() {
   app.route('/', a2aDiscoveryRoute());
   app.route('/', demoRequestRoutes());
 
-  // ─── Auth routes ────────────────────────────────────────────────
+  // ─── Auth routes (login, invite, accept — have their own auth logic) ──
   app.route('/', authRoutes(userRepo));
 
-  // ─── OAuth Storage (Google Drive, OneDrive) ────────────────────
+  // ─── OAuth Storage (Google Drive, OneDrive — callbacks must be public) ──
   app.route('/', oauthStorageRoutes(db));
+
+  // ─── Global auth gate: ALL routes below require authentication ──
+  app.use('/v1/*', authMiddleware());
 
   // ─── Protected routes ───────────────────────────────────────────
   app.route('/', engineRoutes(agency, eventBus));

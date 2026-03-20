@@ -28,6 +28,30 @@ export async function callLLM(
   }
 }
 
+// ─── Retry with exponential backoff ─────────────────────────────────
+const MAX_RETRIES = 3;
+const BASE_DELAY_MS = 1000;
+
+async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const res = await fetch(url, init);
+    if (res.ok || attempt === MAX_RETRIES) return res;
+
+    // Only retry on 429 (rate limit) and 5xx (server errors)
+    if (res.status !== 429 && res.status < 500) return res;
+
+    const retryAfter = res.headers.get('retry-after');
+    const delayMs = retryAfter
+      ? Math.min(parseInt(retryAfter, 10) * 1000, 30000)
+      : BASE_DELAY_MS * Math.pow(2, attempt);
+
+    console.warn(`[LLM] Retry ${attempt + 1}/${MAX_RETRIES} after ${delayMs}ms (status: ${res.status})`);
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  // Unreachable but satisfies TS
+  throw new Error('fetchWithRetry: exhausted retries');
+}
+
 async function callAnthropic(config: LLMConfig, messages: LLMMessage[]): Promise<LLMResponse> {
   const apiKey = config.apiKey ?? process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('Anthropic API key required. Set ANTHROPIC_API_KEY or configure via openagency init.');
@@ -35,7 +59,7 @@ async function callAnthropic(config: LLMConfig, messages: LLMMessage[]): Promise
   const systemMsg = messages.find((m) => m.role === 'system');
   const userMsgs = messages.filter((m) => m.role !== 'system');
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -73,7 +97,7 @@ async function callDeepSeek(config: LLMConfig, messages: LLMMessage[]): Promise<
   const apiKey = config.apiKey ?? process.env.DEEPSEEK_API_KEY;
   if (!apiKey) throw new Error('DeepSeek API key required. Set DEEPSEEK_API_KEY or configure via openagency init.');
 
-  const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+  const res = await fetchWithRetry('https://api.deepseek.com/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

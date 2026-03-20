@@ -5,6 +5,7 @@ export interface ScorecardDbRecord {
   id: string;
   run_id?: string;
   client_id?: string;
+  agency_id?: string;
   run_type: string;
   ad_spend: number;
   billing: Record<string, unknown>;
@@ -23,9 +24,10 @@ export class ScorecardDbRepo {
   async save(record: ScorecardDbRecord): Promise<void> {
     await this.db`
       INSERT INTO scorecards
-        (id, run_id, client_id, run_type, ad_spend, billing, engine_outputs, engine_results, status, feedback, created_at, updated_at)
+        (id, run_id, client_id, agency_id, run_type, ad_spend, billing, engine_outputs, engine_results, status, feedback, created_at, updated_at)
       VALUES (
         ${record.id}, ${record.run_id ?? null}, ${record.client_id ?? null},
+        ${record.agency_id ?? null},
         ${record.run_type}, ${record.ad_spend},
         ${JSON.stringify(record.billing)}, ${JSON.stringify(record.engine_outputs)},
         ${JSON.stringify(record.engine_results)},

@@ -165,20 +165,27 @@ async function runEngines(
   if (!data.gross_spend && adSpend) data.gross_spend = adSpend;
   if (!data.ad_spend && adSpend) data.ad_spend = adSpend;
 
-  for (const engineId of engineIds) {
+  // Run all engines concurrently — they are independent
+  const tasks = engineIds.map(async (engineId) => {
+    const skillId = getPrimarySkill(engineId);
+    if (!skillId) return { engineId, result: null, error: null };
     try {
-      const skillId = getPrimarySkill(engineId);
-      if (skillId) {
-        const result = await agency.run(engineId, skillId, data);
-        engineResults[engineId] = { [skillId]: result };
-        // Extract inner .data for billing — agency.run() wraps output in { engine, skill, data, timestamp }
-        const innerData = ((result as unknown as Record<string, unknown>).data ?? {}) as Record<string, unknown>;
-        mapToEngineOutputs(engineOutputs, engineId, skillId, innerData);
-      }
+      const result = await agency.run(engineId, skillId, data);
+      return { engineId, skillId, result, error: null };
     } catch (err) {
-      engineResults[engineId] = {
-        error: err instanceof Error ? err.message : String(err),
-      };
+      return { engineId, skillId, result: null, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  const settled = await Promise.all(tasks);
+
+  for (const { engineId, skillId, result, error } of settled) {
+    if (error) {
+      engineResults[engineId] = { error };
+    } else if (result && skillId) {
+      engineResults[engineId] = { [skillId]: result };
+      const innerData = ((result as unknown as Record<string, unknown>).data ?? {}) as Record<string, unknown>;
+      mapToEngineOutputs(engineOutputs, engineId, skillId, innerData);
     }
   }
 
