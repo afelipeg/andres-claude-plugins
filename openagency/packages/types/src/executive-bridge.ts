@@ -24,6 +24,8 @@ export interface ShapleyOutput {
   total_conversions: number;
   shapley_total: number;
   channels: ShapleyChannelResult[];
+  /** Whether exact coalition enumeration or sampling approximation was used. */
+  method?: 'exact' | 'approximation';
 }
 
 export interface ShapleyCompareInput {

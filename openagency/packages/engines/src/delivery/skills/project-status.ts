@@ -1,6 +1,7 @@
 // ─── Skill: project-status ───────────────────────────────────────────
 // Generates a project status / milestone tracking document (PDF/DOCX)
 // showing KPIs vs targets and active initiatives.
+// Tier: fast (structured status data, less narrative)
 
 import type { ProjectStatusInput } from '@openagency/schemas';
 import type { DeliverySkillOutput } from '@openagency/types';
@@ -48,8 +49,11 @@ export async function run(input: ProjectStatusInput): Promise<DeliverySkillOutpu
   const prompt = `Client: ${input.client_id}\nAs of: ${asOf}\n\nENGINE DATA:\n${context}\n\nGenerate the project status report.`;
 
   let llm: ProjectStatusLLM;
+  let tokenUsage: { input_tokens: number; output_tokens: number } | undefined;
   try {
-    llm = parseJsonResponse<ProjectStatusLLM>(await callDeliveryLLM(SYSTEM_PROMPT, prompt));
+    const result = await callDeliveryLLM(SYSTEM_PROMPT, prompt, 'fast');
+    tokenUsage = result.usage;
+    llm = parseJsonResponse<ProjectStatusLLM>(result.content);
   } catch {
     llm = {
       executive_summary: `Project status report as of ${asOf} for ${input.client_id}.`,
@@ -92,5 +96,10 @@ export async function run(input: ProjectStatusInput): Promise<DeliverySkillOutpu
   }
 
   const { fileOutput } = await persistGeneratedFile({ clientId: input.client_id, skillId: 'project-status', runId: input.run_id, fileType: primaryFormat, localPath, sizeBytes });
-  return { skill_id: 'project-status', file: fileOutput, summary: llm.summary, generated_at: new Date().toISOString() };
+
+  const output: DeliverySkillOutput = { skill_id: 'project-status', file: fileOutput, summary: llm.summary, generated_at: new Date().toISOString() };
+  if (tokenUsage) {
+    (output as DeliverySkillOutput & { token_usage?: unknown }).token_usage = tokenUsage;
+  }
+  return output;
 }

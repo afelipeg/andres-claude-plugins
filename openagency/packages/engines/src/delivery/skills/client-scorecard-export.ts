@@ -1,6 +1,7 @@
 // ─── Skill: client-scorecard-export ──────────────────────────────────
 // Exports the client scorecard as XLSX (primary) + PDF (secondary).
 // Both files are generated and returned; XLSX in `file`, PDF in `additional_files`.
+// Tier: fast (structured data, less reasoning needed)
 
 import type { ClientScorecardExportInput } from '@openagency/schemas';
 import type { DeliverySkillOutput } from '@openagency/types';
@@ -53,8 +54,11 @@ export async function run(input: ClientScorecardExportInput): Promise<DeliverySk
   const prompt = `Client: ${input.client_id}\nPeriod: ${input.period_start} to ${input.period_end}\n\nENGINE DATA:\n${context}\n\nGenerate the client scorecard.`;
 
   let llm: ScorecardLLM;
+  let tokenUsage: { input_tokens: number; output_tokens: number } | undefined;
   try {
-    llm = parseJsonResponse<ScorecardLLM>(await callDeliveryLLM(SYSTEM_PROMPT, prompt));
+    const result = await callDeliveryLLM(SYSTEM_PROMPT, prompt, 'fast');
+    tokenUsage = result.usage;
+    llm = parseJsonResponse<ScorecardLLM>(result.content);
   } catch {
     llm = {
       executive_summary: `Scorecard for ${input.client_id} — ${input.period_start} to ${input.period_end}.`,
@@ -161,11 +165,15 @@ export async function run(input: ClientScorecardExportInput): Promise<DeliverySk
     pdfFile = fileOutput;
   }
 
-  return {
+  const output: DeliverySkillOutput = {
     skill_id: 'client-scorecard-export',
     file: xlsxFile,
     additional_files: pdfFile ? [pdfFile] : undefined,
     summary: llm.summary,
     generated_at: new Date().toISOString(),
   };
+  if (tokenUsage) {
+    (output as DeliverySkillOutput & { token_usage?: unknown }).token_usage = tokenUsage;
+  }
+  return output;
 }

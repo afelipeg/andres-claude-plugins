@@ -1,5 +1,6 @@
 // ─── OODA Loop Runtime ──────────────────────────────────────────────
 // Core autonomous agent that implements the Observe-Orient-Decide-Act loop.
+// v2: Outcome deltas fed into orient phase as reinforcement learning signals.
 
 import { ulid } from 'ulid';
 import type {
@@ -211,14 +212,38 @@ export class OodaRuntime implements AgentEngine {
         activeGoals = goals.map((g) => `${g.name}: ${g.target_metric} → ${g.target_value} (${g.progress_pct}%)`);
       }
 
-      // Load recent memory
+      // Load recent memory — use semantic search if available
       let memorySnippets: string[] = [];
       if (this.deps.memoryRepo) {
-        const memories = await this.deps.memoryRepo.getRecent(this.state.agent_id, 5);
-        memorySnippets = memories.map((m) => {
-          const row = m as Record<string, unknown>;
-          return String(row['content'] ?? '');
-        });
+        try {
+          // Build a search query from current observations
+          const obsContext = obs.slice(0, 5).map(o =>
+            `${o.type} ${o.source} ${JSON.stringify(o.data).slice(0, 100)}`
+          ).join(' ');
+
+          const memories = await this.deps.memoryRepo.search(
+            this.state.agent_id,
+            obsContext,
+            5,
+          );
+          memorySnippets = memories.map((m) => {
+            const row = m as Record<string, unknown>;
+            return String(row['content'] ?? '');
+          });
+        } catch {
+          // Fallback to getRecent if search fails
+          const memories = await this.deps.memoryRepo.getRecent(this.state.agent_id, 5);
+          memorySnippets = memories.map((m) => {
+            const row = m as Record<string, unknown>;
+            return String(row['content'] ?? '');
+          });
+        }
+      }
+
+      // Inject outcome deltas as reinforcement signals
+      const outcomeSummaries = this.outcomeTracker.getRecentDeltaSummaries(this.state.agent_id);
+      if (outcomeSummaries.length > 0) {
+        memorySnippets.push(...outcomeSummaries);
       }
 
       // Load recent decisions
@@ -352,9 +377,22 @@ export class OodaRuntime implements AgentEngine {
           }
         }
 
-        // Record outcome before metrics
+        // Record outcome before metrics and schedule after-measurement
         if (this.deps.outcomeRepo) {
-          await this.outcomeTracker.recordBefore(decision.id, this.state.agent_id, {});
+          const outcomeId = await this.outcomeTracker.recordBefore(decision.id, this.state.agent_id, {});
+
+          // Schedule after-measurement for next cycle (5 minutes default)
+          const measureDelayMs = this.state.configuration.cycle_interval_ms ?? 300_000;
+          this.outcomeTracker.scheduleAfterMeasurement(
+            outcomeId,
+            this.state.agent_id,
+            measureDelayMs,
+            async () => {
+              // Re-collect current metrics when the timer fires
+              // In production, this would pull fresh platform data
+              return {};
+            },
+          );
         }
 
         decision.status = 'executed';

@@ -3,7 +3,12 @@
 // Not exported from the engine — internal only.
 
 import { ulid } from 'ulid';
-import { callLLM, detectLLMConfig } from '@openagency/core';
+import {
+  callLLMWithFallback,
+  detectLLMConfigs,
+  resolveModelTier,
+} from '@openagency/core';
+import type { ModelTier, LLMResponse } from '@openagency/core';
 import type { DeliveryFileOutput, DeliveryFileType } from '@openagency/types';
 import {
   createFileStorage,
@@ -13,25 +18,50 @@ import {
 
 // ─── LLM ─────────────────────────────────────────────────────────────
 
+/** Result from callDeliveryLLM including token usage. */
+export interface DeliveryLLMResult {
+  content: string;
+  usage?: { input_tokens: number; output_tokens: number };
+}
+
 /**
- * Call Claude with a system + user prompt. Returns the raw text response.
- * Uses detectLLMConfig() (Anthropic → DeepSeek fallback, per arch rules).
- * maxTokens is set to 4096 to allow for substantial delivery content.
+ * Call Claude with a system + user prompt. Returns text + usage.
+ * Uses detectLLMConfigs() for automatic failover (Anthropic -> DeepSeek -> cache).
+ * Accepts an optional `tier` parameter for per-skill model selection:
+ *   - 'fast'     = claude-haiku-4-5 / deepseek-chat (cheaper, structured data)
+ *   - 'standard' = claude-sonnet-4 (default, narrative content)
+ *   - 'advanced' = claude-sonnet-4 with higher max_tokens
  */
 export async function callDeliveryLLM(
   systemPrompt: string,
   userPrompt: string,
-): Promise<string> {
-  const base = detectLLMConfig();
-  if (!base) {
+  tier: ModelTier = 'standard',
+): Promise<DeliveryLLMResult> {
+  const baseConfigs = detectLLMConfigs();
+  if (baseConfigs.length === 0) {
     throw new Error('No LLM configured. Set ANTHROPIC_API_KEY.');
   }
-  const config = { ...base, maxTokens: 4096, temperature: 0.3 };
-  const result = await callLLM(config, [
+
+  // Apply tier-specific model + maxTokens to each config in the fallback chain
+  const configs = baseConfigs.map((base) => {
+    const tierOverrides = resolveModelTier(base.provider, tier);
+    return {
+      ...base,
+      model: tierOverrides.model,
+      maxTokens: Math.max(tierOverrides.maxTokens, 4096), // delivery needs at least 4096
+      temperature: 0.3,
+    };
+  });
+
+  const result: LLMResponse = await callLLMWithFallback(configs, [
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt },
   ]);
-  return result.content;
+
+  return {
+    content: result.content,
+    usage: result.usage,
+  };
 }
 
 /**

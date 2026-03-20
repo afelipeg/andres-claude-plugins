@@ -1,7 +1,8 @@
 // ─── MMM Scenario Planner ───────────────────────────────────────────
-// Simplified Marketing Mix Model: Hill saturation + Adstock + budget optimization.
+// Marketing Mix Model: Hill saturation + Adstock + budget optimization.
+// v4.0: Bayesian MCMC when historical time-series available (104+ weeks),
+//        heuristic fallback otherwise.
 // 4 phases: pre_model, model, post_model, optimize.
-// MMM scenario planner — Hill saturation + geometric Adstock
 
 import {
   hillResponse,
@@ -10,6 +11,7 @@ import {
   round,
 } from '@openagency/core/utils/math';
 import { getChannelDefaults } from './benchmarks.js';
+import { runBayesianMMM } from './bayesian-mmm.js';
 import type {
   MMMPreModelInput,
   MMMPreModelOutput,
@@ -161,7 +163,176 @@ export function preModel(data: MMMPreModelInput): MMMPreModelOutput {
 
 // ─── Phase 2: Model ─────────────────────────────────────────────────
 
-export function model(data: MMMModelInput): MMMModelOutput | { error: string } {
+/**
+ * Determine if Bayesian MCMC mode should be used.
+ * Requires: weekly_kpi array + all channels have weekly_spend + time_periods >= 104
+ * (or force_bayesian flag).
+ */
+function shouldUseBayesian(data: MMMModelInput): boolean {
+  if (data.force_bayesian) return true;
+  if (!data.weekly_kpi || data.weekly_kpi.length < 52) return false;
+  const timePeriods = data.time_periods ?? data.weekly_kpi.length;
+  if (timePeriods < 104 && !data.force_bayesian) return false;
+  const allChannelsHaveTS = (data.channels ?? []).every(
+    ch => ch.weekly_spend && ch.weekly_spend.length >= timePeriods,
+  );
+  return allChannelsHaveTS;
+}
+
+function modelBayesian(data: MMMModelInput): MMMModelOutput {
+  const weeklyKpi = data.weekly_kpi!;
+  const T = weeklyKpi.length;
+  const channels = data.channels ?? [];
+  const totalBudget = data.total_budget ?? 0;
+  const totalKpi = data.total_kpi ?? weeklyKpi.reduce((a, b) => a + b, 0);
+
+  const mcmc = data.mcmc_config ?? {};
+
+  const bayesResult = runBayesianMMM({
+    weekly_kpi: weeklyKpi,
+    channels: channels.map(ch => ({
+      channel: ch.name,
+      weekly_spend: ch.weekly_spend!,
+    })),
+    controls: data.controls,
+    num_chains: mcmc.num_chains,
+    warmup: mcmc.warmup,
+    num_samples: mcmc.num_samples,
+    num_harmonics: mcmc.num_harmonics,
+    seed: mcmc.seed,
+  });
+
+  // Build channel models from posterior
+  const channelModels: MMMChannelModel[] = [];
+  let totalContribution = 0;
+
+  for (let m = 0; m < channels.length; m++) {
+    const ch = channels[m];
+    const chName = ch.name ?? 'unknown';
+    const chSpend = ch.spend ?? (ch.weekly_spend ? ch.weekly_spend.reduce((a, b) => a + b, 0) : 0);
+    const posterior = bayesResult.channel_posteriors[m];
+
+    totalContribution += posterior.contribution.mean;
+
+    const decayRate = posterior.alpha.mean;
+    const halfLife = decayRate > 0 && decayRate < 1
+      ? Math.log(0.5) / Math.log(decayRate)
+      : 0;
+
+    channelModels.push({
+      channel: chName,
+      spend: round(chSpend),
+      spend_share_pct: totalBudget > 0 ? round((chSpend / totalBudget) * 100, 1) : 0,
+      parameters: {
+        alpha: round(posterior.slope.mean, 3), // Hill slope
+        ec50: round(posterior.ec.mean),
+        max_response: round(posterior.beta.mean * T), // scale beta to total
+        decay_rate: round(decayRate, 3),
+        adstock_half_life_weeks: round(halfLife, 1),
+      },
+      results: {
+        estimated_contribution: round(posterior.contribution.mean),
+        contribution_share_pct: 0, // filled below
+        roi: round(posterior.roi.mean),
+        marginal_roi: round(posterior.marginal_roi.mean, 4),
+        saturation_pct: round(posterior.saturation_pct, 1),
+      },
+    });
+  }
+
+  // Fill contribution shares
+  for (const cm of channelModels) {
+    if (totalContribution > 0) {
+      cm.results.contribution_share_pct = round(
+        (cm.results.estimated_contribution / totalContribution) * 100,
+        1,
+      );
+    }
+  }
+
+  const baseContribution = round(bayesResult.baseline_mean * T);
+  const predictedKpiTotal = round(
+    bayesResult.predicted_kpi.reduce((a, b) => a + b, 0),
+  );
+
+  // Response curves from posterior mean
+  const responseCurves: ResponseCurveData[] = channelModels.map((cm) => {
+    const maxSpend = cm.spend * 2.5 || 100_000;
+    const step = maxSpend / 24;
+    const points = Array.from({ length: 25 }, (_, i) => {
+      const s = round(step * i);
+      return {
+        spend: s,
+        response: round(hillResponse(s, cm.parameters.max_response, cm.parameters.alpha, cm.parameters.ec50)),
+      };
+    });
+    return {
+      channel: cm.channel,
+      current_spend: cm.spend,
+      current_response: cm.results.estimated_contribution,
+      points,
+    };
+  });
+
+  // Model fit from Bayesian predictions
+  const periods = Array.from({ length: T }, (_, i) => `W${i + 1}`);
+  const modelFit: ModelFitData = {
+    periods,
+    actual: weeklyKpi.map(v => round(v)),
+    predicted: bayesResult.predicted_kpi,
+  };
+
+  // ROI intervals from posterior
+  const roiIntervals: RoiInterval[] = bayesResult.channel_posteriors.map((cp) => ({
+    channel: cp.channel,
+    roi: cp.roi.mean,
+    lower_ci: cp.roi.ci_5,
+    upper_ci: cp.roi.ci_95,
+    mroi: cp.marginal_roi.mean,
+    mroi_lower_ci: cp.marginal_roi.ci_5,
+    mroi_upper_ci: cp.marginal_roi.ci_95,
+  }));
+
+  // Contribution waterfall
+  const contributionWaterfall: ContributionEntry[] = [
+    {
+      channel: 'Base (Non-Media)',
+      contribution: baseContribution,
+      contribution_pct: predictedKpiTotal > 0 ? round((baseContribution / predictedKpiTotal) * 100, 1) : 0,
+    },
+    ...channelModels.map((cm) => ({
+      channel: cm.channel,
+      contribution: cm.results.estimated_contribution,
+      contribution_pct: cm.results.contribution_share_pct,
+    })),
+  ];
+
+  return {
+    phase: 'model',
+    model_type: 'bayesian_mmm_mcmc',
+    methodology: 'Bayesian MMM with Metropolis-Hastings MCMC — Adstock + Hill saturation + Fourier seasonality',
+    methodology_note: `Bayesian MCMC inference with ${bayesResult.num_chains} chains x ${bayesResult.num_samples} samples (${bayesResult.warmup} warmup). R-hat and ESS computed for convergence diagnostics. Credible intervals are 90% HPD from posterior samples.`,
+    total_budget: totalBudget,
+    total_kpi: totalKpi,
+    predicted_kpi: predictedKpiTotal,
+    base_contribution: baseContribution,
+    media_contribution: round(totalContribution),
+    media_contribution_pct:
+      predictedKpiTotal > 0 ? round((totalContribution / predictedKpiTotal) * 100, 1) : 0,
+    overall_roi: totalBudget > 0 ? round(totalContribution / totalBudget) : 0,
+    r_squared_estimate: bayesResult.r_squared,
+    channel_models: channelModels,
+    response_curves: responseCurves,
+    model_fit: modelFit,
+    roi_intervals: roiIntervals,
+    contribution_waterfall: contributionWaterfall,
+    next_step: 'post_model',
+    convergence_diagnostics: bayesResult.convergence,
+    mape: bayesResult.mape,
+  };
+}
+
+function modelHeuristic(data: MMMModelInput): MMMModelOutput | { error: string } {
   const totalBudget = data.total_budget ?? 0;
   const totalKpi = data.total_kpi ?? 0;
   const channels = data.channels ?? [];
@@ -302,7 +473,7 @@ export function model(data: MMMModelInput): MMMModelOutput | { error: string } {
     phase: 'model',
     model_type: 'simplified_bayesian_mmm',
     methodology: 'Hill saturation + geometric Adstock (Meridian-inspired)',
-    methodology_note: 'Heuristic estimates — not statistically computed. R-squared, confidence intervals, and model fit are approximations for planning purposes. Full Bayesian MMM with MCMC sampling requires historical data.',
+    methodology_note: 'Heuristic estimates — not statistically computed. R-squared, confidence intervals, and model fit are approximations for planning purposes. Full Bayesian MMM with MCMC sampling requires 104+ weeks of weekly KPI and spend data per channel.',
     total_budget: totalBudget,
     total_kpi: totalKpi,
     predicted_kpi: round(predictedKpi),
@@ -319,6 +490,23 @@ export function model(data: MMMModelInput): MMMModelOutput | { error: string } {
     contribution_waterfall: contributionWaterfall,
     next_step: 'post_model',
   };
+}
+
+export function model(data: MMMModelInput): MMMModelOutput | { error: string } {
+  if (shouldUseBayesian(data)) {
+    try {
+      return modelBayesian(data);
+    } catch (err) {
+      // Fallback to heuristic if MCMC fails
+      const heuristic = modelHeuristic(data);
+      if ('error' in heuristic) return heuristic;
+      heuristic.methodology_note =
+        `Bayesian MCMC failed (${err instanceof Error ? err.message : 'unknown error'}), fell back to heuristic. ` +
+        (heuristic.methodology_note ?? '');
+      return heuristic;
+    }
+  }
+  return modelHeuristic(data);
 }
 
 // ─── Phase 3: Post-Model ────────────────────────────────────────────
@@ -353,12 +541,13 @@ export interface PostModelOutput {
 }
 
 export function postModel(data: PostModelInput): PostModelOutput {
-  const modelResults = data.model_results ?? {};
+  const modelResults = data.model_results ?? ({} as MMMModelOutput);
   const channels = modelResults.channel_models ?? [];
   const rSquared = modelResults.r_squared_estimate ?? 0;
 
   const diagnostics: PostModelOutput['overall_fit'] = [];
 
+  // R-squared diagnostic
   if (rSquared < 0.7) {
     diagnostics.push({
       metric: 'r_squared',
@@ -379,6 +568,42 @@ export function postModel(data: PostModelInput): PostModelOutput {
       value: rSquared,
       status: 'good',
       action: 'Model fit is strong. Proceed to optimization.',
+    });
+  }
+
+  // MAPE diagnostic (v4.0 — Bayesian mode)
+  if (modelResults.mape !== undefined) {
+    const mape = modelResults.mape;
+    diagnostics.push({
+      metric: 'mape',
+      value: mape,
+      status: mape < 10 ? 'good' : mape < 20 ? 'acceptable' : 'poor',
+      action: mape < 10
+        ? 'MAPE is excellent. Model predictions are reliable.'
+        : mape < 20
+          ? 'MAPE is acceptable. Monitor for drift.'
+          : 'MAPE is high. Consider adding controls or re-specifying channels.',
+    });
+  }
+
+  // Convergence diagnostic (v4.0 — Bayesian mode)
+  if (modelResults.convergence_diagnostics) {
+    const conv = modelResults.convergence_diagnostics;
+    diagnostics.push({
+      metric: 'max_r_hat',
+      value: conv.max_r_hat,
+      status: conv.max_r_hat < 1.05 ? 'good' : conv.max_r_hat < 1.1 ? 'acceptable' : 'poor',
+      action: conv.max_r_hat < 1.1
+        ? 'MCMC chains converged.'
+        : 'Chains have not converged. Increase warmup or check model specification.',
+    });
+    diagnostics.push({
+      metric: 'min_ess',
+      value: conv.min_ess,
+      status: conv.min_ess > 400 ? 'good' : conv.min_ess > 100 ? 'acceptable' : 'poor',
+      action: conv.min_ess > 100
+        ? 'Effective sample size is sufficient.'
+        : 'ESS is low. Increase num_samples or adjust proposal distribution.',
     });
   }
 
@@ -576,6 +801,11 @@ export function optimize(data: MMMOptimizeInput): MMMOptimizeOutput | { error: s
   if (totalBudget <= 0) return { error: 'total_budget must be positive' };
   if (channels.length === 0) return { error: 'channels list required with spend and parameters' };
 
+  // Build posterior lookup if available
+  const posteriorMap = new Map(
+    (data.bayesian_posteriors ?? []).map(p => [p.channel, p])
+  );
+
   // Parse channel parameters
   const chParams: ChannelParam[] = channels.map((ch) => {
     const chSpend = ch.spend ?? 0;
@@ -589,6 +819,11 @@ export function optimize(data: MMMOptimizeInput): MMMOptimizeOutput | { error: s
     }
 
     const con = constraints[ch.name] ?? {};
+
+    // Guardrail: no channel > 50% of total
+    const maxPctRaw = con.max_pct ?? 100;
+    const maxPct = Math.min(maxPctRaw, 50);
+
     return {
       name: ch.name,
       current_spend: chSpend,
@@ -596,7 +831,7 @@ export function optimize(data: MMMOptimizeInput): MMMOptimizeOutput | { error: s
       ec50,
       max_response: maxResponse,
       min_pct: con.min_pct ?? 0,
-      max_pct: con.max_pct ?? 100,
+      max_pct: maxPct,
     };
   });
 
@@ -665,6 +900,18 @@ export function optimize(data: MMMOptimizeInput): MMMOptimizeOutput | { error: s
     }
     reallocation.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
 
+    // Enforce guardrail: changes < 50% per period
+    for (const r of reallocation) {
+      if (r.current_spend > 0) {
+        const changePct = Math.abs(r.delta) / r.current_spend;
+        if (changePct > 0.5) {
+          const cappedDelta = r.current_spend * 0.5 * (r.delta > 0 ? 1 : -1);
+          r.delta = round(cappedDelta);
+          r.optimized_spend = round(r.current_spend + cappedDelta);
+        }
+      }
+    }
+
     comparison = {
       kpi_lift: round(kpiLift),
       kpi_lift_pct: round(kpiLiftPct, 1),
@@ -686,27 +933,49 @@ export function optimize(data: MMMOptimizeInput): MMMOptimizeOutput | { error: s
   for (const ch of chParams) {
     const sat = hillResponse(ch.current_spend, ch.max_response, ch.alpha, ch.ec50);
     const satPct = ch.max_response > 0 ? (sat / ch.max_response) * 100 : 0;
-    if (satPct > 85) {
+
+    // Use posterior mROI if available
+    const posterior = posteriorMap.get(ch.name);
+    const effectiveMroi = posterior?.marginal_roi_mean ??
+      marginalResponse(ch.current_spend, ch.max_response, ch.alpha, ch.ec50);
+    const effectiveSat = posterior?.saturation_pct ?? satPct;
+
+    if (effectiveSat > 85) {
       recommendations.push({
         priority: 'medium',
-        action: `Reduce ${ch.name} spend — ${Math.round(satPct)}% saturated, diminishing returns.`,
+        action: `Reduce ${ch.name} spend — ${Math.round(effectiveSat)}% saturated, diminishing returns.`,
         impact: 'Reallocate to under-saturated channels',
       });
-    } else if (satPct < 30) {
-      const mr = marginalResponse(ch.current_spend, ch.max_response, ch.alpha, ch.ec50);
-      if (mr > 1.5) {
-        recommendations.push({
-          priority: 'medium',
-          action: `Increase ${ch.name} spend — only ${Math.round(satPct)}% saturated, mROI=${mr.toFixed(2)}.`,
-          impact: 'High marginal returns available',
-        });
-      }
+    } else if (effectiveSat < 30 && effectiveMroi > 1.5) {
+      recommendations.push({
+        priority: 'medium',
+        action: `Increase ${ch.name} spend — only ${Math.round(effectiveSat)}% saturated, mROI=${effectiveMroi.toFixed(2)}.`,
+        impact: 'High marginal returns available',
+      });
     }
+  }
+
+  // Build confidence interval on KPI lift from Bayesian posteriors
+  let kpiLiftConfidence: MMMOptimizeOutput['kpi_lift_confidence'];
+  if (posteriorMap.size > 0 && comparison) {
+    // Approximate: scale lift by ratio of mROI CI bounds to mean
+    const avgMroiRatio5 = Array.from(posteriorMap.values()).reduce(
+      (s, p) => s + (p.marginal_roi_mean > 0 ? p.marginal_roi_ci_5 / p.marginal_roi_mean : 0.5), 0,
+    ) / posteriorMap.size;
+    const avgMroiRatio95 = Array.from(posteriorMap.values()).reduce(
+      (s, p) => s + (p.marginal_roi_mean > 0 ? p.marginal_roi_ci_95 / p.marginal_roi_mean : 1.5), 0,
+    ) / posteriorMap.size;
+    kpiLiftConfidence = {
+      ci_5: round(comparison.kpi_lift * avgMroiRatio5),
+      ci_95: round(comparison.kpi_lift * avgMroiRatio95),
+    };
   }
 
   return {
     phase: 'scenario_planning',
-    methodology: 'Greedy marginal allocation with Hill saturation (Meridian-inspired)',
+    methodology: posteriorMap.size > 0
+      ? 'Bayesian posterior-informed greedy allocation with Hill saturation'
+      : 'Greedy marginal allocation with Hill saturation (Meridian-inspired)',
     total_budget: totalBudget,
     scenarios: scenarioResults,
     comparison_vs_current: comparison ?? {
@@ -716,5 +985,6 @@ export function optimize(data: MMMOptimizeInput): MMMOptimizeOutput | { error: s
       reallocation: [],
     },
     recommendations,
+    kpi_lift_confidence: kpiLiftConfidence,
   };
 }

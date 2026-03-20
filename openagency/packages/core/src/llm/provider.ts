@@ -1,7 +1,9 @@
 // ─── LLM Provider ───────────────────────────────────────────────────
 // Lightweight multi-provider LLM client. No heavy deps — uses native fetch.
 // Supports: Anthropic (Claude), DeepSeek, OpenAI-compatible, Ollama (local).
+// v2: Failover chain, response cache, model tiers.
 
+import { createHash } from 'node:crypto';
 import type { LLMConfig, LLMMessage } from '@openagency/types';
 
 export interface LLMResponse {
@@ -10,22 +12,147 @@ export interface LLMResponse {
   usage?: { input_tokens: number; output_tokens: number };
 }
 
+// ─── Model Tiers ────────────────────────────────────────────────────
+
+export type ModelTier = 'fast' | 'standard' | 'advanced';
+
+const ANTHROPIC_MODELS: Record<ModelTier, string> = {
+  fast: 'claude-haiku-4-5-20251001',
+  standard: 'claude-sonnet-4-20250514',
+  advanced: 'claude-sonnet-4-20250514',
+};
+
+const DEEPSEEK_MODELS: Record<ModelTier, string> = {
+  fast: 'deepseek-chat',
+  standard: 'deepseek-chat',
+  advanced: 'deepseek-chat',
+};
+
+const TIER_MAX_TOKENS: Record<ModelTier, number> = {
+  fast: 2048,
+  standard: 2048,
+  advanced: 4096,
+};
+
+/**
+ * Resolve a model name and maxTokens for a given provider + tier.
+ * Returns a partial config that can be spread into an LLMConfig.
+ */
+export function resolveModelTier(
+  provider: LLMConfig['provider'],
+  tier: ModelTier,
+): { model: string; maxTokens: number } {
+  const models = provider === 'anthropic' ? ANTHROPIC_MODELS
+    : provider === 'deepseek' ? DEEPSEEK_MODELS
+    : null;
+
+  return {
+    model: models?.[tier] ?? (provider === 'anthropic' ? ANTHROPIC_MODELS.standard : 'deepseek-chat'),
+    maxTokens: TIER_MAX_TOKENS[tier],
+  };
+}
+
+// ─── Response Cache (TTL-based, per prompt hash) ────────────────────
+
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+interface CacheEntry {
+  response: LLMResponse;
+  expires: number;
+}
+
+const responseCache = new Map<string, CacheEntry>();
+
+function hashMessages(messages: LLMMessage[]): string {
+  return createHash('sha256')
+    .update(JSON.stringify(messages))
+    .digest('hex');
+}
+
+function getCached(key: string): LLMResponse | null {
+  const entry = responseCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expires) {
+    responseCache.delete(key);
+    return null;
+  }
+  return entry.response;
+}
+
+function setCache(key: string, response: LLMResponse): void {
+  // Evict expired entries periodically (keep cache bounded)
+  if (responseCache.size > 500) {
+    const now = Date.now();
+    for (const [k, v] of responseCache) {
+      if (now > v.expires) responseCache.delete(k);
+    }
+  }
+  responseCache.set(key, { response, expires: Date.now() + CACHE_TTL_MS });
+}
+
+// ─── Core callLLM ───────────────────────────────────────────────────
+
 export async function callLLM(
   config: LLMConfig,
   messages: LLMMessage[],
 ): Promise<LLMResponse> {
+  let response: LLMResponse;
   switch (config.provider) {
     case 'anthropic':
-      return callAnthropic(config, messages);
+      response = await callAnthropic(config, messages);
+      break;
     case 'deepseek':
-      return callDeepSeek(config, messages);
+      response = await callDeepSeek(config, messages);
+      break;
     case 'openai':
-      return callOpenAI(config, messages);
+      response = await callOpenAI(config, messages);
+      break;
     case 'ollama':
-      return callOllama(config, messages);
+      response = await callOllama(config, messages);
+      break;
     default:
       throw new Error(`Unknown LLM provider: ${config.provider}. Use: anthropic, deepseek, openai, ollama`);
   }
+
+  // Cache successful response
+  const cacheKey = hashMessages(messages);
+  setCache(cacheKey, response);
+
+  return response;
+}
+
+// ─── Failover: try multiple providers in order ──────────────────────
+
+/**
+ * Try each config in order. If all providers fail, attempt to return a
+ * cached response for the same prompt. If no cache hit, throws.
+ */
+export async function callLLMWithFallback(
+  configs: LLMConfig[],
+  messages: LLMMessage[],
+): Promise<LLMResponse> {
+  const errors: string[] = [];
+
+  for (const config of configs) {
+    try {
+      return await callLLM(config, messages);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[LLM] ${config.provider} failed, trying next...`, msg);
+      errors.push(`${config.provider}: ${msg}`);
+      continue;
+    }
+  }
+
+  // All providers failed — check cache
+  const cacheKey = hashMessages(messages);
+  const cached = getCached(cacheKey);
+  if (cached) {
+    console.warn('[LLM] All providers failed — returning cached response');
+    return cached;
+  }
+
+  throw new Error(`All LLM providers failed: ${errors.join(' | ')}`);
 }
 
 // ─── Retry with exponential backoff ─────────────────────────────────
@@ -222,11 +349,22 @@ export function isLLMConfigured(config: LLMConfig): boolean {
  * fallback. OpenAI is available only via explicit config, never auto-detected.
  */
 export function detectLLMConfig(): LLMConfig | null {
+  const configs = detectLLMConfigs();
+  return configs.length > 0 ? configs[0] : null;
+}
+
+/**
+ * Auto-detect ALL available LLM providers from environment, ordered by priority.
+ * Returns an array suitable for callLLMWithFallback().
+ * Priority: Anthropic (Claude) > DeepSeek
+ */
+export function detectLLMConfigs(): LLMConfig[] {
+  const configs: LLMConfig[] = [];
   if (process.env.ANTHROPIC_API_KEY) {
-    return { provider: 'anthropic', model: 'claude-sonnet-4-20250514' };
+    configs.push({ provider: 'anthropic', model: 'claude-sonnet-4-20250514' });
   }
   if (process.env.DEEPSEEK_API_KEY) {
-    return { provider: 'deepseek', model: 'deepseek-chat' };
+    configs.push({ provider: 'deepseek', model: 'deepseek-chat' });
   }
-  return null;
+  return configs;
 }

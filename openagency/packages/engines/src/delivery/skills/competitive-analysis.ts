@@ -5,6 +5,7 @@
 //   - Google Ads Transparency via SerpAPI (live competitor ads)
 //   - Web search (industry context, news, benchmarks)
 //   - Claude narrative (analysis + recommendations)
+// Tier: standard (analytical narrative)
 
 import type { CompetitiveAnalysisInput } from '@openagency/schemas';
 import type {
@@ -167,12 +168,15 @@ export async function run(input: CompetitiveAnalysisInput): Promise<DeliverySkil
 
   // ── LLM analysis ─────────────────────────────────────────────────
   let llm: CompAnalysisLLM;
+  let tokenUsage: { input_tokens: number; output_tokens: number } | undefined;
   try {
-    const raw = await callDeliveryLLM(
+    const result = await callDeliveryLLM(
       SYSTEM_PROMPT,
       buildUserPrompt(input, clientContext, metaAds, googleAds, searchResults),
+      'standard',
     );
-    llm = parseJsonResponse<CompAnalysisLLM>(raw);
+    tokenUsage = result.usage;
+    llm = parseJsonResponse<CompAnalysisLLM>(result.content);
   } catch {
     llm = {
       overview: `Competitive analysis for ${input.competitors.join(', ')} — ${input.client_id}.`,
@@ -280,12 +284,16 @@ export async function run(input: CompetitiveAnalysisInput): Promise<DeliverySkil
     sizeBytes,
   });
 
-  return {
+  const output: DeliverySkillOutput = {
     skill_id: 'competitive-analysis',
     file: fileOutput,
     summary: llm.summary,
     generated_at: new Date().toISOString(),
   };
+  if (tokenUsage) {
+    (output as DeliverySkillOutput & { token_usage?: unknown }).token_usage = tokenUsage;
+  }
+  return output;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────

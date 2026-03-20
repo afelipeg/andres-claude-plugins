@@ -1,6 +1,7 @@
 // ─── Skill: media-plan-deck ──────────────────────────────────────────
 // Generates a PPTX/PDF media plan deck using MediaArchitect outputs
 // showing channel allocation, flight calendar, and optimization approach.
+// Tier: standard (strategic narrative)
 
 import type { MediaPlanDeckInput } from '@openagency/schemas';
 import type { DeliverySkillOutput } from '@openagency/types';
@@ -50,8 +51,11 @@ export async function run(input: MediaPlanDeckInput): Promise<DeliverySkillOutpu
   const prompt = `Client: ${input.client_id}\nPeriod: ${input.period_start} to ${input.period_end}\nTotal Budget: ${budgetStr}\n\nENGINE DATA (MediaArchitect recommendations):\n${context}\n\nGenerate the media plan deck.`;
 
   let llm: MediaPlanLLM;
+  let tokenUsage: { input_tokens: number; output_tokens: number } | undefined;
   try {
-    llm = parseJsonResponse<MediaPlanLLM>(await callDeliveryLLM(SYSTEM_PROMPT, prompt));
+    const result = await callDeliveryLLM(SYSTEM_PROMPT, prompt, 'standard');
+    tokenUsage = result.usage;
+    llm = parseJsonResponse<MediaPlanLLM>(result.content);
   } catch {
     llm = {
       strategy_rationale: `Media plan for ${input.period_start} to ${input.period_end} — ${input.client_id}.`,
@@ -108,5 +112,10 @@ export async function run(input: MediaPlanDeckInput): Promise<DeliverySkillOutpu
   }
 
   const { fileOutput } = await persistGeneratedFile({ clientId: input.client_id, skillId: 'media-plan-deck', runId: input.run_id, fileType: primaryFormat, localPath, sizeBytes });
-  return { skill_id: 'media-plan-deck', file: fileOutput, summary: llm.summary, generated_at: new Date().toISOString() };
+
+  const output: DeliverySkillOutput = { skill_id: 'media-plan-deck', file: fileOutput, summary: llm.summary, generated_at: new Date().toISOString() };
+  if (tokenUsage) {
+    (output as DeliverySkillOutput & { token_usage?: unknown }).token_usage = tokenUsage;
+  }
+  return output;
 }

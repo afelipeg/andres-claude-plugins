@@ -71,6 +71,54 @@ export interface NextAction {
   estimated_hours: number;
 }
 
+// ─── Cross-Engine Signal Types (v4.0) ───────────────────────────────
+
+/** Waste signal from Leak Detector engine */
+export interface LeakDetectorSignals {
+  /** Waste % by category */
+  waste_waterfall?: Record<string, number>;
+  /** Per-channel quality scores (0-1) */
+  media_quality?: Record<string, {
+    fraud_score?: number;
+    viewability?: number;
+    brand_safety?: number;
+    mfa_score?: number;
+    overall: number;
+  }>;
+  /** Supply chain audit data */
+  supply_chain?: Record<string, {
+    working_media_ratio?: number;
+    tech_fee_pct?: number;
+    total_fee_pct?: number;
+  }>;
+}
+
+/** Media Architect signals for Campaign Ops */
+export interface MediaArchitectSignals {
+  /** Per-channel optimization data from channel-optimize */
+  channel_optimize?: Record<string, {
+    optimal_spend: number;
+    marginal_roi: number;
+    saturation_pct: number;
+  }>;
+  /** Per-channel MMM model data */
+  mmm_model?: Record<string, {
+    roi: number;
+    marginal_roi: number;
+    saturation_pct: number;
+    contribution: number;
+    roi_ci_lower?: number;
+    roi_ci_upper?: number;
+  }>;
+  /** Anomaly detection results */
+  anomalies?: Array<{
+    channel: string;
+    metric: string;
+    z_score: number;
+    direction: 'above' | 'below';
+  }>;
+}
+
 // ─── Optimization Rules ─────────────────────────────────────────────
 
 export interface CampaignMetricsInput {
@@ -91,6 +139,10 @@ export interface CampaignMetricsInput {
 
 export interface OptimizationInput {
   campaigns: CampaignMetricsInput[];
+  /** Cross-engine signals from Leak Detector (v4.0) */
+  leak_detector?: LeakDetectorSignals;
+  /** Cross-engine signals from Media Architect (v4.0) */
+  media_architect?: MediaArchitectSignals;
 }
 
 export interface OptAlert {
@@ -113,11 +165,15 @@ export interface OptCampaignResult {
   };
   alerts: OptAlert[];
   alert_count: { critical: number; warning: number; info: number };
+  /** Priority score from cross-engine analysis (v4.0, 0-1) */
+  priority_score?: number;
 }
 
 export interface OptimizationOutput {
   campaigns: OptCampaignResult[];
   total_alerts: { critical: number; warning: number; info: number };
+  /** Cross-engine alerts combining signals from multiple engines (v4.0) */
+  cross_engine_alerts?: OptAlert[];
 }
 
 export interface ReallocateInput {
@@ -127,14 +183,45 @@ export interface ReallocateInput {
     spend: number;
     roas: number;
   }>;
+  /** Cross-engine signals from Leak Detector (v4.0) */
+  leak_detector?: LeakDetectorSignals;
+  /** Cross-engine signals from Media Architect (v4.0) */
+  media_architect?: MediaArchitectSignals;
+  /** Total budget constraint */
+  total_budget?: number;
+}
+
+export interface ReallocateRecommendation {
+  action: string;
+  from_campaign: string;
+  to_campaign: string;
+  amount: number;
+  rationale: string;
+  /** Recommendation category (v4.0) */
+  category?: 'quick_win' | 'strategic_shift' | 'growth_opportunity';
+  /** Expected impact description (v4.0) */
+  expected_impact?: string;
+  /** Risk level (v4.0) */
+  risk?: 'low' | 'medium' | 'high';
 }
 
 export interface ReallocateOutput {
-  recommendations: Array<{
-    from_campaign: string;
-    to_campaign: string;
-    amount: number;
-    reason: string;
+  performances: Array<{
+    campaign: string;
+    channel: string;
+    current_spend: number;
+    roas: number;
+    cpa: number | null;
+    /** Priority score from cross-engine analysis (v4.0, 0-1) */
+    priority_score?: number;
   }>;
-  estimated_roas_improvement: number;
+  recommendations: ReallocateRecommendation[];
+  /** Estimated overall ROAS improvement from recommendations (v4.0) */
+  estimated_roas_improvement?: number;
+  /** Pacing alerts for campaigns (v4.0) */
+  pacing_alerts?: Array<{
+    campaign: string;
+    status: 'over_delivery' | 'under_delivery';
+    message: string;
+  }>;
 }

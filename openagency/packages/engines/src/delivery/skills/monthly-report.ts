@@ -1,6 +1,7 @@
 // ─── Skill: monthly-report ───────────────────────────────────────────
 // Generates a monthly performance report (PDF and/or PPTX) by combining
 // outputs from the 4 Layer-1 engines with a Claude-authored narrative.
+// Tier: standard (executive narrative, data synthesis)
 //
 // Flow:
 //   1. Compact Layer-1 results into a token-efficient summary
@@ -81,9 +82,11 @@ export async function run(input: MonthlyReportInput): Promise<DeliverySkillOutpu
 
   // ── LLM narrative ────────────────────────────────────────────────
   let llmData: MonthlyReportLLMResponse;
+  let tokenUsage: { input_tokens: number; output_tokens: number } | undefined;
   try {
-    const raw = await callDeliveryLLM(SYSTEM_PROMPT, buildUserPrompt(input, layerSummary));
-    llmData = parseJsonResponse<MonthlyReportLLMResponse>(raw);
+    const result = await callDeliveryLLM(SYSTEM_PROMPT, buildUserPrompt(input, layerSummary), 'standard');
+    tokenUsage = result.usage;
+    llmData = parseJsonResponse<MonthlyReportLLMResponse>(result.content);
   } catch (err) {
     // Graceful fallback — still generate a file with available data
     llmData = {
@@ -161,10 +164,14 @@ export async function run(input: MonthlyReportInput): Promise<DeliverySkillOutpu
     sizeBytes,
   });
 
-  return {
+  const output: DeliverySkillOutput = {
     skill_id: 'monthly-report',
     file: fileOutput,
     summary: llmData.summary,
     generated_at: new Date().toISOString(),
   };
+  if (tokenUsage) {
+    (output as DeliverySkillOutput & { token_usage?: unknown }).token_usage = tokenUsage;
+  }
+  return output;
 }

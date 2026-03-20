@@ -49,6 +49,8 @@ export interface MMMChannelInput {
   ec50?: number;
   max_response?: number;
   roi_prior?: number;
+  /** Weekly spend time series (length = time_periods). Enables Bayesian mode. */
+  weekly_spend?: number[];
 }
 
 export interface MMMPreModelInput {
@@ -65,6 +67,20 @@ export interface MMMModelInput {
   total_kpi: number;
   channels: MMMChannelInput[];
   time_periods: number;
+  /** Weekly KPI values (length = time_periods). Required for Bayesian mode. */
+  weekly_kpi?: number[];
+  /** Optional control variables for Bayesian mode */
+  controls?: Array<{ name: string; values: number[] }>;
+  /** Force Bayesian mode even with < 104 weeks (default: auto-detect) */
+  force_bayesian?: boolean;
+  /** MCMC configuration overrides */
+  mcmc_config?: {
+    num_chains?: number;
+    warmup?: number;
+    num_samples?: number;
+    num_harmonics?: number;
+    seed?: number;
+  };
 }
 
 export interface MMMOptimizeInput {
@@ -72,6 +88,14 @@ export interface MMMOptimizeInput {
   channels: MMMChannelInput[];
   scenarios?: string[];
   constraints?: Record<string, { min_pct?: number; max_pct?: number }>;
+  /** Bayesian posterior channel data for posterior-informed optimization */
+  bayesian_posteriors?: Array<{
+    channel: string;
+    marginal_roi_mean: number;
+    marginal_roi_ci_5: number;
+    marginal_roi_ci_95: number;
+    saturation_pct: number;
+  }>;
 }
 
 export interface MMMIssue {
@@ -160,6 +184,16 @@ export interface ContributionEntry {
   contribution_pct: number;
 }
 
+/** Convergence diagnostics from Bayesian MCMC (v4.0) */
+export interface MMMConvergenceDiagnostics {
+  r_hat: Record<string, number>;
+  ess: Record<string, number>;
+  divergences: number;
+  max_r_hat: number;
+  min_ess: number;
+  converged: boolean;
+}
+
 export interface MMMModelOutput {
   phase: 'model';
   model_type: string;
@@ -180,6 +214,9 @@ export interface MMMModelOutput {
   roi_intervals: RoiInterval[];
   contribution_waterfall: ContributionEntry[];
   next_step: 'post_model';
+  // Bayesian diagnostics (v4.0) — present only when methodology is bayesian_mcmc
+  convergence_diagnostics?: MMMConvergenceDiagnostics;
+  mape?: number;
 }
 
 export interface MMMScenarioChannel {
@@ -223,6 +260,11 @@ export interface MMMOptimizeOutput {
     action: string;
     impact: string;
   }>;
+  /** Confidence intervals on KPI lift from Bayesian posteriors (v4.0) */
+  kpi_lift_confidence?: {
+    ci_5: number;
+    ci_95: number;
+  };
 }
 
 // ─── Benchmark Tracker ──────────────────────────────────────────────

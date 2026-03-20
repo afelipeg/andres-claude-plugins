@@ -1,9 +1,12 @@
 // ─── Shapley Attribution ────────────────────────────────────────────
 // Multi-touch attribution using Shapley values from game theory.
-// Coalition-based Shapley value attribution
+// v2: Adds sampling-based approximation for 13+ channels (O(n*samples)
+// instead of O(2^n)), auto-switches based on channel count.
 
 import { factorial, round } from '@openagency/core/utils/math';
 import type { ShapleyInput, ShapleyOutput, ShapleyChannelResult } from '@openagency/types';
+
+// ─── Exact Shapley (coalition enumeration) ──────────────────────────
 
 function* combinations(arr: string[], k: number): Generator<string[]> {
   if (k === 0) {
@@ -17,7 +20,7 @@ function* combinations(arr: string[], k: number): Generator<string[]> {
   }
 }
 
-function computeShapley(
+function computeShapleyExact(
   channels: string[],
   coalitionConversions: Record<string, number>,
 ): Record<string, number> {
@@ -47,6 +50,82 @@ function computeShapley(
   return shapleyValues;
 }
 
+// ─── Approximate Shapley (random permutation sampling) ──────────────
+
+/**
+ * Fisher-Yates shuffle (in-place).
+ */
+function shuffle<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/**
+ * Compute the coalition value for a set of channels.
+ * Looks up the sorted key in coalitionConversions.
+ */
+function coalitionValue(
+  channels: string[],
+  coalitionConversions: Record<string, number>,
+): number {
+  if (channels.length === 0) return 0;
+  const key = [...channels].sort().join('+');
+  return coalitionConversions[key] ?? 0;
+}
+
+/**
+ * Sampling-based Shapley approximation using random permutations.
+ * For each sample: generate a random permutation, compute each channel's
+ * marginal contribution at its position.
+ *
+ * Complexity: O(nSamples * n) where n = number of channels.
+ * Converges to exact Shapley values as nSamples -> infinity.
+ */
+function computeShapleyApproximate(
+  channels: string[],
+  coalitionConversions: Record<string, number>,
+  nSamples: number = 10000,
+): Record<string, number> {
+  const n = channels.length;
+  const marginalSums: Record<string, number> = {};
+  for (const ch of channels) marginalSums[ch] = 0;
+
+  for (let sample = 0; sample < nSamples; sample++) {
+    // Generate a random permutation
+    const perm = shuffle([...channels]);
+    const predecessors: string[] = [];
+
+    for (const ch of perm) {
+      // Coalition with this channel
+      const withCh = [...predecessors, ch];
+      const vWith = coalitionValue(withCh, coalitionConversions);
+      const vWithout = coalitionValue(predecessors, coalitionConversions);
+
+      // Marginal contribution
+      marginalSums[ch] += vWith - vWithout;
+
+      predecessors.push(ch);
+    }
+  }
+
+  // Average marginal contributions
+  const shapleyValues: Record<string, number> = {};
+  for (const ch of channels) {
+    shapleyValues[ch] = marginalSums[ch] / nSamples;
+  }
+
+  return shapleyValues;
+}
+
+// ─── Threshold for switching to approximation ───────────────────────
+
+const EXACT_THRESHOLD = 12; // Use exact for <= 12 channels
+
+// ─── Public API ─────────────────────────────────────────────────────
+
 export function attribute(data: ShapleyInput): ShapleyOutput | { error: string } {
   const channels = data.channels ?? [];
   const coalitionConversions = data.coalition_conversions ?? {};
@@ -54,7 +133,14 @@ export function attribute(data: ShapleyInput): ShapleyOutput | { error: string }
 
   if (channels.length === 0) return { error: 'No channels provided' };
 
-  const shapleyValues = computeShapley(channels, coalitionConversions);
+  // Auto-select method based on channel count
+  const useApproximation = channels.length > EXACT_THRESHOLD;
+  const method: 'exact' | 'approximation' = useApproximation ? 'approximation' : 'exact';
+
+  const shapleyValues = useApproximation
+    ? computeShapleyApproximate(channels, coalitionConversions, 10000)
+    : computeShapleyExact(channels, coalitionConversions);
+
   const shapleyTotal = Object.values(shapleyValues).reduce((s, v) => s + v, 0);
 
   const soloTotal = channels.reduce((s, ch) => s + (coalitionConversions[ch] ?? 0), 0);
@@ -89,7 +175,20 @@ export function attribute(data: ShapleyInput): ShapleyOutput | { error: string }
     total_conversions: totalConversions,
     shapley_total: round(shapleyTotal),
     channels: results,
+    method,
   };
+}
+
+/**
+ * Standalone approximate Shapley function for direct use.
+ * Use when you know you have many channels and want explicit control.
+ */
+export function approximateShapley(
+  channels: string[],
+  coalitionConversions: Record<string, number>,
+  nSamples: number = 10000,
+): Record<string, number> {
+  return computeShapleyApproximate(channels, coalitionConversions, nSamples);
 }
 
 export interface CompareChannelInput {

@@ -1,6 +1,7 @@
 // ─── Skill: industry-benchmarks ──────────────────────────────────────
 // Searches for fresh industry benchmarks via web search, then uses Claude
 // to structure findings into a PDF and/or XLSX report.
+// Tier: fast (structured data extraction, less narrative reasoning)
 
 import type { IndustryBenchmarksInput } from '@openagency/schemas';
 import type { DeliverySkillOutput, WebSearchResponse } from '@openagency/types';
@@ -58,8 +59,11 @@ export async function run(input: IndustryBenchmarksInput): Promise<DeliverySkill
   ]);
 
   let llm: BenchmarksLLM;
+  let tokenUsage: { input_tokens: number; output_tokens: number } | undefined;
   try {
-    llm = parseJsonResponse<BenchmarksLLM>(await callDeliveryLLM(SYSTEM_PROMPT, buildPrompt(input, context, searches)));
+    const result = await callDeliveryLLM(SYSTEM_PROMPT, buildPrompt(input, context, searches), 'fast');
+    tokenUsage = result.usage;
+    llm = parseJsonResponse<BenchmarksLLM>(result.content);
   } catch {
     llm = { overview: `Benchmarks for ${input.industry}. Narrative unavailable.`, benchmarks: [], channel_benchmarks: [], trends: [], client_vs_industry: [], recommendations: ['Retry with ANTHROPIC_API_KEY.'], summary: `Benchmark report for ${input.industry}.` };
   }
@@ -99,7 +103,12 @@ export async function run(input: IndustryBenchmarksInput): Promise<DeliverySkill
   }
 
   const { fileOutput } = await persistGeneratedFile({ clientId: input.client_id, skillId: 'industry-benchmarks', runId: input.run_id, fileType: primaryFormat, localPath, sizeBytes });
-  return { skill_id: 'industry-benchmarks', file: fileOutput, summary: llm.summary, generated_at: new Date().toISOString() };
+
+  const output: DeliverySkillOutput = { skill_id: 'industry-benchmarks', file: fileOutput, summary: llm.summary, generated_at: new Date().toISOString() };
+  if (tokenUsage) {
+    (output as DeliverySkillOutput & { token_usage?: unknown }).token_usage = tokenUsage;
+  }
+  return output;
 }
 
 function emptySearch(): WebSearchResponse { return { query: '', results: [], cached: false, fetched_at: new Date().toISOString() }; }

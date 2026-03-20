@@ -1,6 +1,7 @@
 // ─── Skill: budget-proposal ──────────────────────────────────────────
 // Generates a budget proposal (PDF/DOCX) using Layer-1 outputs to
 // justify and structure a proposed media investment.
+// Tier: standard (narrative-heavy, persuasive writing)
 
 import type { BudgetProposalInput } from '@openagency/schemas';
 import type { DeliverySkillOutput } from '@openagency/types';
@@ -49,8 +50,11 @@ export async function run(input: BudgetProposalInput): Promise<DeliverySkillOutp
   const prompt = `Client: ${input.client_id}\nProposed Budget: ${usd(input.proposed_budget)}\nPeriod: ${input.period_start} to ${input.period_end}\nObjectives: ${input.objectives?.join(', ') ?? 'Revenue growth, efficiency'}\n\nENGINE DATA:\n${context}\n\nGenerate the budget proposal.`;
 
   let llm: BudgetProposalLLM;
+  let tokenUsage: { input_tokens: number; output_tokens: number } | undefined;
   try {
-    llm = parseJsonResponse<BudgetProposalLLM>(await callDeliveryLLM(SYSTEM_PROMPT, prompt));
+    const result = await callDeliveryLLM(SYSTEM_PROMPT, prompt, 'standard');
+    tokenUsage = result.usage;
+    llm = parseJsonResponse<BudgetProposalLLM>(result.content);
   } catch {
     llm = {
       rationale: `Budget proposal for ${usd(input.proposed_budget)} — ${input.period_start} to ${input.period_end}.`,
@@ -93,5 +97,10 @@ export async function run(input: BudgetProposalInput): Promise<DeliverySkillOutp
   }
 
   const { fileOutput } = await persistGeneratedFile({ clientId: input.client_id, skillId: 'budget-proposal', runId: input.run_id, fileType: primaryFormat, localPath, sizeBytes });
-  return { skill_id: 'budget-proposal', file: fileOutput, summary: llm.summary, generated_at: new Date().toISOString() };
+
+  const output: DeliverySkillOutput = { skill_id: 'budget-proposal', file: fileOutput, summary: llm.summary, generated_at: new Date().toISOString() };
+  if (tokenUsage) {
+    (output as DeliverySkillOutput & { token_usage?: unknown }).token_usage = tokenUsage;
+  }
+  return output;
 }

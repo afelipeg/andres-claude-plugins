@@ -1,6 +1,7 @@
 // ─── Skill: quarterly-review ─────────────────────────────────────────
 // Generates a QBR executive presentation (PPTX/PDF) with quarter summary,
 // channel deep dive, wins & losses, and next quarter roadmap.
+// Tier: standard (executive narrative, strategic outlook)
 
 import type { QuarterlyReviewInput } from '@openagency/schemas';
 import type { DeliverySkillOutput } from '@openagency/types';
@@ -49,8 +50,11 @@ export async function run(input: QuarterlyReviewInput): Promise<DeliverySkillOut
   const prompt = `Client: ${input.client_id}\nQuarter: ${input.quarter}\n\nENGINE DATA:\n${context}\n\nGenerate the QBR.`;
 
   let llm: QBRLLM;
+  let tokenUsage: { input_tokens: number; output_tokens: number } | undefined;
   try {
-    llm = parseJsonResponse<QBRLLM>(await callDeliveryLLM(SYSTEM_PROMPT, prompt));
+    const result = await callDeliveryLLM(SYSTEM_PROMPT, prompt, 'standard');
+    tokenUsage = result.usage;
+    llm = parseJsonResponse<QBRLLM>(result.content);
   } catch {
     llm = {
       quarter_overview: `QBR for ${input.quarter} — ${input.client_id}.`,
@@ -106,5 +110,10 @@ export async function run(input: QuarterlyReviewInput): Promise<DeliverySkillOut
   }
 
   const { fileOutput } = await persistGeneratedFile({ clientId: input.client_id, skillId: 'quarterly-review', runId: input.run_id, fileType: primaryFormat, localPath, sizeBytes });
-  return { skill_id: 'quarterly-review', file: fileOutput, summary: llm.summary, generated_at: new Date().toISOString() };
+
+  const output: DeliverySkillOutput = { skill_id: 'quarterly-review', file: fileOutput, summary: llm.summary, generated_at: new Date().toISOString() };
+  if (tokenUsage) {
+    (output as DeliverySkillOutput & { token_usage?: unknown }).token_usage = tokenUsage;
+  }
+  return output;
 }

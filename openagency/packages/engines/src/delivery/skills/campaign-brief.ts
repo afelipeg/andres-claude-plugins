@@ -1,6 +1,7 @@
 // ─── Skill: campaign-brief ───────────────────────────────────────────
 // Generates a creative campaign brief (DOCX/PDF) using engine insights
 // to inform strategic positioning, audience, and media approach.
+// Tier: standard (narrative-heavy, creative strategy)
 
 import type { CampaignBriefInput } from '@openagency/schemas';
 import type { DeliverySkillOutput } from '@openagency/types';
@@ -57,8 +58,11 @@ export async function run(input: CampaignBriefInput): Promise<DeliverySkillOutpu
   const prompt = `Campaign: ${input.campaign_name}\nObjective: ${input.objective}\nBudget: ${input.budget ? `$${input.budget.toLocaleString()}` : 'TBD'}\nClient: ${input.client_id}\n\nENGINE INSIGHTS:\n${context}\n\nGenerate the campaign brief.`;
 
   let llm: CampaignBriefLLM;
+  let tokenUsage: { input_tokens: number; output_tokens: number } | undefined;
   try {
-    llm = parseJsonResponse<CampaignBriefLLM>(await callDeliveryLLM(SYSTEM_PROMPT, prompt));
+    const result = await callDeliveryLLM(SYSTEM_PROMPT, prompt, 'standard');
+    tokenUsage = result.usage;
+    llm = parseJsonResponse<CampaignBriefLLM>(result.content);
   } catch {
     llm = {
       campaign_overview: `Campaign brief for "${input.campaign_name}" — ${input.objective}.`,
@@ -110,5 +114,10 @@ export async function run(input: CampaignBriefInput): Promise<DeliverySkillOutpu
   }
 
   const { fileOutput } = await persistGeneratedFile({ clientId: input.client_id, skillId: 'campaign-brief', runId: input.run_id, fileType: primaryFormat, localPath, sizeBytes });
-  return { skill_id: 'campaign-brief', file: fileOutput, summary: llm.summary, generated_at: new Date().toISOString() };
+
+  const output: DeliverySkillOutput = { skill_id: 'campaign-brief', file: fileOutput, summary: llm.summary, generated_at: new Date().toISOString() };
+  if (tokenUsage) {
+    (output as DeliverySkillOutput & { token_usage?: unknown }).token_usage = tokenUsage;
+  }
+  return output;
 }

@@ -1,6 +1,7 @@
 // ─── Skill: learnings-digest ─────────────────────────────────────────
 // Generates a PDF/DOCX digest of key learnings from the reporting period,
 // including what worked, what didn't, and hypotheses for the next period.
+// Tier: standard (analytical narrative, pattern recognition)
 
 import type { LearningsDigestInput } from '@openagency/schemas';
 import type { DeliverySkillOutput } from '@openagency/types';
@@ -45,8 +46,11 @@ export async function run(input: LearningsDigestInput): Promise<DeliverySkillOut
   const prompt = `Client: ${input.client_id}\nPeriod: ${input.period_start} to ${input.period_end}\n\nENGINE DATA:\n${context}\n\nGenerate the learnings digest.`;
 
   let llm: LearningsLLM;
+  let tokenUsage: { input_tokens: number; output_tokens: number } | undefined;
   try {
-    llm = parseJsonResponse<LearningsLLM>(await callDeliveryLLM(SYSTEM_PROMPT, prompt));
+    const result = await callDeliveryLLM(SYSTEM_PROMPT, prompt, 'standard');
+    tokenUsage = result.usage;
+    llm = parseJsonResponse<LearningsLLM>(result.content);
   } catch {
     llm = {
       period_context: `Learnings digest for ${input.period_start} to ${input.period_end} — ${input.client_id}.`,
@@ -92,5 +96,10 @@ export async function run(input: LearningsDigestInput): Promise<DeliverySkillOut
   }
 
   const { fileOutput } = await persistGeneratedFile({ clientId: input.client_id, skillId: 'learnings-digest', runId: input.run_id, fileType: primaryFormat, localPath, sizeBytes });
-  return { skill_id: 'learnings-digest', file: fileOutput, summary: llm.summary, generated_at: new Date().toISOString() };
+
+  const output: DeliverySkillOutput = { skill_id: 'learnings-digest', file: fileOutput, summary: llm.summary, generated_at: new Date().toISOString() };
+  if (tokenUsage) {
+    (output as DeliverySkillOutput & { token_usage?: unknown }).token_usage = tokenUsage;
+  }
+  return output;
 }
