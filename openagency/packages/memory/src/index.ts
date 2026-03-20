@@ -25,4 +25,5 @@ export { FederationLogRepo, type FederationLogRow } from './repos/federation-log
 export { AgencyRepo, type AgencyRow } from './repos/agency.js';
 export { QuotaRepo, type QuotaCheckResult, type AgencyQuotaUsageRow, type QuotaRequestRow, currentMonth, computeMonthlyRunLimit, computeRunTypeLimit } from './repos/quota.js';
 export { AuditLogRepo, type AuditLogEntry } from './repos/audit-log.js';
+export { HFLDecisionRepo, type HFLDecisionRow } from './repos/hfl-decision.js';
 export { encrypt, decrypt } from './utils/encrypt.js';

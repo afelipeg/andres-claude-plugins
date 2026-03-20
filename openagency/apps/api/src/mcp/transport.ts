@@ -7,7 +7,7 @@ import type { OodaRuntime, MeshCoordinator, A2AClient, McpClientRegistry, Pipeli
 import type { DynamicSkillRegistry } from '@openagency/schemas';
 import type { HFLCoordinator } from '@openagency/hfl';
 import type { ConnectorInfra } from '../connectors/setup.js';
-import type { FileRepo } from '@openagency/memory';
+import type { FileRepo, AgencyRepo, QuotaRepo } from '@openagency/memory';
 import { createMcpServer } from './server.js';
 
 export function mcpRoute(
@@ -21,11 +21,15 @@ export function mcpRoute(
   hflCoordinator?: HFLCoordinator,
   scheduler?: PipelineScheduler,
   fileRepo?: FileRepo | null,
+  agencyRepo?: AgencyRepo,
+  quotaRepo?: QuotaRepo,
 ) {
   const app = new Hono();
 
   app.post('/v1/mcp', async (c) => {
-    const server = createMcpServer(agency, agents, mesh, connectorInfra, a2aClient, mcpClientRegistry, dynamicSkillRegistry, hflCoordinator, scheduler, fileRepo);
+    // FIX 4: Pass auth context + quota repos to MCP server for quota enforcement
+    const auth = c.get('auth') as { sub: string; role?: string } | undefined;
+    const server = createMcpServer(agency, agents, mesh, connectorInfra, a2aClient, mcpClientRegistry, dynamicSkillRegistry, hflCoordinator, scheduler, fileRepo, agencyRepo, quotaRepo, auth);
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
     });

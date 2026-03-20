@@ -31,28 +31,28 @@ export const ShapleyOutputSchema = z.object({
   ),
 });
 
+// FIX 5: Shapley Compare — matches actual compare() in shapley-attribution.ts
+// Input: { channels: [{ name, shapley_share, last_click_share, spend }] }
+// Output: { comparison: [{ channel, spend, shapley_share, last_click_share, shapley_efficiency, last_click_efficiency, recommendation }] }
 export const ShapleyCompareInputSchema = z.object({
-  channels: z.array(z.string()),
-  coalition_conversions: z.record(z.string(), z.number()),
-  total_conversions: z.number(),
-  spend: z.record(z.string(), z.number()),
-  last_click: z.record(z.string(), z.number()),
+  channels: z.array(z.object({
+    name: z.string(),
+    shapley_share: z.number(),
+    last_click_share: z.number(),
+    spend: z.number(),
+  })),
 });
 
 export const ShapleyCompareOutputSchema = z.object({
-  channels: z.array(
+  comparison: z.array(
     z.object({
       channel: z.string(),
-      shapley_share_pct: z.number(),
-      last_click_share_pct: z.number(),
-      spend_share_pct: z.number(),
+      spend: z.number(),
+      shapley_share: z.number(),
+      last_click_share: z.number(),
       shapley_efficiency: z.number(),
       last_click_efficiency: z.number(),
-      recommendation: z.enum([
-        'Increase budget',
-        'Investigate',
-        'Maintain',
-      ]),
+      recommendation: z.string(),
     }),
   ),
 });
@@ -112,6 +112,31 @@ export const RevenueBridgeOutputSchema = z.object({
     }),
   ),
   csuite_summary: CSuiteSummarySchema,
+});
+
+// FIX 5: Revenue Compare — matches actual compareChannels() in revenue-bridge.ts
+// Input: { channels: [{ name, spend, revenue, conversions }] }
+// Output: { comparison: [{ channel, spend, revenue, roas, cpa, efficiency_rank }] }
+export const RevenueCompareInputSchema = z.object({
+  channels: z.array(z.object({
+    name: z.string(),
+    spend: z.number(),
+    revenue: z.number(),
+    conversions: z.number(),
+  })),
+});
+
+export const RevenueCompareOutputSchema = z.object({
+  comparison: z.array(
+    z.object({
+      channel: z.string(),
+      spend: z.number(),
+      revenue: z.number(),
+      roas: z.number(),
+      cpa: z.number(),
+      efficiency_rank: z.number(),
+    }),
+  ),
 });
 
 // ─── Revenue Reconciliation ─────────────────────────────────────────

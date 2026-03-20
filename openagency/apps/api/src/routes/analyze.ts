@@ -106,6 +106,32 @@ export function analyzeRoutes(agency: OpenAgency, agencyRepo?: AgencyRepo, quota
       );
     }
 
+    // FIX 3: Quota check before file analysis (same pattern as /v1/analyze)
+    let quotaAgencyId: string | null = null;
+    let quotaRunType: 'initial' | 'optimization' = 'initial';
+    if (agencyRepo && quotaRepo) {
+      const auth = c.get('auth') as AuthPayload | undefined;
+      if (auth?.sub) {
+        quotaAgencyId = await agencyRepo.resolveForUser(auth.sub);
+        if (quotaAgencyId) {
+          const ag = await agencyRepo.findById(quotaAgencyId);
+          if (ag) {
+            const quota = await quotaRepo.checkRunQuota(quotaAgencyId, ag.brand_count, quotaRunType);
+            if (!quota.allowed) {
+              return c.json({
+                error: 'QUOTA_EXCEEDED',
+                run_type: quotaRunType,
+                used: quota.used,
+                limit: quota.limit,
+                month: quota.month,
+                message: quota.reason,
+              }, 429);
+            }
+          }
+        }
+      }
+    }
+
     try {
       // 1. Parse the file
       const buffer = await file.arrayBuffer();
@@ -122,6 +148,11 @@ export function analyzeRoutes(agency: OpenAgency, agencyRepo?: AgencyRepo, quota
 
       // 3. Run engines
       const result = await runEngines(agency, adSpend, engineInput);
+
+      // FIX 3: Increment quota after successful file analysis
+      if (quotaAgencyId && quotaRepo) {
+        quotaRepo.incrementRunUsage(quotaAgencyId, quotaRunType).catch(() => {});
+      }
 
       return c.json({
         file: {

@@ -12,7 +12,7 @@ import type { HFLCoordinator } from '@openagency/hfl';
 import type { ConnectorPlatform, OAuthTokens } from '@openagency/types';
 import { getConnector, hasConnector } from '@openagency/connectors';
 import type { ConnectorInfra } from '../connectors/setup.js';
-import type { FileRepo } from '@openagency/memory';
+import type { FileRepo, AgencyRepo, QuotaRepo } from '@openagency/memory';
 
 const VALID_PLATFORMS = new Set<string>([
   'google_ads', 'meta_ads', 'dv360', 'tiktok_ads', 'tiktok_shop', 'amazon_ads',
@@ -33,6 +33,9 @@ export function createMcpServer(
   hflCoordinator?: HFLCoordinator,
   scheduler?: PipelineScheduler,
   fileRepo?: FileRepo | null,
+  agencyRepo?: AgencyRepo,
+  quotaRepo?: QuotaRepo,
+  authContext?: { sub: string; role?: string },
 ): McpServer {
   const server = new McpServer({
     name: 'openagency',
@@ -435,6 +438,34 @@ export function createMcpServer(
       } as Record<string, { type: string; description?: string }>,
       async (args: Record<string, unknown>) => {
         try {
+          // FIX 4: Quota enforcement before MCP pipeline execution
+          if (agencyRepo && quotaRepo && authContext?.sub) {
+            const agencyId = await agencyRepo.resolveForUser(authContext.sub);
+            if (agencyId) {
+              const ag = await agencyRepo.findById(agencyId);
+              if (ag) {
+                const runType: 'initial' | 'optimization' = 'initial';
+                const quota = await quotaRepo.checkRunQuota(agencyId, ag.brand_count, runType);
+                if (!quota.allowed) {
+                  return {
+                    content: [{
+                      type: 'text' as const,
+                      text: JSON.stringify({
+                        error: 'QUOTA_EXCEEDED',
+                        run_type: runType,
+                        used: quota.used,
+                        limit: quota.limit,
+                        month: quota.month,
+                        message: quota.reason ?? `Monthly ${runType} run limit reached (${quota.used}/${quota.limit}).`,
+                      }, null, 2),
+                    }],
+                    isError: true,
+                  };
+                }
+              }
+            }
+          }
+
           let syncSummary: Array<{ platform: string; status: string; row_count: number }> | undefined;
 
           // Auto-sync all connected platforms before pipeline execution
@@ -465,6 +496,14 @@ export function createMcpServer(
             args['pipeline_id'] as string,
             args['goal_id'] as string | undefined,
           );
+
+          // FIX 4: Increment quota after successful execution
+          if (run.status === 'completed' && agencyRepo && quotaRepo && authContext?.sub) {
+            const agencyId = await agencyRepo.resolveForUser(authContext.sub);
+            if (agencyId) {
+              quotaRepo.incrementRunUsage(agencyId, 'initial').catch(() => {});
+            }
+          }
 
           const response: Record<string, unknown> = mesh.serializeRun(run);
           if (syncSummary) {

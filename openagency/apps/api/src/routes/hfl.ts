@@ -1,10 +1,21 @@
 // ─── HFL Routes ─────────────────────────────────────────────────────
 // Human Feedback Loop endpoints for approve/reject, config, decisions.
+// FIX 1: Decisions are persisted to PostgreSQL via HFLDecisionRepo.
+// FIX 6: Agency-level RBAC on approve/reject.
 
 import { Hono } from 'hono';
 import type { HFLCoordinator, HFLConfig, ChannelDispatcher } from '@openagency/hfl';
+import type { HFLDecisionRepo } from '@openagency/memory';
+import type { AgencyRepo } from '@openagency/memory';
+import type { MeshCoordinator } from '@openagency/agent';
+import type { AuthPayload } from '@openagency/types';
 
-export function hflRoutes(hfl: HFLCoordinator) {
+export function hflRoutes(
+  hfl: HFLCoordinator,
+  hflDecisionRepo?: HFLDecisionRepo,
+  agencyRepo?: AgencyRepo,
+  mesh?: MeshCoordinator,
+) {
   const app = new Hono();
 
   // ─── Approve a mesh run ────────────────────────────────────────────
@@ -12,12 +23,41 @@ export function hflRoutes(hfl: HFLCoordinator) {
     const runId = c.req.param('runId');
     const body = await c.req.json<{ feedback?: string }>().catch(() => ({} as { feedback?: string }));
 
+    // FIX 6: Agency-level RBAC — approving user must belong to same agency as run
+    const auth = c.get('auth') as AuthPayload | undefined;
+    if (agencyRepo && mesh && auth?.sub) {
+      const userAgencyId = await agencyRepo.resolveForUser(auth.sub);
+      if (userAgencyId) {
+        const run = await mesh.getRunAsync(runId);
+        const runClientId = run?.usage?.agent_client_id;
+        if (runClientId) {
+          // Run's client_id should match user's agency — or user is admin
+          if (auth.role !== 'admin' && auth.role !== 'super_admin' && runClientId !== userAgencyId) {
+            return c.json(
+              { error: 'forbidden', message: 'You cannot approve runs for a different agency', status: 403 },
+              403,
+            );
+          }
+        }
+      }
+    }
+
     const decision = await hfl.approveRun(runId, body.feedback);
     if (!decision) {
       return c.json(
         { error: 'not_found', message: `No pending decision for run: ${runId}`, status: 404 },
         404,
       );
+    }
+
+    // FIX 1: Persist status update to PostgreSQL
+    if (hflDecisionRepo) {
+      hflDecisionRepo.updateStatus(
+        decision.id,
+        decision.status,
+        auth?.sub,
+        body.feedback,
+      ).catch(() => {});
     }
 
     return c.json(decision);
@@ -28,12 +68,40 @@ export function hflRoutes(hfl: HFLCoordinator) {
     const runId = c.req.param('runId');
     const body = await c.req.json<{ feedback?: string }>().catch(() => ({} as { feedback?: string }));
 
+    // FIX 6: Agency-level RBAC — rejecting user must belong to same agency as run
+    const auth = c.get('auth') as AuthPayload | undefined;
+    if (agencyRepo && mesh && auth?.sub) {
+      const userAgencyId = await agencyRepo.resolveForUser(auth.sub);
+      if (userAgencyId) {
+        const run = await mesh.getRunAsync(runId);
+        const runClientId = run?.usage?.agent_client_id;
+        if (runClientId) {
+          if (auth.role !== 'admin' && auth.role !== 'super_admin' && runClientId !== userAgencyId) {
+            return c.json(
+              { error: 'forbidden', message: 'You cannot reject runs for a different agency', status: 403 },
+              403,
+            );
+          }
+        }
+      }
+    }
+
     const decision = await hfl.rejectRun(runId, body.feedback);
     if (!decision) {
       return c.json(
         { error: 'not_found', message: `No pending decision for run: ${runId}`, status: 404 },
         404,
       );
+    }
+
+    // FIX 1: Persist status update to PostgreSQL
+    if (hflDecisionRepo) {
+      hflDecisionRepo.updateStatus(
+        decision.id,
+        decision.status,
+        auth?.sub,
+        body.feedback,
+      ).catch(() => {});
     }
 
     return c.json(decision);
@@ -144,29 +212,63 @@ export function hflRoutes(hfl: HFLCoordinator) {
     }
   });
 
-  // ─── List decisions ────────────────────────────────────────────────
-  app.get('/v1/hfl/decisions', (c) => {
+  // ─── List decisions (DB-backed if available, in-memory fallback) ──
+  app.get('/v1/hfl/decisions', async (c) => {
     const limitParam = c.req.query('limit');
     const limit = limitParam ? parseInt(limitParam, 10) : 50;
+
+    // Prefer DB if available for persistence across redeploys
+    if (hflDecisionRepo) {
+      try {
+        const rows = await hflDecisionRepo.list(limit);
+        return c.json({ decisions: rows, count: rows.length, source: 'db' });
+      } catch {
+        // Fall through to in-memory
+      }
+    }
+
     const decisions = hfl.listDecisions(limit);
-    return c.json({ decisions, count: decisions.length });
+    return c.json({ decisions, count: decisions.length, source: 'memory' });
   });
 
   // ─── Get decision by ID ────────────────────────────────────────────
-  app.get('/v1/hfl/decisions/:id', (c) => {
+  app.get('/v1/hfl/decisions/:id', async (c) => {
     const id = c.req.param('id');
+
+    // Try in-memory first (has full object), then DB
     const decision = hfl.getDecision(id);
-    if (!decision) {
-      return c.json(
-        { error: 'not_found', message: `Decision not found: ${id}`, status: 404 },
-        404,
-      );
+    if (decision) return c.json(decision);
+
+    if (hflDecisionRepo) {
+      const row = await hflDecisionRepo.findById(id);
+      if (row) return c.json(row);
     }
-    return c.json(decision);
+
+    return c.json(
+      { error: 'not_found', message: `Decision not found: ${id}`, status: 404 },
+      404,
+    );
   });
 
   // ─── List pending decisions ────────────────────────────────────────
-  app.get('/v1/hfl/pending', (c) => {
+  app.get('/v1/hfl/pending', async (c) => {
+    // Prefer DB for persistence across redeploys
+    if (hflDecisionRepo) {
+      try {
+        const rows = await hflDecisionRepo.listPending();
+        // Merge with in-memory pending (may have newer entries not yet flushed)
+        const memPending = hfl.listPending();
+        const dbIds = new Set(rows.map(r => r.id));
+        const merged = [
+          ...rows,
+          ...memPending.filter(d => !dbIds.has(d.id)),
+        ];
+        return c.json({ decisions: merged, count: merged.length });
+      } catch {
+        // Fall through to in-memory
+      }
+    }
+
     const pending = hfl.listPending();
     return c.json({ decisions: pending, count: pending.length });
   });

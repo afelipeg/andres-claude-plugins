@@ -11,9 +11,8 @@
 import { Hono } from 'hono';
 import { authMiddleware } from '@openagency/auth';
 import type { MeshCoordinator, MeshRun } from '@openagency/agent';
-import { computePipelineScore, HFL_SCORE_THRESHOLD } from '@openagency/agent';
 import type { PipelineScheduler } from '@openagency/agent';
-import type { HFLCoordinator, MeshRunSummary } from '@openagency/hfl';
+import type { HFLCoordinator } from '@openagency/hfl';
 import { createScorecardFromMeshRun } from './scorecard.js';
 import type { ConnectorInfra } from '../connectors/setup.js';
 import { assembleContextFromSync, mergeClientBatchData, mergeMcpData, validateSkillContext } from '../connectors/context-assembler.js';
@@ -199,24 +198,36 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, schedule
       const run = await mesh.executePipeline(pipelineId, goalId, clientId, skillContext);
       const serialized = mesh.serializeRun(run) as Record<string, unknown>;
 
-      // ─── HFL evaluation after pipeline completes ─────────────────
+      // FIX 2: HFL evaluation is handled ONLY by the event bus handler in app.ts.
+      // Read the HFL decision after a brief delay so the event handler has time to run.
       if (hfl && run.status === 'completed') {
-        const hflResult = await evaluateHFL(hfl, run, mesh, clientId);
-        serialized.hfl_decision = hflResult;
+        // Allow a small window for the event bus handler to evaluate
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        const hflDecision = hfl.getDecisionByRunId(run.id);
+        if (hflDecision) {
+          serialized.hfl_decision = {
+            id: hflDecision.id,
+            status: hflDecision.status,
+            urgency: hflDecision.urgency,
+            needs_human: hflDecision.needs_human,
+            reason: hflDecision.reason,
+            risk_score: hflDecision.risk_score,
+          };
 
-        // Email: HFL decision pending
-        if (hflResult && (hflResult as Record<string, unknown>).status === 'escalated') {
-          const appUrl = process.env['APP_URL'] ?? 'https://plinth.polanyi.tech';
-          const adminEmail = process.env['ADMIN_EMAIL'] ?? 'dedalo@polanyi.tech';
-          void sendEmail({
-            to: adminEmail,
-            subject: 'Action required: Decision pending approval',
-            template: HFLDecisionPending({
-              decisionId: (hflResult as Record<string, unknown>).id as string ?? run.id,
-              summary: (hflResult as Record<string, unknown>).reason as string ?? 'Pipeline completed — review required',
-              appUrl,
-            }),
-          });
+          // Email: HFL decision pending
+          if (hflDecision.status === 'escalated') {
+            const appUrl = process.env['APP_URL'] ?? 'https://plinth.polanyi.tech';
+            const adminEmail = process.env['ADMIN_EMAIL'] ?? 'dedalo@polanyi.tech';
+            void sendEmail({
+              to: adminEmail,
+              subject: 'Action required: Decision pending approval',
+              template: HFLDecisionPending({
+                decisionId: hflDecision.id,
+                summary: hflDecision.reason ?? 'Pipeline completed — review required',
+                appUrl,
+              }),
+            });
+          }
         }
       }
 
@@ -571,51 +582,4 @@ export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, schedule
   });
 
   return app;
-}
-
-// ─── HFL Evaluation Helper ──────────────────────────────────────────
-
-async function evaluateHFL(
-  hfl: HFLCoordinator,
-  run: MeshRun,
-  mesh: MeshCoordinator,
-  clientId?: string,
-): Promise<Record<string, unknown>> {
-  // Build MeshRunSummary from the completed run
-  const stageResults: Record<string, { agent_id: string; status: string; duration_ms: number; skills_invoked: string[]; output_summary?: Record<string, unknown>; error?: string }> = {};
-  for (const [agentId, result] of run.context.stage_results) {
-    stageResults[agentId] = {
-      agent_id: result.agent_id,
-      status: result.status,
-      duration_ms: result.duration_ms,
-      skills_invoked: result.skills_invoked,
-      output_summary: result.output_summary,
-      error: result.error,
-    };
-  }
-
-  // Compute pipeline quality score for force-escalation check
-  const pipelineScore = computePipelineScore(run.context.stage_results);
-  const forceEscalate = pipelineScore.composite < HFL_SCORE_THRESHOLD;
-
-  const summary: MeshRunSummary = {
-    id: run.id,
-    pipeline_id: run.pipeline_id,
-    status: run.status,
-    total_duration_ms: run.total_duration_ms ?? 0,
-    client_id: clientId,
-    stage_results: stageResults,
-  };
-
-  const decision = await hfl.evaluate(summary, forceEscalate);
-
-  return {
-    id: decision.id,
-    status: decision.status,
-    urgency: decision.urgency,
-    needs_human: decision.needs_human,
-    reason: decision.reason,
-    risk_score: decision.risk_score,
-    pipeline_score: pipelineScore,
-  };
 }

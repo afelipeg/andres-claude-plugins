@@ -60,6 +60,8 @@ import {
   ShapleyCompareOutputSchema,
   RevenueBridgeInputSchema,
   RevenueBridgeOutputSchema,
+  RevenueCompareInputSchema,
+  RevenueCompareOutputSchema,
   ReconcileInputSchema,
   ReconcileOutputSchema,
   IntegrityInputSchema,
@@ -278,7 +280,7 @@ export const SKILL_SCHEMAS: SkillSchemaEntry[] = [
     skillId: 'shapley-compare',
     name: 'Shapley Compare',
     description:
-      'Compare Shapley attribution vs last-click with efficiency analysis',
+      'Compare Shapley attribution vs last-click with efficiency analysis per channel',
     inputSchema: ShapleyCompareInputSchema,
     outputSchema: ShapleyCompareOutputSchema,
   },
@@ -296,9 +298,9 @@ export const SKILL_SCHEMAS: SkillSchemaEntry[] = [
     skillId: 'revenue-compare',
     name: 'Revenue Compare',
     description:
-      'Compare revenue efficiency across channels with C-suite summaries',
-    inputSchema: RevenueBridgeInputSchema,
-    outputSchema: RevenueBridgeOutputSchema,
+      'Compare revenue efficiency across channels with ROAS, CPA, and efficiency ranking',
+    inputSchema: RevenueCompareInputSchema,
+    outputSchema: RevenueCompareOutputSchema,
   },
   {
     engineId: 'executive-bridge',

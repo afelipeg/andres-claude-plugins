@@ -67,7 +67,7 @@ import { campaignRoutes } from './routes/campaigns.js';
 import { onboardingRoutes } from './routes/onboarding.js';
 import { consumptionRoutes } from './routes/consumption.js';
 import { assistantRoutes, autoCreatePipelineConversation } from './routes/assistant.js';
-import { ConversationRepo, ScorecardDbRepo, ClientDataRepo, DailyMetricsRepo, FederationLogRepo, AgencyRepo, QuotaRepo } from '@openagency/memory';
+import { ConversationRepo, ScorecardDbRepo, ClientDataRepo, DailyMetricsRepo, FederationLogRepo, AgencyRepo, QuotaRepo, HFLDecisionRepo } from '@openagency/memory';
 import { oauthStorageRoutes } from './routes/oauth-storage.js';
 import { agencyConnectorRoutes } from './routes/agency-connectors.js';
 import { demoRequestRoutes } from './routes/demo-request.js';
@@ -117,6 +117,7 @@ export async function createApp() {
   let federationLogRepo: FederationLogRepo | null = null;
   let agencyRepo: AgencyRepo | null = null;
   let quotaRepo: QuotaRepo | null = null;
+  let hflDecisionRepo: HFLDecisionRepo | null = null;
 
   if (db) {
     log.info('Database connected — repos active');
@@ -135,6 +136,7 @@ export async function createApp() {
     federationLogRepo = new FederationLogRepo(db);
     agencyRepo = new AgencyRepo(db);
     quotaRepo = new QuotaRepo(db);
+    hflDecisionRepo = new HFLDecisionRepo(db);
     await seedAdminUser(userRepo);
   } else {
     log.warn('No DATABASE_URL — running without persistence');
@@ -303,6 +305,7 @@ export async function createApp() {
   });
 
   // ─── Auto-invoke HFL after every pipeline completes ──────────────
+  // This is the SINGLE evaluation point (FIX 2: removed duplicate from mesh.ts)
   eventBus.subscribe('mesh.pipeline.completed', async (event) => {
     const runId = (event.payload as { run_id: string }).run_id;
     const meshRun = mesh.getRun(runId);
@@ -338,9 +341,33 @@ export async function createApp() {
       );
     }
 
-    hflCoordinator.evaluate(summary, forceEscalate).catch((err: unknown) => {
+    try {
+      const decision = await hflCoordinator.evaluate(summary, forceEscalate);
+
+      // FIX 1: Persist HFL decision to PostgreSQL
+      if (hflDecisionRepo && decision) {
+        const riskScore = decision.risk_score;
+        await hflDecisionRepo.save({
+          id: decision.id,
+          run_id: decision.run_id,
+          client_id: decision.client_id ?? null,
+          status: decision.status,
+          risk_score: riskScore?.total_impact_usd ?? null,
+          risk_level: riskScore?.urgency ?? null,
+          reasons: riskScore?.risk_factors ?? [],
+          rendered_payload: (decision.render_output as unknown as Record<string, unknown>) ?? {},
+          channel: decision.dispatched_to ?? null,
+          created_at: decision.created_at,
+          resolved_at: decision.resolved_at ?? null,
+          resolved_by: null,
+          feedback: null,
+        }).catch((err: unknown) => {
+          log.warn({ err, decision_id: decision.id }, 'Failed to persist HFL decision');
+        });
+      }
+    } catch (err: unknown) {
       log.warn({ err, run_id: runId }, 'HFL evaluation error');
-    });
+    }
 
     // ── Auto-generate assistant briefing for this run ──────────────
     // Runs after HFL so the pending decision is already in hfl.listPending()
@@ -493,8 +520,8 @@ export async function createApp() {
   // ─── Storage connectors (Google Drive, OneDrive) ─────────────────
   app.route('/', storageConnectorRoutes(clientDataRepo ?? undefined));
 
-  // ─── Human Feedback Loop routes ────────────────────────────────
-  app.route('/', hflRoutes(hflCoordinator));
+  // ─── Human Feedback Loop routes (FIX 1: with persistence, FIX 6: with RBAC) ──
+  app.route('/', hflRoutes(hflCoordinator, hflDecisionRepo ?? undefined, agencyRepo ?? undefined, mesh));
 
   // ─── Scorecard + Billing ──────────────────────────────────────
   app.route('/', scorecardRoutes(agency, mesh, connectorInfra, scorecardDbRepo ?? undefined));
@@ -543,8 +570,8 @@ export async function createApp() {
   // ─── AI Assistant routes ──────────────────────────────────────
   app.route('/', assistantRoutes(llmConfig, mesh, hflCoordinator, connectorInfra, agency, db ? new ConversationRepo(db) : undefined, quotaRepo ?? undefined));
 
-  // ─── MCP endpoint ───────────────────────────────────────────────
-  app.route('/', mcpRoute(agency, agentMap, mesh, connectorInfra, a2aClient, mcpClientRegistry, dynamicSkillRegistry, hflCoordinator, scheduler, fileRepo));
+  // ─── MCP endpoint (FIX 4: pass agencyRepo + quotaRepo for quota enforcement) ──
+  app.route('/', mcpRoute(agency, agentMap, mesh, connectorInfra, a2aClient, mcpClientRegistry, dynamicSkillRegistry, hflCoordinator, scheduler, fileRepo, agencyRepo ?? undefined, quotaRepo ?? undefined));
 
   // ─── Error handler ──────────────────────────────────────────────
   app.onError(errorHandler);
