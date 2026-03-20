@@ -64,7 +64,8 @@ export interface KBStats {
 // ─── Folders ────────────────────────────────────────────────────────
 
 export async function listFolders(clientId: string): Promise<KBFolder[]> {
-  return fetchJson<KBFolder[]>(`/v1/kb/folders?client_id=${encodeURIComponent(clientId)}`);
+  const data = await fetchJson<{ folders: KBFolder[] } | KBFolder[]>(`/v1/kb/folders?client_id=${encodeURIComponent(clientId)}`);
+  return Array.isArray(data) ? data : data.folders ?? [];
 }
 
 export async function createFolder(
@@ -90,7 +91,8 @@ export async function listDocuments(
 ): Promise<KBDocument[]> {
   const params = new URLSearchParams({ client_id: clientId });
   if (folderId) params.set('folder_id', folderId);
-  return fetchJson<KBDocument[]>(`/v1/kb/documents?${params.toString()}`);
+  const data = await fetchJson<{ documents: KBDocument[] } | KBDocument[]>(`/v1/kb/documents?${params.toString()}`);
+  return Array.isArray(data) ? data : data.documents ?? [];
 }
 
 export async function uploadDocument(
@@ -137,7 +139,8 @@ export async function searchKB(
 ): Promise<KBSearchResult[]> {
   const params = new URLSearchParams({ client_id: clientId, q: query });
   if (limit) params.set('limit', String(limit));
-  return fetchJson<KBSearchResult[]>(`/v1/kb/search?${params.toString()}`);
+  const data = await fetchJson<{ results: KBSearchResult[] } | KBSearchResult[]>(`/v1/kb/search?${params.toString()}`);
+  return Array.isArray(data) ? data : data.results ?? [];
 }
 
 // ─── Stats ──────────────────────────────────────────────────────────
