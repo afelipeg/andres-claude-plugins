@@ -4,6 +4,8 @@ export { loadConfig, saveConfig, getConfigPath } from './config.js';
 export { parseInput } from './data/parser.js';
 export { parseFile } from './data/file-parser.js';
 export type { FileParseResult, FileFormat } from './data/file-parser.js';
+export { detectTimeSeries } from './data/time-series-parser.js';
+export type { TimeSeriesData } from './data/time-series-parser.js';
 export {
   callLLM,
   callLLMWithFallback,

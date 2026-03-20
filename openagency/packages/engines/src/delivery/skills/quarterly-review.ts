@@ -1,12 +1,15 @@
 // ─── Skill: quarterly-review ─────────────────────────────────────────
 // Generates a QBR executive presentation (PPTX/PDF) with quarter summary,
 // channel deep dive, wins & losses, and next quarter roadmap.
+// Now includes native charts for channel performance and budget allocation.
 // Tier: standard (executive narrative, strategic outlook)
 
 import type { QuarterlyReviewInput } from '@openagency/schemas';
 import type { DeliverySkillOutput } from '@openagency/types';
 import { generatePptx } from '../tools/file-generators/pptx-generator.js';
 import { generatePdf } from '../tools/file-generators/pdf-generator.js';
+import { extractChartsFromLayerOne } from '../tools/chart-generator.js';
+import type { ChartData } from '../tools/chart-generator.js';
 import {
   callDeliveryLLM,
   parseJsonResponse,
@@ -69,6 +72,24 @@ export async function run(input: QuarterlyReviewInput): Promise<DeliverySkillOut
     };
   }
 
+  // ── Extract charts from Layer-1 data ─────────────────────────────
+  let charts: ChartData[] = [];
+  try {
+    charts = extractChartsFromLayerOne(input.layer_one_results);
+  } catch {
+    // Chart extraction failed — continue without charts
+  }
+
+  // Also build charts from LLM-generated channel_performance data
+  const channelChartFromLLM = buildChannelChartFromLLM(llm.channel_performance);
+  const allocationChartFromLLM = buildAllocationPieFromLLM(llm.channel_performance);
+
+  // Pick charts: prefer engine-extracted, fall back to LLM-derived
+  const spendChart = charts.find(c => c.title.includes('Spend')) ?? channelChartFromLLM;
+  const pieChart = charts.find(c => c.type === 'pie') ?? allocationChartFromLLM;
+  const wasteChart = charts.find(c => c.type === 'waterfall');
+  const trendChart = charts.find(c => c.type === 'line');
+
   const title = `Quarterly Business Review`;
   const subtitle = `${input.quarter}  ·  ${input.client_id}`;
   const formats = input.output_formats ?? ['pptx'];
@@ -86,9 +107,12 @@ export async function run(input: QuarterlyReviewInput): Promise<DeliverySkillOut
     localPath = tempPath('pdf');
     const r = await generatePdf({ title, subtitle, sections: [
       { heading: 'Quarter Overview', content: llm.quarter_overview },
-      { heading: 'Channel Performance', content: '', table: channelTable },
+      { heading: 'Channel Performance', content: '', table: channelTable, chart: spendChart },
+      { heading: 'Channel Contribution', content: '', chart: pieChart },
       { heading: 'Top Wins', content: '', table: winsTable },
       { heading: 'Key Challenges', content: '', table: challengesTable },
+      ...(wasteChart ? [{ heading: 'Waste Decomposition', content: '', chart: wasteChart }] : []),
+      ...(trendChart ? [{ heading: 'KPI Trends', content: '', chart: trendChart }] : []),
       { heading: 'Learnings', content: llm.learnings.map((l, i) => `${i + 1}. ${l}`).join('\n') },
       { heading: 'Next Quarter Plan', content: '', table: nextQTable },
       { heading: 'Executive Outlook', content: llm.executive_outlook },
@@ -99,9 +123,12 @@ export async function run(input: QuarterlyReviewInput): Promise<DeliverySkillOut
     const r = await generatePptx({ title, subtitle, slides: [
       { heading: 'Quarter Overview', body: llm.quarter_overview },
       { heading: 'Key Metrics', kpis: llm.key_metrics },
-      { heading: 'Channel Performance', table: channelTable },
+      { heading: 'Channel Performance', table: channelTable, chart: spendChart },
+      { heading: 'Channel Contribution', chart: pieChart },
       { heading: 'Top Wins', table: winsTable },
       { heading: 'Key Challenges', table: challengesTable },
+      ...(wasteChart ? [{ heading: 'Waste Decomposition', chart: wasteChart }] : []),
+      ...(trendChart ? [{ heading: 'KPI Trends', chart: trendChart }] : []),
       { heading: 'Learnings', body: llm.learnings.map((l, i) => `${i + 1}. ${l}`).join('\n') },
       { heading: 'Next Quarter Plan', table: nextQTable },
       { heading: 'Executive Outlook', body: llm.executive_outlook },
@@ -116,4 +143,49 @@ export async function run(input: QuarterlyReviewInput): Promise<DeliverySkillOut
     (output as DeliverySkillOutput & { token_usage?: unknown }).token_usage = tokenUsage;
   }
   return output;
+}
+
+// ─── Build charts from LLM channel_performance data ─────────────────
+
+function buildChannelChartFromLLM(
+  channels: QBRLLM['channel_performance'],
+): ChartData | undefined {
+  if (channels.length === 0) return undefined;
+
+  const data = channels
+    .map(c => {
+      const spend = parseFloat(c.spend.replace(/[$,]/g, ''));
+      return { label: c.channel, value: isNaN(spend) ? 0 : spend };
+    })
+    .filter(d => d.value > 0);
+
+  if (data.length === 0) return undefined;
+
+  return {
+    type: 'bar',
+    title: 'Channel Spend Comparison',
+    data,
+  };
+}
+
+function buildAllocationPieFromLLM(
+  channels: QBRLLM['channel_performance'],
+): ChartData | undefined {
+  if (channels.length === 0) return undefined;
+
+  const data = channels
+    .map(c => {
+      const spend = parseFloat(c.spend.replace(/[$,]/g, ''));
+      return { label: c.channel, value: isNaN(spend) ? 0 : spend };
+    })
+    .filter(d => d.value > 0);
+
+  if (data.length === 0) return undefined;
+
+  return {
+    type: 'pie',
+    title: 'Budget Allocation by Channel',
+    data,
+    options: { showLegend: true },
+  };
 }

@@ -6,13 +6,16 @@
 // Flow:
 //   1. Compact Layer-1 results into a token-efficient summary
 //   2. Call Claude for structured narrative (JSON response)
-//   3. Generate requested file format(s) with Plinth template
-//   4. Persist via file-storage, return primary format
+//   3. Extract chart data from Layer-1 results
+//   4. Generate requested file format(s) with Plinth template + charts
+//   5. Persist via file-storage, return primary format
 
 import type { MonthlyReportInput } from '@openagency/schemas';
 import type { DeliverySkillOutput } from '@openagency/types';
 import { generatePdf } from '../tools/file-generators/pdf-generator.js';
 import { generatePptx } from '../tools/file-generators/pptx-generator.js';
+import { extractChartsFromLayerOne } from '../tools/chart-generator.js';
+import type { ChartData } from '../tools/chart-generator.js';
 import {
   callDeliveryLLM,
   parseJsonResponse,
@@ -110,6 +113,20 @@ export async function run(input: MonthlyReportInput): Promise<DeliverySkillOutpu
     };
   }
 
+  // ── Extract charts from Layer-1 data ─────────────────────────────
+  let charts: ChartData[] = [];
+  try {
+    charts = extractChartsFromLayerOne(input.layer_one_results);
+  } catch {
+    // Chart extraction failed — continue without charts
+  }
+
+  // Map chart types to sections for context-appropriate placement
+  const spendChart = charts.find(c => c.title.includes('Spend'));
+  const roasChart = charts.find(c => c.title.includes('ROAS'));
+  const trendChart = charts.find(c => c.type === 'line');
+  const wasteChart = charts.find(c => c.type === 'waterfall');
+
   const title = `Monthly Performance Report`;
   const subtitle = `${input.period_start} → ${input.period_end}  ·  ${input.client_id}`;
   const formats = input.output_formats ?? ['pdf'];
@@ -118,7 +135,13 @@ export async function run(input: MonthlyReportInput): Promise<DeliverySkillOutpu
   // ── PDF sections ─────────────────────────────────────────────────
   const pdfSections = [
     { heading: 'Executive Summary', content: llmData.executive_summary },
-    ...llmData.sections.map(s => ({ heading: s.heading, content: s.content, table: s.table })),
+    ...llmData.sections.map((s, i) => ({
+      heading: s.heading,
+      content: s.content,
+      table: s.table,
+      // Attach charts to matching sections by keyword, or to early sections
+      chart: matchChartToSection(s.heading, [spendChart, roasChart, trendChart, wasteChart], i),
+    })),
     {
       heading: 'Recommendations',
       content: llmData.recommendations.map((r, i) => `${i + 1}. ${r}`).join('\n'),
@@ -129,11 +152,16 @@ export async function run(input: MonthlyReportInput): Promise<DeliverySkillOutpu
   const pptxSlides = [
     { heading: 'Executive Summary', body: llmData.executive_summary },
     { heading: 'Key Metrics', kpis: llmData.key_metrics },
-    ...llmData.sections.map(s => ({
+    ...llmData.sections.map((s, i) => ({
       heading: s.heading,
       body: s.table ? undefined : s.content,
       table: s.table,
+      chart: matchChartToSection(s.heading, [spendChart, roasChart, trendChart, wasteChart], i),
     })),
+    // Dedicated chart slides for any remaining charts not matched to sections
+    ...charts
+      .filter(c => ![spendChart, roasChart, trendChart, wasteChart].includes(c))
+      .map(c => ({ heading: c.title, chart: c })),
     {
       heading: 'Recommendations',
       body: llmData.recommendations.map((r, i) => `${i + 1}. ${r}`).join('\n'),
@@ -174,4 +202,26 @@ export async function run(input: MonthlyReportInput): Promise<DeliverySkillOutpu
     (output as DeliverySkillOutput & { token_usage?: unknown }).token_usage = tokenUsage;
   }
   return output;
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────
+
+/** Match a chart to a section heading by keyword, or by index fallback. */
+function matchChartToSection(
+  heading: string,
+  availableCharts: (ChartData | undefined)[],
+  sectionIndex: number,
+): ChartData | undefined {
+  const h = heading.toLowerCase();
+
+  // Keyword matching
+  if ((h.includes('waste') || h.includes('leak')) && availableCharts[3]) return availableCharts[3];
+  if ((h.includes('channel') || h.includes('spend')) && availableCharts[0]) return availableCharts[0];
+  if ((h.includes('roi') || h.includes('roas') || h.includes('efficiency')) && availableCharts[1]) return availableCharts[1];
+  if ((h.includes('trend') || h.includes('kpi') || h.includes('performance')) && availableCharts[2]) return availableCharts[2];
+
+  // Index fallback: attach first available to early sections
+  if (sectionIndex < availableCharts.length) return availableCharts[sectionIndex];
+
+  return undefined;
 }

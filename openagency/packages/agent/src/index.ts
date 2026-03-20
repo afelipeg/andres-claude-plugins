@@ -19,7 +19,8 @@ export { GoalDecomposer } from './goals/goal-decomposer.js';
 export { GoalTracker } from './goals/goal-tracker.js';
 
 // Mesh orchestration
-export { MeshCoordinator } from './mesh/mesh-coordinator.js';
+export { MeshCoordinator, getPipelineQueueStatus } from './mesh/mesh-coordinator.js';
+export type { QueueStatus } from './mesh/mesh-coordinator.js';
 export { DEFAULT_PIPELINE } from './mesh/default-pipeline.js';
 export { DELIVERY_PIPELINE } from './mesh/delivery-pipeline.js';
 export { PipelineScheduler, matchesCron, nextCronDate } from './mesh/scheduler.js';

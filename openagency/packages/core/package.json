@@ -34,6 +34,10 @@
       "types": "./dist/data/platform-detect.d.ts",
       "import": "./dist/data/platform-detect.js"
     },
+    "./data/time-series-parser": {
+      "types": "./dist/data/time-series-parser.d.ts",
+      "import": "./dist/data/time-series-parser.js"
+    },
     "./llm/provider": {
       "types": "./dist/llm/provider.d.ts",
       "import": "./dist/llm/provider.js"

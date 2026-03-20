@@ -67,6 +67,7 @@ import { campaignRoutes } from './routes/campaigns.js';
 import { onboardingRoutes } from './routes/onboarding.js';
 import { consumptionRoutes } from './routes/consumption.js';
 import { assistantRoutes, autoCreatePipelineConversation } from './routes/assistant.js';
+import { benchmarkRoutes } from './routes/benchmarks.js';
 import { ConversationRepo, ScorecardDbRepo, ClientDataRepo, DailyMetricsRepo, FederationLogRepo, AgencyRepo, QuotaRepo, HFLDecisionRepo } from '@openagency/memory';
 import { oauthStorageRoutes } from './routes/oauth-storage.js';
 import { agencyConnectorRoutes } from './routes/agency-connectors.js';
@@ -529,6 +530,9 @@ export async function createApp() {
   // ─── Analyze pipeline (upload → engines → scorecard) ──────────
   app.route('/', analyzeRoutes(agency, agencyRepo ?? undefined, quotaRepo ?? undefined));
 
+  // ─── Cross-Client Benchmarks (anonymized) ─────────────────────
+  app.route('/', benchmarkRoutes(db));
+
   // ─── SSE event stream ──────────────────────────────────────────
   app.route('/', eventStreamRoutes(eventBus));
 
@@ -567,7 +571,7 @@ export async function createApp() {
   // ─── Delivery Engine routes ───────────────────────────────────
   app.route('/', deliveryRoutes(agency, fileRepo));
 
-  // ─── AI Assistant routes ──────────────────────────────────────
+  // ─── AI Assistant routes (Agentic Mode) ────────────────────────
   app.route('/', assistantRoutes(llmConfig, mesh, hflCoordinator, connectorInfra, agency, db ? new ConversationRepo(db) : undefined, quotaRepo ?? undefined));
 
   // ─── MCP endpoint (FIX 4: pass agencyRepo + quotaRepo for quota enforcement) ──

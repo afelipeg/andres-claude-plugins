@@ -135,7 +135,7 @@ export default defineConfig({
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
-          charts: ['recharts'],
+          charts: ['recharts', 'highcharts', 'highcharts-react-official'],
           pdf: ['jspdf'],
         },
       },

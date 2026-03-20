@@ -1,19 +1,21 @@
 // ─── Analyze Pipeline Routes ────────────────────────────────────────
-// POST /v1/analyze      — JSON data + run engines → billing
-// POST /v1/analyze/file — file upload + parse + run engines → billing
+// POST /v1/analyze      — JSON data + run engines -> billing
+// POST /v1/analyze/file — file upload + parse + run engines -> billing
 //
 // End-to-end pipeline:
 //   1. Accept file upload (CSV/Excel/PDF) or JSON body
 //   2. Parse and detect platform
-//   3. Run relevant engine skills
-//   4. Calculate billing from engine results
-//   5. Return unified scorecard response
+//   3. Detect time-series structure for MMM batch mode
+//   4. Run relevant engine skills
+//   5. Calculate billing from engine results
+//   6. Return unified scorecard response
 
 import { Hono } from 'hono';
 import type { OpenAgency } from '@openagency/core';
 import { calculateBillingFromEngines } from '@openagency/core';
 import { parseFile } from '@openagency/core/data/file-parser';
 import { detectPlatform } from '@openagency/core/data/platform-detect';
+import { detectTimeSeries } from '@openagency/core/data/time-series-parser';
 import type { EngineOutputs } from '@openagency/core';
 import type { AgencyRepo, QuotaRepo } from '@openagency/memory';
 import type { AuthPayload } from '@openagency/types';
@@ -138,7 +140,10 @@ export function analyzeRoutes(agency: OpenAgency, agencyRepo?: AgencyRepo, quota
       const parsed = await parseFile(buffer, file.name);
       const mapping = detectPlatform(parsed.columns);
 
-      // 2. Build engine input from parsed data
+      // 2. Detect time-series structure for MMM batch mode
+      const timeSeries = detectTimeSeries(parsed.data, parsed.columns);
+
+      // 3. Build engine input from parsed data
       const engineInput: Record<string, unknown> = {
         platform: mapping.platform,
         column_map: mapping.columnMap,
@@ -146,7 +151,38 @@ export function analyzeRoutes(agency: OpenAgency, agencyRepo?: AgencyRepo, quota
         columns: parsed.columns,
       };
 
-      // 3. Run engines
+      // 4. If time-series detected with >= 52 weeks, enable Bayesian MMM mode
+      let timeSeriesMeta: Record<string, unknown> | undefined;
+      if (timeSeries && timeSeries.time_periods >= 52) {
+        engineInput.weekly_kpi = timeSeries.weekly_kpi;
+        engineInput.weekly_spend = timeSeries.channels;
+        engineInput.time_series_mode = true;
+        engineInput.time_periods = timeSeries.time_periods;
+        engineInput.date_range = timeSeries.date_range;
+
+        timeSeriesMeta = {
+          detected: true,
+          mode: 'bayesian_mmm',
+          time_periods: timeSeries.time_periods,
+          channels: timeSeries.channels.length,
+          channel_names: timeSeries.channels.map((ch) => ch.channel),
+          date_range: timeSeries.date_range,
+          kpi_column: timeSeries.kpi_column,
+          date_column: timeSeries.date_column,
+        };
+      } else if (timeSeries) {
+        // Time-series found but < 52 weeks — include metadata but don't activate batch mode
+        timeSeriesMeta = {
+          detected: true,
+          mode: 'heuristic',
+          time_periods: timeSeries.time_periods,
+          channels: timeSeries.channels.length,
+          date_range: timeSeries.date_range,
+          reason: `${timeSeries.time_periods} weeks detected, minimum 52 required for Bayesian MMM`,
+        };
+      }
+
+      // 5. Run engines
       const result = await runEngines(agency, adSpend, engineInput);
 
       // FIX 3: Increment quota after successful file analysis
@@ -163,6 +199,7 @@ export function analyzeRoutes(agency: OpenAgency, agencyRepo?: AgencyRepo, quota
           rows: parsed.data.length,
           columns: parsed.columns,
         },
+        ...(timeSeriesMeta ? { time_series: timeSeriesMeta } : {}),
         ...result,
       }, 201);
     } catch (err) {

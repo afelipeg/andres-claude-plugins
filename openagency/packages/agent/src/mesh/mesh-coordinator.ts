@@ -28,6 +28,56 @@ import {
   meshStageSkipped,
 } from '@openagency/events';
 
+// ─── Semaphore ──────────────────────────────────────────────────────
+// Limits concurrent pipeline executions to prevent DB pool saturation
+// and API rate limit exhaustion.
+class Semaphore {
+  private queue: (() => void)[] = [];
+  private running = 0;
+  constructor(private concurrency: number) {}
+  async acquire(): Promise<void> {
+    if (this.running < this.concurrency) {
+      this.running++;
+      return;
+    }
+    return new Promise<void>((resolve) => {
+      this.queue.push(() => {
+        this.running++;
+        resolve();
+      });
+    });
+  }
+  release(): void {
+    this.running--;
+    const next = this.queue.shift();
+    if (next) next();
+  }
+  get pending(): number {
+    return this.queue.length;
+  }
+  get active(): number {
+    return this.running;
+  }
+}
+
+/** Module-level semaphore — max 2 concurrent pipeline executions */
+const pipelineSemaphore = new Semaphore(2);
+
+/** Queue depth info for observability */
+export interface QueueStatus {
+  active: number;
+  pending: number;
+  concurrency: number;
+}
+
+export function getPipelineQueueStatus(): QueueStatus {
+  return {
+    active: pipelineSemaphore.active,
+    pending: pipelineSemaphore.pending,
+    concurrency: 2,
+  };
+}
+
 // Minimal structural interface — status is widened to string so MeshRunRepo
 // (from @openagency/memory) satisfies it without importing agent types.
 export interface IMeshRunRepo {
@@ -162,6 +212,27 @@ export class MeshCoordinator {
       throw new Error(`Pipeline not found: ${pipelineId}`);
     }
 
+    // Acquire semaphore — blocks if 2 pipelines already running
+    this.log.info(
+      { pipeline_id: pipelineId, queue_active: pipelineSemaphore.active, queue_pending: pipelineSemaphore.pending },
+      'Pipeline queued — awaiting semaphore',
+    );
+    await pipelineSemaphore.acquire();
+
+    try {
+      return await this._executePipelineInner(pipeline, pipelineId, goalId, clientId, skillContext);
+    } finally {
+      pipelineSemaphore.release();
+    }
+  }
+
+  private async _executePipelineInner(
+    pipeline: MeshPipeline,
+    pipelineId: string,
+    goalId?: string,
+    clientId?: string,
+    skillContext?: Record<string, unknown>,
+  ): Promise<MeshRun> {
     const runId = ulid();
     const startedAt = new Date();
 
@@ -506,7 +577,7 @@ export class MeshCoordinator {
     return this.runs.get(runId)?.usage;
   }
 
-  /** Serialize a run for JSON response (Maps → plain objects) */
+  /** Serialize a run for JSON response (Maps -> plain objects) */
   serializeRun(run: MeshRun): Record<string, unknown> {
     const stageResults: Record<string, unknown> = {};
     for (const [agentId, result] of run.context.stage_results) {
@@ -539,6 +610,7 @@ export class MeshCoordinator {
       goal_id: run.context.goal_id,
       stage_results: stageResults,
       usage: run.usage,
+      queue: getPipelineQueueStatus(),
     };
   }
 }

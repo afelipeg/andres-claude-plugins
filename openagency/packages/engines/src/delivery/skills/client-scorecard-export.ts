@@ -1,12 +1,16 @@
 // ─── Skill: client-scorecard-export ──────────────────────────────────
 // Exports the client scorecard as XLSX (primary) + PDF (secondary).
 // Both files are generated and returned; XLSX in `file`, PDF in `additional_files`.
+// Now includes performance charts in the PDF export.
 // Tier: fast (structured data, less reasoning needed)
 
 import type { ClientScorecardExportInput } from '@openagency/schemas';
 import type { DeliverySkillOutput } from '@openagency/types';
 import { generateXlsx } from '../tools/file-generators/xlsx-generator.js';
 import { generatePdf } from '../tools/file-generators/pdf-generator.js';
+import { extractChartsFromLayerOne } from '../tools/chart-generator.js';
+import type { ChartData } from '../tools/chart-generator.js';
+import { CHART_PALETTE } from '../tools/chart-generator.js';
 import {
   callDeliveryLLM,
   parseJsonResponse,
@@ -72,6 +76,19 @@ export async function run(input: ClientScorecardExportInput): Promise<DeliverySk
     };
   }
 
+  // ── Extract charts from Layer-1 data ─────────────────────────────
+  let engineCharts: ChartData[] = [];
+  try {
+    engineCharts = extractChartsFromLayerOne(input.layer_one_results);
+  } catch {
+    // Continue without engine charts
+  }
+
+  // Build scorecard-specific charts from LLM data
+  const perfVsTargetChart = buildPerformanceVsTargetChart(llm.scorecard_rows);
+  const sectionScoresChart = buildSectionScoresChart(llm.section_scores);
+  const wasteChart = engineCharts.find(c => c.type === 'waterfall');
+
   const title = 'Client Scorecard';
   const subtitle = `${llm.overall_grade} (${llm.overall_score}/100)  ·  ${input.period_start} → ${input.period_end}  ·  ${input.client_id}`;
   const formats = input.output_formats?.length ? input.output_formats : ['xlsx', 'pdf'];
@@ -132,18 +149,21 @@ export async function run(input: ClientScorecardExportInput): Promise<DeliverySk
       sections: [
         { heading: 'Executive Summary', content: llm.executive_summary },
         {
-          heading: 'Scorecard Metrics',
+          heading: 'Performance vs Targets',
           content: '',
           table: {
             headers: ['Metric', 'Category', 'Target', 'Actual', 'Delta', 'Status'],
             rows: llm.scorecard_rows.map(r => [r.metric, r.category, r.target, r.actual, r.delta, r.status]),
           },
+          chart: perfVsTargetChart,
         },
         {
           heading: 'Section Grades',
           content: '',
           table: { headers: ['Section', 'Score', 'Grade', 'Highlights'], rows: llm.section_scores.map(s => [s.section, `${s.score}/${s.max_score}`, s.grade, s.highlights.join('; ')]) },
+          chart: sectionScoresChart,
         },
+        ...(wasteChart ? [{ heading: 'Waste Decomposition', content: 'Waste breakdown from Leak Detector analysis.', chart: wasteChart }] : []),
         { heading: 'Trend Analysis', content: llm.trend_analysis },
         {
           heading: 'Action Priorities',
@@ -176,4 +196,60 @@ export async function run(input: ClientScorecardExportInput): Promise<DeliverySk
     (output as DeliverySkillOutput & { token_usage?: unknown }).token_usage = tokenUsage;
   }
   return output;
+}
+
+// ─── Scorecard-specific chart builders ──────────────────────────────
+
+function buildPerformanceVsTargetChart(
+  rows: ScorecardLLM['scorecard_rows'],
+): ChartData | undefined {
+  if (rows.length === 0) return undefined;
+
+  // Build a bar chart comparing actual vs target for numeric metrics
+  const data = rows
+    .map(r => {
+      const actual = parseFloat(r.actual.replace(/[^0-9.-]/g, ''));
+      if (isNaN(actual)) return null;
+
+      // Color by status
+      let color: string;
+      switch (r.status) {
+        case 'Exceeded': color = CHART_PALETTE[1]!; break;  // green
+        case 'On Track': color = CHART_PALETTE[0]!; break;   // blue
+        case 'At Risk': color = CHART_PALETTE[3]!; break;    // amber
+        case 'Missed': color = CHART_PALETTE[2]!; break;     // red
+        default: color = CHART_PALETTE[5]!;
+      }
+
+      return { label: r.metric, value: actual, color };
+    })
+    .filter((d): d is NonNullable<typeof d> => d !== null)
+    .slice(0, 8); // max 8 bars for readability
+
+  if (data.length === 0) return undefined;
+
+  return {
+    type: 'bar',
+    title: 'Performance vs Targets',
+    data,
+    options: { showValues: true },
+  };
+}
+
+function buildSectionScoresChart(
+  sections: ScorecardLLM['section_scores'],
+): ChartData | undefined {
+  if (sections.length === 0) return undefined;
+
+  const data = sections.map(s => ({
+    label: s.section,
+    value: s.score,
+  }));
+
+  return {
+    type: 'bar',
+    title: 'Section Scores',
+    data,
+    options: { showValues: true, colors: [CHART_PALETTE[0]!] },
+  };
 }

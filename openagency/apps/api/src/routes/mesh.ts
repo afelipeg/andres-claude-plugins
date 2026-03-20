@@ -4,6 +4,7 @@
 // GET  /v1/mesh/runs                  — list runs (paginated, filterable)
 // GET  /v1/mesh/runs/:id              — get run detail with HFL decision
 // GET  /v1/mesh/runs/:id/recovery     — recovery breakdown for scorecard
+// GET  /v1/mesh/queue                 — pipeline execution queue status
 // POST /v1/mesh/schedules             — create schedule
 // GET  /v1/mesh/schedules             — list schedules
 // DELETE /v1/mesh/schedules/:id       — delete schedule
@@ -11,6 +12,7 @@
 import { Hono } from 'hono';
 import { authMiddleware } from '@openagency/auth';
 import type { MeshCoordinator, MeshRun } from '@openagency/agent';
+import { getPipelineQueueStatus } from '@openagency/agent';
 import type { PipelineScheduler } from '@openagency/agent';
 import type { HFLCoordinator } from '@openagency/hfl';
 import { createScorecardFromMeshRun } from './scorecard.js';
@@ -26,6 +28,11 @@ const meshLog = createLogger('mesh-routes');
 
 export function meshRoutes(mesh: MeshCoordinator, hfl?: HFLCoordinator, scheduler?: PipelineScheduler, connectorInfra?: ConnectorInfra, clientDataRepo?: ClientDataRepo, mcpClientRegistry?: McpClientRegistry, scorecardDbRepo?: ScorecardDbRepo, agencyRepo?: AgencyRepo, quotaRepo?: QuotaRepo) {
   const app = new Hono();
+
+  // ─── Pipeline execution queue status ────────────────────────────
+  app.get('/v1/mesh/queue', (c) => {
+    return c.json(getPipelineQueueStatus());
+  });
 
   // ─── List pipelines ──────────────────────────────────────────────
   app.get('/v1/mesh/pipelines', (c) => {

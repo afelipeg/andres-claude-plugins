@@ -1,5 +1,6 @@
 // ─── Redis Streams Event Bus ────────────────────────────────────────
 // Loaded only when REDIS_URL is set. Falls back to InMemoryEventBus otherwise.
+// Fixes: init race (queued events), XACK after processing, consumer cleanup on stop.
 
 import type { EngineEvent, EngineEventType, EventBus, EventHandler } from '@openagency/types';
 
@@ -15,9 +16,16 @@ export class RedisEventBus implements EventBus {
   private consumerId: string;
   private streamKey = 'openagency:events';
 
+  /** Stored init promise — callers can await readiness */
+  private initPromise: Promise<void>;
+  private ready = false;
+
+  /** Events published before Redis is connected — flushed on ready */
+  private pendingPublish: EngineEvent<unknown>[] = [];
+
   constructor(redisUrl: string) {
     this.consumerId = `consumer-${process.pid}-${Date.now()}`;
-    void this.init(redisUrl);
+    this.initPromise = this.init(redisUrl);
   }
 
   private async init(redisUrl: string): Promise<void> {
@@ -35,6 +43,16 @@ export class RedisEventBus implements EventBus {
         // Group already exists
       }
 
+      this.ready = true;
+
+      // Flush any events that were published before init completed
+      if (this.pendingPublish.length > 0) {
+        const queued = this.pendingPublish.splice(0);
+        for (const event of queued) {
+          await this.publishToRedis(event);
+        }
+      }
+
       this.startPolling();
     } catch {
       console.warn('[events] ioredis not available, Redis event bus disabled');
@@ -42,6 +60,19 @@ export class RedisEventBus implements EventBus {
   }
 
   async publish<T>(event: EngineEvent<T>): Promise<void> {
+    // If init hasn't completed yet, queue the event
+    if (!this.ready) {
+      this.pendingPublish.push(event as EngineEvent<unknown>);
+      // Wait for init — if init completes, events are flushed there
+      await this.initPromise;
+      // After init, the event may have been flushed already
+      // If redis is still not available, silently drop
+      return;
+    }
+    await this.publishToRedis(event);
+  }
+
+  private async publishToRedis<T>(event: EngineEvent<T>): Promise<void> {
     if (!this.redis) return;
     const r = this.redis as { xadd: (...args: unknown[]) => Promise<unknown> };
     await r.xadd(
@@ -90,7 +121,10 @@ export class RedisEventBus implements EventBus {
   private async poll(): Promise<void> {
     while (this.polling) {
       try {
-        const r = this.redis as { xreadgroup: (...args: unknown[]) => Promise<unknown> };
+        const r = this.redis as {
+          xreadgroup: (...args: unknown[]) => Promise<unknown>;
+          xack: (...args: unknown[]) => Promise<unknown>;
+        };
         const results = await r.xreadgroup(
           'GROUP', this.consumerGroup, this.consumerId,
           'COUNT', '10', 'BLOCK', '5000',
@@ -100,7 +134,7 @@ export class RedisEventBus implements EventBus {
         if (!results) continue;
 
         for (const [, messages] of results) {
-          for (const [, fields] of messages) {
+          for (const [messageId, fields] of messages) {
             const map = new Map<string, string>();
             for (let i = 0; i < fields.length; i += 2) {
               map.set(fields[i]!, fields[i + 1]!);
@@ -112,6 +146,8 @@ export class RedisEventBus implements EventBus {
               payload: JSON.parse(map.get('payload') ?? 'null') as unknown,
               metadata: JSON.parse(map.get('metadata') ?? '{}') as Record<string, unknown>,
             };
+
+            // Dispatch to type-specific handlers
             const handlers = this.handlers.get(event.type);
             if (handlers) {
               for (const handler of handlers) {
@@ -125,15 +161,30 @@ export class RedisEventBus implements EventBus {
                 void handler(event);
               }
             }
+
+            // XACK — acknowledge the message to prevent PEL growth
+            try {
+              await r.xack(this.streamKey, this.consumerGroup, messageId);
+            } catch {
+              // ACK failure is non-fatal — message will be re-delivered
+            }
           }
         }
       } catch {
-        await new Promise((r) => setTimeout(r, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }
   }
 
   stop(): void {
     this.polling = false;
+
+    // Clean up consumer from the group to prevent dead consumer entries
+    if (this.redis) {
+      const r = this.redis as { xgroup: (...args: string[]) => Promise<unknown> };
+      r.xgroup('DELCONSUMER', this.streamKey, this.consumerGroup, this.consumerId).catch(() => {
+        // Cleanup failure is non-fatal
+      });
+    }
   }
 }
