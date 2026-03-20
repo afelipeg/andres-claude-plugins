@@ -416,8 +416,10 @@ export function KnowledgeBasePage() {
       setFolders((prev) => [...prev, folder]);
       setNewFolderName('');
       setShowNewFolder(false);
-    } catch {
-      // Silently fail
+      void loadData(); // Refresh tree
+    } catch (err) {
+      console.error('Failed to create folder:', err);
+      alert(err instanceof Error ? err.message : 'Failed to create folder');
     }
   };
 

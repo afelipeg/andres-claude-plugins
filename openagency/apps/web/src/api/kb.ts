@@ -64,7 +64,7 @@ export interface KBStats {
 // ─── Folders ────────────────────────────────────────────────────────
 
 export async function listFolders(clientId: string): Promise<KBFolder[]> {
-  return fetchJson<KBFolder[]>(`/v1/kb/${clientId}/folders`);
+  return fetchJson<KBFolder[]>(`/v1/kb/folders?client_id=${encodeURIComponent(clientId)}`);
 }
 
 export async function createFolder(
@@ -72,9 +72,9 @@ export async function createFolder(
   name: string,
   parentId?: string,
 ): Promise<KBFolder> {
-  return fetchJson<KBFolder>(`/v1/kb/${clientId}/folders`, {
+  return fetchJson<KBFolder>(`/v1/kb/folders`, {
     method: 'POST',
-    body: JSON.stringify({ name, parent_folder_id: parentId }),
+    body: JSON.stringify({ client_id: clientId, name, parent_folder_id: parentId }),
   });
 }
 
@@ -88,8 +88,9 @@ export async function listDocuments(
   clientId: string,
   folderId?: string,
 ): Promise<KBDocument[]> {
-  const qs = folderId ? `?folder_id=${folderId}` : '';
-  return fetchJson<KBDocument[]>(`/v1/kb/${clientId}/documents${qs}`);
+  const params = new URLSearchParams({ client_id: clientId });
+  if (folderId) params.set('folder_id', folderId);
+  return fetchJson<KBDocument[]>(`/v1/kb/documents?${params.toString()}`);
 }
 
 export async function uploadDocument(
@@ -100,12 +101,13 @@ export async function uploadDocument(
   const formData = new FormData();
   formData.append('file', file);
   formData.append('folder_id', folderId);
+  formData.append('client_id', clientId);
 
   const token = localStorage.getItem('plinth_token');
   const headers: Record<string, string> = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetch(`${API_URL}/v1/kb/${clientId}/documents`, {
+  const res = await fetch(`${API_URL}/v1/kb/documents/upload`, {
     method: 'POST',
     headers,
     body: formData,
@@ -133,13 +135,13 @@ export async function searchKB(
   query: string,
   limit?: number,
 ): Promise<KBSearchResult[]> {
-  const params = new URLSearchParams({ q: query });
+  const params = new URLSearchParams({ client_id: clientId, q: query });
   if (limit) params.set('limit', String(limit));
-  return fetchJson<KBSearchResult[]>(`/v1/kb/${clientId}/search?${params.toString()}`);
+  return fetchJson<KBSearchResult[]>(`/v1/kb/search?${params.toString()}`);
 }
 
 // ─── Stats ──────────────────────────────────────────────────────────
 
 export async function getKBStats(clientId: string): Promise<KBStats> {
-  return fetchJson<KBStats>(`/v1/kb/${clientId}/stats`);
+  return fetchJson<KBStats>(`/v1/kb/stats?client_id=${encodeURIComponent(clientId)}`);
 }
