@@ -397,7 +397,11 @@ async function fetchSubAccounts(
             client_secret: creds.client_secret,
           }),
         });
-        if (!tokenRes.ok) throw new Error(`Token refresh failed (${tokenRes.status}): ${await tokenRes.text()}`);
+        if (!tokenRes.ok) {
+          const errText = await tokenRes.text();
+          console.error(`[google_ads] Token refresh failed (${tokenRes.status}):`, errText);
+          throw new Error(`Token refresh failed (${tokenRes.status}): ${errText}`);
+        }
         const tokenData = (await tokenRes.json()) as { access_token: string };
         accessToken = tokenData.access_token;
       }
@@ -406,15 +410,22 @@ async function fetchSubAccounts(
       // List accessible customers under MCC
       const devToken = creds.developer_token ?? '';
       const mccId = creds.login_customer_id ?? '';
+      if (!devToken) throw new Error('Missing developer_token — required for Google Ads API');
       const headers: Record<string, string> = {
         Authorization: `Bearer ${accessToken}`,
         'developer-token': devToken,
       };
       if (mccId) headers['login-customer-id'] = mccId.replace(/-/g, '');
 
+      console.log(`[google_ads] listAccessibleCustomers — devToken: ${devToken.slice(0, 6)}..., mccId: ${mccId || '(none)'}`);
       const listRes = await fetch('https://googleads.googleapis.com/v17/customers:listAccessibleCustomers', { headers });
-      if (!listRes.ok) throw new Error(`Google Ads API error (${listRes.status}): ${await listRes.text()}`);
+      if (!listRes.ok) {
+        const errText = await listRes.text();
+        console.error(`[google_ads] listAccessibleCustomers failed (${listRes.status}):`, errText);
+        throw new Error(`Google Ads API error (${listRes.status}): ${errText}`);
+      }
       const listData = (await listRes.json()) as { resourceNames?: string[] };
+      console.log(`[google_ads] listAccessibleCustomers returned ${listData.resourceNames?.length ?? 0} customers`);
       const customerIds = (listData.resourceNames ?? []).map((r: string) => r.replace('customers/', ''));
 
       // Fetch names for each customer

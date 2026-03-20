@@ -240,6 +240,10 @@ function ConnectDialog({
       if (acctRes.ok) {
         const data = (await acctRes.json()) as { accounts: Array<{ id: string; name: string; status?: string }> };
         setSubAccounts(data.accounts ?? []);
+      } else {
+        const errBody = await acctRes.json().catch(() => ({})) as { message?: string; error?: string };
+        const errMsg = errBody.message || errBody.error || `Failed to fetch sub-accounts (HTTP ${acctRes.status})`;
+        setError(errMsg);
       }
       setLoadingAccounts(false);
       setStep('advertisers');
