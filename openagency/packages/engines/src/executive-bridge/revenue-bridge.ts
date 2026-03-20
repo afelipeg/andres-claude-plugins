@@ -1,6 +1,6 @@
 // ─── Revenue Bridge ─────────────────────────────────────────────────
 // Translates L3 media -> L2 business -> L1 financial metrics.
-// Port of revenue_bridge.py
+// L3→L2→L1 revenue translation with CLV computation
 
 import { round } from '@openagency/core/utils/math';
 import type {

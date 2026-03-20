@@ -1,6 +1,6 @@
 // ─── Optimization Rules Engine ──────────────────────────────────────
 // Rule-based campaign optimization with cross-channel reallocation.
-// Port of optimization_rules.py
+// Optimization rules and cross-channel reallocation
 
 import { round } from '@openagency/core/utils/math';
 import type {

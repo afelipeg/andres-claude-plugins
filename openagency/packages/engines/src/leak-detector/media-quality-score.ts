@@ -1,5 +1,5 @@
 // ─── Media Quality Score Engine ──────────────────────────────────────
-// Port of media_quality_score.py - Composite quality scoring
+// Composite quality scoring (fraud, viewability, brand safety, MFA)
 
 import { round } from '@openagency/core';
 import type {

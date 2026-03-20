@@ -1,6 +1,6 @@
 // ─── Channel Optimizer ──────────────────────────────────────────────
 // Budget optimization using Hill saturation curves with greedy marginal allocation.
-// Port of channel_optimizer.py
+// Greedy marginal allocation with Hill saturation curves
 
 import { hillResponse, marginalResponse, round } from '@openagency/core/utils/math';
 import { getChannelDefaults } from './benchmarks.js';

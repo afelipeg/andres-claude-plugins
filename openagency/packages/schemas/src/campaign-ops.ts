@@ -80,6 +80,20 @@ export const NextActionSchema = z.object({
   estimated_hours: z.number(),
 });
 
+export const CampaignSummaryOutputSchema = z.object({
+  campaign: z.unknown(),
+  overall_progress: z.number(),
+  engines: z.record(z.string(), z.unknown()),
+  blockers: z.array(z.string()),
+  next_actions: z.array(NextActionSchema),
+  tasks_done: z.number(),
+  tasks_total: z.number(),
+});
+
+export const NextActionsOutputSchema = z.object({
+  actions: z.array(NextActionSchema),
+});
+
 // ─── Optimization Rules ─────────────────────────────────────────────
 
 const CampaignMetricsInputSchema = z.object({
@@ -141,21 +155,31 @@ export const ReallocateInputSchema = z.object({
   campaigns: z.array(
     z.object({
       name: z.string(),
-      channel: z.string(),
+      channel: z.string().optional(),
       spend: z.number(),
-      roas: z.number(),
+      revenue: z.number(),
+      conversions: z.number().optional(),
     }),
   ),
 });
 
 export const ReallocateOutputSchema = z.object({
+  performances: z.array(
+    z.object({
+      name: z.string(),
+      channel: z.string().optional(),
+      spend: z.number(),
+      revenue: z.number(),
+      roas: z.number(),
+    }),
+  ),
   recommendations: z.array(
     z.object({
+      action: z.string(),
       from_campaign: z.string(),
       to_campaign: z.string(),
       amount: z.number(),
-      reason: z.string(),
+      rationale: z.string(),
     }),
   ),
-  estimated_roas_improvement: z.number(),
 });

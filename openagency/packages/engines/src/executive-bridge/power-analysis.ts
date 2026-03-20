@@ -1,6 +1,6 @@
 // ─── Power Analysis for Incrementality Tests ────────────────────────
 // Designs geo-lift, conversion lift, and holdout experiments.
-// Port of power_analysis.py
+// Power analysis for geo-lift, conversion-lift, and holdout tests
 
 import { normalCdf, normalPpf, round } from '@openagency/core/utils/math';
 import type {

@@ -1,6 +1,6 @@
 // ─── Media Plan Generator ───────────────────────────────────────────
 // Auto-generates flowcharts, insertion orders, spec sheets, and UTM taxonomy.
-// Port of media_plan_generator.py
+// Media plan generator — flowcharts, insertion orders, UTM taxonomy
 
 import { round } from '@openagency/core/utils/math';
 import { PLATFORM_SPECS } from './benchmarks.js';

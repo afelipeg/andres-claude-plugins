@@ -1,6 +1,6 @@
 // ─── Benchmark Tracker ──────────────────────────────────────────────
 // Compares campaign actuals vs market benchmarks and detects anomalies.
-// Port of benchmark_tracker.py
+// Channel performance vs industry benchmarks
 
 import { round } from '@openagency/core/utils/math';
 import { getAdjustedBenchmark } from './benchmarks.js';

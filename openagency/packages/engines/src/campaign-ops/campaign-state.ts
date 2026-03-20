@@ -1,6 +1,6 @@
 // ─── Campaign State Machine ─────────────────────────────────────────
 // Tracks campaign lifecycle, engine states, and task dependencies.
-// Port of campaign_state.py
+// Campaign lifecycle state machine with 23-task DAG
 
 import type {
   CampaignCreateInput,

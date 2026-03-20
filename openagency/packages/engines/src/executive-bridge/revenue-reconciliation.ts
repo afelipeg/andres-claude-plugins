@@ -1,6 +1,6 @@
 // ─── Revenue Reconciliation ─────────────────────────────────────────
 // Compares platform-reported vs actual conversions/revenue.
-// Port of revenue_reconciliation.py
+// Platform data reconciliation and over-reporting detection
 
 import { round } from '@openagency/core/utils/math';
 import type {

@@ -123,3 +123,17 @@ export const ClientScorecardExportInputSchema = DeliverySkillBaseSchema.extend({
 });
 
 export type ClientScorecardExportInput = z.infer<typeof ClientScorecardExportInputSchema>;
+
+// ─── Shared delivery output schema ──────────────────────────────────
+
+export const DeliverySkillOutputSchema = z.object({
+  files: z.array(z.object({
+    file_type: z.string(),
+    file_name: z.string(),
+    storage_key: z.string().optional(),
+    download_url: z.string().optional(),
+    size_bytes: z.number().optional(),
+  })),
+  summary: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});

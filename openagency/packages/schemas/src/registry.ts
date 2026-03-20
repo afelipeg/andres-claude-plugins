@@ -32,12 +32,27 @@ import {
 import {
   CampaignCreateInputSchema,
   CampaignStateSchema,
+  CampaignSummaryOutputSchema,
+  NextActionsOutputSchema,
   TaskUpdateInputSchema,
   OptimizationInputSchema,
   OptimizationOutputSchema,
   ReallocateInputSchema,
   ReallocateOutputSchema,
 } from './campaign-ops.js';
+import {
+  MonthlyReportInputSchema,
+  CompetitiveAnalysisInputSchema,
+  IndustryBenchmarksInputSchema,
+  BudgetProposalInputSchema,
+  CampaignBriefInputSchema,
+  ProjectStatusInputSchema,
+  QuarterlyReviewInputSchema,
+  MediaPlanDeckInputSchema,
+  LearningsDigestInputSchema,
+  ClientScorecardExportInputSchema,
+  DeliverySkillOutputSchema,
+} from './delivery.js';
 import {
   ShapleyInputSchema,
   ShapleyOutputSchema,
@@ -219,7 +234,7 @@ export const SKILL_SCHEMAS: SkillSchemaEntry[] = [
     name: 'Campaign Summary',
     description: 'Get current campaign state with progress and blockers',
     inputSchema: CampaignStateSchema,
-    outputSchema: CampaignStateSchema,
+    outputSchema: CampaignSummaryOutputSchema,
   },
   {
     engineId: 'campaign-ops',
@@ -227,7 +242,7 @@ export const SKILL_SCHEMAS: SkillSchemaEntry[] = [
     name: 'Campaign Next Actions',
     description: 'Get next unblocked tasks ready for execution',
     inputSchema: CampaignStateSchema,
-    outputSchema: CampaignStateSchema,
+    outputSchema: NextActionsOutputSchema,
   },
   {
     engineId: 'campaign-ops',
@@ -329,6 +344,58 @@ export const SKILL_SCHEMAS: SkillSchemaEntry[] = [
       'Power analysis for holdout incrementality tests with revenue-at-risk calculation',
     inputSchema: HoldoutInputSchema,
     outputSchema: HoldoutOutputSchema,
+  },
+
+  // ─── Delivery Engine ────────────────────────────────────────────
+  {
+    engineId: 'delivery', skillId: 'monthly-report',
+    name: 'Monthly Report', description: 'Generate monthly performance report (PDF/PPTX)',
+    inputSchema: MonthlyReportInputSchema, outputSchema: DeliverySkillOutputSchema,
+  },
+  {
+    engineId: 'delivery', skillId: 'competitive-analysis',
+    name: 'Competitive Analysis', description: 'Competitor ad intelligence with web research',
+    inputSchema: CompetitiveAnalysisInputSchema, outputSchema: DeliverySkillOutputSchema,
+  },
+  {
+    engineId: 'delivery', skillId: 'industry-benchmarks',
+    name: 'Industry Benchmarks', description: 'Industry benchmark report with fresh web data',
+    inputSchema: IndustryBenchmarksInputSchema, outputSchema: DeliverySkillOutputSchema,
+  },
+  {
+    engineId: 'delivery', skillId: 'budget-proposal',
+    name: 'Budget Proposal', description: 'Investment thesis with channel allocation and ROI projections',
+    inputSchema: BudgetProposalInputSchema, outputSchema: DeliverySkillOutputSchema,
+  },
+  {
+    engineId: 'delivery', skillId: 'campaign-brief',
+    name: 'Campaign Brief', description: 'Creative brief with audience, messaging, and media strategy',
+    inputSchema: CampaignBriefInputSchema, outputSchema: DeliverySkillOutputSchema,
+  },
+  {
+    engineId: 'delivery', skillId: 'project-status',
+    name: 'Project Status', description: 'KPI scorecard with milestones and next steps',
+    inputSchema: ProjectStatusInputSchema, outputSchema: DeliverySkillOutputSchema,
+  },
+  {
+    engineId: 'delivery', skillId: 'quarterly-review',
+    name: 'Quarterly Review', description: 'QBR executive presentation with channel deep dive',
+    inputSchema: QuarterlyReviewInputSchema, outputSchema: DeliverySkillOutputSchema,
+  },
+  {
+    engineId: 'delivery', skillId: 'media-plan-deck',
+    name: 'Media Plan Deck', description: 'Media plan with channel allocation and flight strategy',
+    inputSchema: MediaPlanDeckInputSchema, outputSchema: DeliverySkillOutputSchema,
+  },
+  {
+    engineId: 'delivery', skillId: 'learnings-digest',
+    name: 'Learnings Digest', description: 'What worked/didn\'t, patterns, testable hypotheses',
+    inputSchema: LearningsDigestInputSchema, outputSchema: DeliverySkillOutputSchema,
+  },
+  {
+    engineId: 'delivery', skillId: 'client-scorecard-export',
+    name: 'Client Scorecard Export', description: 'Multi-format scorecard with grades and action priorities',
+    inputSchema: ClientScorecardExportInputSchema, outputSchema: DeliverySkillOutputSchema,
   },
 ];
 

@@ -1,5 +1,5 @@
 // ─── Waste Waterfall Engine ──────────────────────────────────────────
-// Port of waste_waterfall.py - 6-stage waste decomposition
+// 6-stage waste decomposition waterfall
 // Math rule: sum of all waste + productive = gross_spend (tolerance < $1)
 
 import { round } from '@openagency/core';

@@ -164,6 +164,7 @@ export interface MMMModelOutput {
   phase: 'model';
   model_type: string;
   methodology: string;
+  methodology_note?: string;
   total_budget: number;
   total_kpi: number;
   predicted_kpi: number;

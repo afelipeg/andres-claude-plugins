@@ -1,5 +1,5 @@
 // ─── Supply Chain Audit Engine ───────────────────────────────────────
-// Port of supply_chain_audit.py - Dollar flow mapping and fee transparency
+// Dollar flow mapping and fee transparency audit
 
 import { round } from '@openagency/core';
 import type {

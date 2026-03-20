@@ -1,7 +1,7 @@
 // ─── MMM Scenario Planner ───────────────────────────────────────────
 // Simplified Marketing Mix Model: Hill saturation + Adstock + budget optimization.
 // 4 phases: pre_model, model, post_model, optimize.
-// Port of mmm_scenario_planner.py (654 LOC)
+// MMM scenario planner — Hill saturation + geometric Adstock
 
 import {
   hillResponse,
@@ -302,6 +302,7 @@ export function model(data: MMMModelInput): MMMModelOutput | { error: string } {
     phase: 'model',
     model_type: 'simplified_bayesian_mmm',
     methodology: 'Hill saturation + geometric Adstock (Meridian-inspired)',
+    methodology_note: 'Heuristic estimates — not statistically computed. R-squared, confidence intervals, and model fit are approximations for planning purposes. Full Bayesian MMM with MCMC sampling requires historical data.',
     total_budget: totalBudget,
     total_kpi: totalKpi,
     predicted_kpi: round(predictedKpi),

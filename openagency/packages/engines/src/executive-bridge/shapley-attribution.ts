@@ -1,6 +1,6 @@
 // ─── Shapley Attribution ────────────────────────────────────────────
 // Multi-touch attribution using Shapley values from game theory.
-// Port of shapley_attribution.py
+// Coalition-based Shapley value attribution
 
 import { factorial, round } from '@openagency/core/utils/math';
 import type { ShapleyInput, ShapleyOutput, ShapleyChannelResult } from '@openagency/types';
