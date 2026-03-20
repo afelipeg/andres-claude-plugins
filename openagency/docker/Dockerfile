@@ -21,6 +21,7 @@ COPY packages/memory/package.json packages/memory/
 COPY packages/agent/package.json packages/agent/
 COPY packages/hfl/package.json packages/hfl/
 COPY packages/email/package.json packages/email/
+COPY packages/kb/package.json packages/kb/
 COPY apps/api/package.json apps/api/
 
 RUN pnpm install --frozen-lockfile
