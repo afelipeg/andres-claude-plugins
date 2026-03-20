@@ -13,7 +13,9 @@ import {
   getConversation,
   uploadAndAnalyzeFile,
   type AssistantMessage,
+  type KBSourceRef,
 } from '../api/assistant';
+import { KBSourcesPill } from '../components/KBSourcesPill';
 import { cn } from '../lib/utils';
 
 const ACCENT = '#02c98d';
@@ -226,7 +228,7 @@ function ActionCard({ action }: { action: { type: string; result: unknown } }) {
 
 // ─── Message bubble ───────────────────────────────────────────────────
 
-function MessageBubble({ msg }: { msg: AssistantMessage & { pending?: boolean; fileCard?: string } }) {
+function MessageBubble({ msg }: { msg: ExtendedMessage }) {
   const pending = 'pending' in msg && msg.pending;
   const fileCard = 'fileCard' in msg ? (msg.fileCard as string | undefined) : undefined;
 
@@ -254,7 +256,7 @@ function MessageBubble({ msg }: { msg: AssistantMessage & { pending?: boolean; f
         {pending ? (
           <div className="flex items-center gap-1.5 py-1">
             <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
-            <span className="text-sm text-zinc-400">Plinth is thinking…</span>
+            <span className="text-sm text-zinc-400">Plinth is thinking...</span>
           </div>
         ) : (
           <>
@@ -262,6 +264,12 @@ function MessageBubble({ msg }: { msg: AssistantMessage & { pending?: boolean; f
             {msg.actions && msg.actions.length > 0 && (
               <div className="mt-2 space-y-1">
                 {msg.actions.map((a, i) => <ActionCard key={i} action={a} />)}
+              </div>
+            )}
+            {/* KB Sources pill — only shows when kb_sources has items */}
+            {msg.kb_sources && msg.kb_sources.length > 0 && (
+              <div className="mt-2">
+                <KBSourcesPill sources={msg.kb_sources} />
               </div>
             )}
             <p className="mt-1.5 text-[11px] text-zinc-400">
@@ -278,7 +286,7 @@ function MessageBubble({ msg }: { msg: AssistantMessage & { pending?: boolean; f
 
 const SUGGESTIONS = [
   'What happened in the last pipeline run?',
-  '¿Cómo se calcula el fee de Recovery?',
+  'Como se calcula el fee de Recovery?',
   'Show me pending HFL decisions',
   'Explain the Leak Detector waste findings',
   '/run',
@@ -317,7 +325,7 @@ function WelcomeScreen({ onSuggest }: { onSuggest: (text: string) => void }) {
 
 // ─── Main page ────────────────────────────────────────────────────────
 
-type ExtendedMessage = AssistantMessage & { pending?: boolean; fileCard?: string };
+type ExtendedMessage = AssistantMessage & { pending?: boolean; fileCard?: string; kb_sources?: KBSourceRef[] };
 
 export function AssistantPage() {
   const { id: urlId } = useParams<{ id?: string }>();
@@ -406,6 +414,7 @@ export function AssistantPage() {
 
       try {
         const res = await sendMessage(msg, activeId ?? undefined);
+        // kb_sources are already merged into res.message by the API client
         setMessages((prev) => [...prev.filter((m) => m.id !== PENDING_ID), res.message]);
         if (!activeId) {
           setActiveId(res.conversation_id);
@@ -415,7 +424,7 @@ export function AssistantPage() {
         const errMsg = err instanceof Error ? err.message : 'Failed to get response';
         setMessages((prev) => [
           ...prev.filter((m) => m.id !== PENDING_ID),
-          { id: `err_${Date.now()}`, role: 'assistant', content: `⚠️ ${errMsg}`, timestamp: new Date().toISOString() },
+          { id: `err_${Date.now()}`, role: 'assistant', content: `Warning: ${errMsg}`, timestamp: new Date().toISOString() },
         ]);
       } finally {
         setSending(false);
@@ -448,7 +457,7 @@ export function AssistantPage() {
     const fileUserMsg: ExtendedMessage = {
       id: `file_${Date.now()}`,
       role: 'user',
-      content: `Uploading ${pendingFile.name}…`,
+      content: `Uploading ${pendingFile.name}...`,
       timestamp: new Date().toISOString(),
       fileCard: pendingFile.name,
     };
@@ -486,7 +495,7 @@ Please provide a clear briefing of these results: waste found, optimization reco
       const errMsg = err instanceof Error ? err.message : 'Upload or analysis failed';
       setMessages((prev) => [
         ...prev.filter((m) => m.id !== PENDING_ID),
-        { id: `err_${Date.now()}`, role: 'assistant', content: `⚠️ ${errMsg}`, timestamp: new Date().toISOString() },
+        { id: `err_${Date.now()}`, role: 'assistant', content: `Warning: ${errMsg}`, timestamp: new Date().toISOString() },
       ]);
     } finally {
       setUploading(false);
@@ -625,7 +634,7 @@ Please provide a clear briefing of these results: waste found, optimization reco
                 </button>
               ))}
               <div className="border-t border-zinc-100 px-3 py-1">
-                <span className="text-[10px] text-zinc-400">↑↓ navigate · Enter select · Esc close</span>
+                <span className="text-[10px] text-zinc-400">Up/Down navigate -- Enter select -- Esc close</span>
               </div>
             </div>
           )}
@@ -647,7 +656,7 @@ Please provide a clear briefing of these results: waste found, optimization reco
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask anything… or type / for commands"
+              placeholder="Ask anything... or type / for commands"
               rows={1}
               disabled={sending || uploading}
               className="flex-1 resize-none bg-transparent text-sm text-zinc-800 placeholder:text-zinc-400 focus:outline-none disabled:opacity-60"
@@ -664,9 +673,9 @@ Please provide a clear briefing of these results: waste found, optimization reco
           </div>
 
           <p className="mt-1.5 text-center text-[11px] text-zinc-400">
-            <kbd className="rounded bg-zinc-100 px-1 py-0.5 font-mono text-[10px]">Enter</kbd> send ·{' '}
-            <kbd className="rounded bg-zinc-100 px-1 py-0.5 font-mono text-[10px]">Shift+Enter</kbd> new line ·{' '}
-            <kbd className="rounded bg-zinc-100 px-1 py-0.5 font-mono text-[10px}">/</kbd> commands
+            <kbd className="rounded bg-zinc-100 px-1 py-0.5 font-mono text-[10px]">Enter</kbd> send --{' '}
+            <kbd className="rounded bg-zinc-100 px-1 py-0.5 font-mono text-[10px]">Shift+Enter</kbd> new line --{' '}
+            <kbd className="rounded bg-zinc-100 px-1 py-0.5 font-mono text-[10px]">/</kbd> commands
           </p>
         </div>
       </div>

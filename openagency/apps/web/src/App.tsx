@@ -41,6 +41,7 @@ const ArchitecturePage = lazy(() => import('./pages/ArchitecturePage').then(m =>
 const ConsumptionPage = lazy(() => import('./pages/ConsumptionPage').then(m => ({ default: m.ConsumptionPage })));
 const SuperAdminDashboard = lazy(() => import('./pages/SuperAdminDashboard').then(m => ({ default: m.SuperAdminDashboard })));
 const AgencyDashboard = lazy(() => import('./pages/AgencyDashboard').then(m => ({ default: m.AgencyDashboard })));
+const KnowledgeBasePage = lazy(() => import('./pages/KnowledgeBasePage').then(m => ({ default: m.KnowledgeBasePage })));
 
 // Settings sub-pages
 const SettingsLayout = lazy(() => import('./pages/settings/SettingsLayout').then(m => ({ default: m.SettingsLayout })));
@@ -88,6 +89,7 @@ function AppRoutes() {
       <Route path="consumption" element={<Suspense fallback={<PageLoader />}><ConsumptionPage /></Suspense>} />
       <Route path="admin" element={<Suspense fallback={<PageLoader />}><SuperAdminDashboard /></Suspense>} />
       <Route path="agency-dashboard" element={<Suspense fallback={<PageLoader />}><AgencyDashboard /></Suspense>} />
+      <Route path="kb" element={<Suspense fallback={<PageLoader />}><KnowledgeBasePage /></Suspense>} />
       <Route path="settings" element={<Suspense fallback={<PageLoader />}><SettingsLayout /></Suspense>}>
         <Route index element={<Navigate to="profile" replace />} />
         <Route path="profile" element={<Suspense fallback={<PageLoader />}><ProfilePage /></Suspense>} />

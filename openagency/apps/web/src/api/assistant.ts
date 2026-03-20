@@ -7,12 +7,23 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+export interface KBSourceRef {
+  document_id: string;
+  filename: string;
+  source_type: string;
+  run_id?: string;
+  date: string;
+  relevance: number;
+  snippet: string;
+}
+
 export interface AssistantMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
   actions?: Array<{ type: string; result: unknown }>;
+  kb_sources?: KBSourceRef[];
 }
 
 export interface Conversation {
@@ -37,6 +48,7 @@ export interface ConversationDetail {
 export interface ChatResponse {
   conversation_id: string;
   message: AssistantMessage;
+  kb_sources?: KBSourceRef[];
 }
 
 export async function sendMessage(
@@ -53,7 +65,12 @@ export async function sendMessage(
     const err = await res.json().catch(() => ({ message: 'Request failed' })) as { message?: string };
     throw new Error(err.message ?? `HTTP ${res.status}`);
   }
-  return res.json() as Promise<ChatResponse>;
+  const data = await res.json() as ChatResponse;
+  // Merge top-level kb_sources into the message for convenience
+  if (data.kb_sources && data.kb_sources.length > 0 && !data.message.kb_sources) {
+    data.message.kb_sources = data.kb_sources;
+  }
+  return data;
 }
 
 export async function listConversations(): Promise<Conversation[]> {

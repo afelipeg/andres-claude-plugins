@@ -36,6 +36,7 @@
     "@openagency/engines": "workspace:*",
     "@openagency/events": "workspace:*",
     "@openagency/hfl": "workspace:*",
+    "@openagency/kb": "workspace:*",
     "@openagency/memory": "workspace:*",
     "@openagency/schemas": "workspace:*",
     "@openagency/types": "workspace:*",

@@ -30,6 +30,7 @@ import {
   ShoppingBag,
   Shield,
   Gauge,
+  FolderOpen,
 } from 'lucide-react';
 import { SyncStatus } from './SyncStatus';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -116,6 +117,7 @@ const NAV_STRUCTURE: NavEntry[] = [
   },
   // Standalone items
   { path: '/agency-dashboard', label: 'Agency Dashboard', Icon: Gauge },
+  { path: '/kb', label: 'Knowledge Base', Icon: FolderOpen },
   { path: '/consumption', label: 'Usage & Runs', Icon: Activity },
   { path: '/billing', label: 'Outcome Base Fee', Icon: CreditCard },
   { path: '/admin', label: 'Super Admin', Icon: Shield },
@@ -142,6 +144,7 @@ function getPageTitle(pathname: string): string {
     marketplace: 'MCP Marketplace',
     admin: 'Super Admin',
     'agency-dashboard': 'Agency Dashboard',
+    kb: 'Knowledge Base',
     settings: 'Settings',
   };
   return (segment !== undefined ? titles[segment] : undefined) ?? 'Dashboard';

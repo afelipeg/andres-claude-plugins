@@ -8,6 +8,7 @@
 // Conversation mode is fully preserved as the default.
 //
 // Powered by core callLLM abstraction (Anthropic -> DeepSeek fallback).
+// RAG: Knowledge Base context injected before every LLM call.
 
 import { Hono } from 'hono';
 import { ulid } from 'ulid';
@@ -19,6 +20,7 @@ import { ConversationRepo, type ConversationRecord, type ConvMessage } from '@op
 import type { QuotaRepo } from '@openagency/memory';
 import type { OpenAgency } from '@openagency/core';
 import type { AuthPayload } from '@openagency/types';
+import { searchKB, type RAGResult } from '@openagency/kb';
 import {
   classifyIntent,
   type AssistantIntent,
@@ -222,6 +224,24 @@ async function listConvSummaries(): Promise<Array<{
 async function deleteConv(id: string): Promise<boolean> {
   if (convRepo) await convRepo.delete(id).catch(() => {});
   return memConversations.delete(id);
+}
+
+// ─── KB RAG context builder ──────────────────────────────────────────
+
+function buildKBContextBlock(kbSources: RAGResult[]): string {
+  if (kbSources.length === 0) return '';
+
+  return `
+
+<knowledge_base>
+The following are relevant documents from this client's knowledge base.
+Use this information to ground your responses with specific data, dates, and run results.
+Cite the source document when referencing KB data.
+
+${kbSources.map(s => `<source document="${s.filename}" type="${s.source_type}" date="${s.date}" run_id="${s.run_id ?? 'N/A'}">
+${s.snippet}
+</source>`).join('\n\n')}
+</knowledge_base>`;
 }
 
 // ─── Plinth Agentic system prompt ────────────────────────────────────
@@ -1076,6 +1096,7 @@ export function assistantRoutes(
   agencyRef?: OpenAgency,
   convRepoInstance?: ConversationRepo,
   quotaRepo?: QuotaRepo,
+  dbRef?: unknown,
 ) {
   if (convRepoInstance) setConversationRepo(convRepoInstance);
   const app = new Hono();
@@ -1175,12 +1196,25 @@ export function assistantRoutes(
         }
       }
 
+      // ── Step 2.5: RAG — Knowledge Base context retrieval ──────────
+      let kbSources: RAGResult[] = [];
+      if (clientId && dbRef) {
+        try {
+          kbSources = await searchKB(dbRef, clientId, body.message, 8);
+        } catch (err) {
+          log.warn({ err }, 'KB search failed — continuing without KB context');
+        }
+      }
+
       // ── Step 3: LLM Call (conversation or summarization) ───────────
       const connectedPlatforms = connectorInfra.credentialStore.platforms();
       const systemPrompt = buildSystemPrompt(mesh, hfl, connectedPlatforms);
 
+      // Inject KB context into system prompt
+      const kbBlock = buildKBContextBlock(kbSources);
+
       // If agentic result, inject execution context into the system prompt
-      let augmentedSystemPrompt = systemPrompt;
+      let augmentedSystemPrompt = systemPrompt + kbBlock;
       if (agenticResult?.context_injection) {
         augmentedSystemPrompt += `\n\n## EXECUTION CONTEXT (just executed by the system)\n${agenticResult.context_injection}`;
       }
@@ -1240,6 +1274,15 @@ export function assistantRoutes(
           timestamp: assistantMsg.timestamp,
           actions: actionResults.length > 0 ? actionResults : undefined,
         },
+        kb_sources: kbSources.map(s => ({
+          document_id: s.document_id,
+          filename: s.filename,
+          source_type: s.source_type,
+          run_id: s.run_id,
+          date: s.date,
+          relevance: s.relevance,
+          snippet: s.snippet.slice(0, 200),
+        })),
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Internal error';

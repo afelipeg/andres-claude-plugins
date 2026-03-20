@@ -15,7 +15,8 @@
     { "path": "../../packages/connectors" },
     { "path": "../../packages/memory" },
     { "path": "../../packages/agent" },
-    { "path": "../../packages/hfl" }
+    { "path": "../../packages/hfl" },
+    { "path": "../../packages/kb" }
   ],
   "include": ["src"]
 }

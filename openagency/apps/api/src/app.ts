@@ -39,6 +39,7 @@ import {
   MeshRunRepo,
   McpConnectionRepo,
 } from '@openagency/memory';
+import { KBFolderRepo, KBDocumentRepo, KBChunkRepo, startAutoSaver } from '@openagency/kb';
 import { setupConnectors } from './connectors/setup.js';
 import { getDb } from './db/client.js';
 import { healthRoutes } from './routes/health.js';
@@ -75,6 +76,7 @@ import { demoRequestRoutes } from './routes/demo-request.js';
 import { adminRoutes } from './routes/admin.js';
 import { quotaRoutes } from './routes/quota.js';
 import { agencyDashboardRoutes } from './routes/agency-dashboard.js';
+import { kbRoutes } from './routes/kb.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/logger.js';
 import { rateLimiter } from './middleware/rate-limiter.js';
@@ -120,6 +122,11 @@ export async function createApp() {
   let quotaRepo: QuotaRepo | null = null;
   let hflDecisionRepo: HFLDecisionRepo | null = null;
 
+  // ─── KB repos (Knowledge Base) ─────────────────────────────────
+  let kbFolderRepo: KBFolderRepo | null = null;
+  let kbDocumentRepo: KBDocumentRepo | null = null;
+  let kbChunkRepo: KBChunkRepo | null = null;
+
   if (db) {
     log.info('Database connected — repos active');
     agentStateRepo = new AgentStateRepo(db);
@@ -138,6 +145,9 @@ export async function createApp() {
     agencyRepo = new AgencyRepo(db);
     quotaRepo = new QuotaRepo(db);
     hflDecisionRepo = new HFLDecisionRepo(db);
+    kbFolderRepo = new KBFolderRepo(db);
+    kbDocumentRepo = new KBDocumentRepo(db);
+    kbChunkRepo = new KBChunkRepo(db);
     await seedAdminUser(userRepo);
   } else {
     log.warn('No DATABASE_URL — running without persistence');
@@ -399,6 +409,18 @@ export async function createApp() {
     }, 500); // small delay so HFL decision is registered first
   });
 
+  // ─── KB Auto-Saver (pipeline completed → R2 + indexing queue) ───
+  if (kbFolderRepo && kbDocumentRepo && process.env['R2_ACCOUNT_ID']) {
+    startAutoSaver({
+      eventBus,
+      folderRepo: kbFolderRepo,
+      documentRepo: kbDocumentRepo,
+      getMeshRun: (runId) => mesh.getRun(runId) as unknown as import('@openagency/kb').MeshRunLike | undefined,
+      log,
+    });
+    log.info('KB auto-saver active (mesh.pipeline.completed → R2)');
+  }
+
   // ─── Metrics persistence (event bus → daily_metrics) ───────────
   if (dailyMetricsRepo) {
     const today = () => new Date().toISOString().slice(0, 10);
@@ -570,6 +592,16 @@ export async function createApp() {
 
   // ─── Delivery Engine routes ───────────────────────────────────
   app.route('/', deliveryRoutes(agency, fileRepo));
+
+  // ─── Knowledge Base routes (folders, documents, search) ────────
+  if (kbFolderRepo && kbDocumentRepo && kbChunkRepo) {
+    app.route('/', kbRoutes({
+      folderRepo: kbFolderRepo,
+      documentRepo: kbDocumentRepo,
+      chunkRepo: kbChunkRepo,
+      db,
+    }));
+  }
 
   // ─── AI Assistant routes (Agentic Mode) ────────────────────────
   app.route('/', assistantRoutes(llmConfig, mesh, hflCoordinator, connectorInfra, agency, db ? new ConversationRepo(db) : undefined, quotaRepo ?? undefined));
