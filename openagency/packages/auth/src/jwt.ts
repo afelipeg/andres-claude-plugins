@@ -13,13 +13,14 @@ function getSecret(secret?: string): Uint8Array {
 }
 
 export async function signToken(
-  payload: { sub: string; role: Role; scopes: string[] },
+  payload: { sub: string; role: Role; scopes: string[]; agency_id?: string },
   options?: { secret?: string; expiresIn?: string },
 ): Promise<string> {
   const secret = getSecret(options?.secret);
   return new jose.SignJWT({
     role: payload.role,
     scopes: payload.scopes,
+    ...(payload.agency_id ? { agency_id: payload.agency_id } : {}),
   } as unknown as jose.JWTPayload)
     .setProtectedHeader({ alg: ALG })
     .setSubject(payload.sub)
@@ -41,6 +42,7 @@ export async function verifyToken(
     scopes: (payload as Record<string, unknown>)['scopes'] as string[],
     iat: payload.iat ?? 0,
     exp: payload.exp ?? 0,
+    agency_id: (payload as Record<string, unknown>)['agency_id'] as string | undefined,
   };
 }
 

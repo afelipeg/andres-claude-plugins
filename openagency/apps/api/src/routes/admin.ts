@@ -330,6 +330,7 @@ export function adminRoutes(deps: AdminRouteDeps) {
         sub: auth.sub,
         role: 'agency_admin' as import('@openagency/types').Role,
         scopes: ['admin:*', 'engine:*', 'connectors:*'],
+        agency_id: agencyId,
       },
       { expiresIn: '15m' },
     );

@@ -21,12 +21,12 @@ export interface ConnectorInfra {
   credentialStore: NodeCredentialStore;
   syncScheduler: SyncScheduler;
   writeRegistry: ConnectorWriteRegistry;
-  syncResultCache: Map<ConnectorPlatform, SyncResult>;
+  syncResultCache: Map<string, SyncResult>;
 }
 
 export function setupConnectors(eventBus: EventBus): ConnectorInfra {
   const writeRegistry = new ConnectorWriteRegistry();
-  const syncResultCache = new Map<ConnectorPlatform, SyncResult>();
+  const syncResultCache = new Map<string, SyncResult>();
 
   // ─── Google Ads ─────────────────────────────────────────────────
   const gaClientId = process.env['GOOGLE_ADS_CLIENT_ID'];

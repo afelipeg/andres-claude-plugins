@@ -10,6 +10,7 @@ export interface AuthPayload {
   scopes: string[];
   iat: number;
   exp: number;
+  agency_id?: string;
 }
 
 export interface ApiKeyRecord {

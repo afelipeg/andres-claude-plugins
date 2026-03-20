@@ -535,7 +535,7 @@ export async function createApp() {
   app.route('/', connectorRoutes(connectorInfra, eventBus));
 
   // ─── Agency connector routes (multi-advertiser) ────────────────
-  app.route('/', agencyConnectorRoutes(db, connectorInfra));
+  app.route('/', agencyConnectorRoutes(db, connectorInfra, agencyRepo ?? undefined));
 
   // ─── File upload route ──────────────────────────────────────────
   app.route('/', uploadRoutes(clientDataRepo ?? undefined));

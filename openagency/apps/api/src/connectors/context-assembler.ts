@@ -43,7 +43,7 @@ interface CampaignSummary {
  * that every engine skill can consume.
  */
 export function assembleContextFromSync(
-  syncResultCache: Map<ConnectorPlatform, SyncResult>,
+  syncResultCache: Map<string, SyncResult>,
   explicitContext?: Record<string, unknown>,
 ): Record<string, unknown> {
   // If the user provided an explicit context, use it as base — platform data fills gaps

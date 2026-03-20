@@ -9,6 +9,7 @@ import { authMiddleware } from '@openagency/auth';
 import { encrypt, decrypt } from '@openagency/memory';
 import { getConnector, hasConnector } from '@openagency/connectors';
 import type { ConnectorPlatform, OAuthTokens, PlatformAccount, AuthPayload } from '@openagency/types';
+import type { AgencyRepo } from '@openagency/memory';
 import type { ConnectorInfra } from '../connectors/setup.js';
 
 type Db = { unsafe: (q: string, params?: unknown[]) => Promise<unknown[]> };
@@ -70,7 +71,15 @@ function isValidPlatform(p: string): p is ConnectorPlatform {
   return VALID_PLATFORMS.has(p);
 }
 
-export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra) {
+/** Resolve agency ID: impersonation JWT claim → DB lookup → fallback to auth.sub */
+async function resolveAgencyId(c: Context, agencyRepo?: AgencyRepo | null): Promise<string | null> {
+  const auth = c.get('auth') as AuthPayload;
+  if (auth.agency_id) return auth.agency_id;
+  if (agencyRepo) return agencyRepo.resolveForUser(auth.sub);
+  return auth.sub;
+}
+
+export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra, agencyRepo?: AgencyRepo) {
   const app = new Hono();
 
   if (!db) return app;
@@ -86,8 +95,8 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra) {
 
   // ─── POST /v1/agency/connections — Save Level 1 credentials ────
   app.post('/v1/agency/connections', async (c) => {
-    const auth = c.get('auth');
-    const agencyId = auth.sub;
+    const agencyId = await resolveAgencyId(c, agencyRepo);
+    if (!agencyId) return c.json({ error: 'no_agency', message: 'User is not assigned to an agency' }, 404);
     const body = await c.req.json<{
       platform: string;
       connection_type: string;
@@ -130,7 +139,8 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra) {
 
   // ─── GET /v1/agency/connections — List all ─────────────────────
   app.get('/v1/agency/connections', async (c) => {
-    const agencyId = c.get('auth').sub;
+    const agencyId = await resolveAgencyId(c, agencyRepo);
+    if (!agencyId) return c.json({ error: 'no_agency', message: 'User is not assigned to an agency' }, 404);
     const rows = await sql.unsafe(
       `SELECT ac.id, ac.platform, ac.connection_type, ac.status, ac.connected_at, ac.updated_at,
               COUNT(s.id)::int AS advertiser_count
@@ -145,7 +155,8 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra) {
 
   // ─── GET /v1/agency/connections/:platform — Detail ─────────────
   app.get('/v1/agency/connections/:platform', async (c) => {
-    const agencyId = c.get('auth').sub;
+    const agencyId = await resolveAgencyId(c, agencyRepo);
+    if (!agencyId) return c.json({ error: 'no_agency', message: 'User is not assigned to an agency' }, 404);
     const platform = c.req.param('platform');
 
     const rows = await sql.unsafe(
@@ -167,7 +178,8 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra) {
 
   // ─── DELETE /v1/agency/connections/:platform — Disconnect ──────
   app.delete('/v1/agency/connections/:platform', async (c) => {
-    const agencyId = c.get('auth').sub;
+    const agencyId = await resolveAgencyId(c, agencyRepo);
+    if (!agencyId) return c.json({ error: 'no_agency', message: 'User is not assigned to an agency' }, 404);
     const platform = c.req.param('platform');
 
     await sql.unsafe(
@@ -181,7 +193,8 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra) {
   // ─── GET /v1/agency/connections/:platform/sub-accounts ─────────
   // Fetches available sub-accounts from platform API using stored creds
   app.get('/v1/agency/connections/:platform/sub-accounts', async (c) => {
-    const agencyId = c.get('auth').sub;
+    const agencyId = await resolveAgencyId(c, agencyRepo);
+    if (!agencyId) return c.json({ error: 'no_agency', message: 'User is not assigned to an agency' }, 404);
     const platform = c.req.param('platform');
 
     if (!isValidPlatform(platform)) {
@@ -216,7 +229,8 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra) {
 
   // ─── POST /v1/agency/connections/:platform/advertisers ─────────
   app.post('/v1/agency/connections/:platform/advertisers', async (c) => {
-    const agencyId = c.get('auth').sub;
+    const agencyId = await resolveAgencyId(c, agencyRepo);
+    if (!agencyId) return c.json({ error: 'no_agency', message: 'User is not assigned to an agency' }, 404);
     const platform = c.req.param('platform');
     const body = await c.req.json<{
       advertisers: Array<{ id: string; name?: string }>;
@@ -251,7 +265,8 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra) {
 
   // ─── GET /v1/agency/connections/:platform/advertisers ──────────
   app.get('/v1/agency/connections/:platform/advertisers', async (c) => {
-    const agencyId = c.get('auth').sub;
+    const agencyId = await resolveAgencyId(c, agencyRepo);
+    if (!agencyId) return c.json({ error: 'no_agency', message: 'User is not assigned to an agency' }, 404);
     const platform = c.req.param('platform');
 
     const rows = await sql.unsafe(
@@ -268,7 +283,8 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra) {
 
   // ─── DELETE /v1/agency/connections/:platform/advertisers/:id ───
   app.delete('/v1/agency/connections/:platform/advertisers/:advertiserId', async (c) => {
-    const agencyId = c.get('auth').sub;
+    const agencyId = await resolveAgencyId(c, agencyRepo);
+    if (!agencyId) return c.json({ error: 'no_agency', message: 'User is not assigned to an agency' }, 404);
     const platform = c.req.param('platform');
     const advertiserId = c.req.param('advertiserId');
 
@@ -285,7 +301,8 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra) {
   // ─── POST /v1/agency/connections/:platform/sync ────────────────
   // Sync data for a specific advertiser
   app.post('/v1/agency/connections/:platform/sync', async (c) => {
-    const agencyId = c.get('auth').sub;
+    const agencyId = await resolveAgencyId(c, agencyRepo);
+    if (!agencyId) return c.json({ error: 'no_agency', message: 'User is not assigned to an agency' }, 404);
     const platform = c.req.param('platform');
     const body = await c.req.json<{ advertiser_id: string; date_range_days?: number }>();
 
@@ -325,8 +342,8 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra) {
         end: end.toISOString().slice(0, 10),
       });
 
-      // Cache the sync result for context assembly
-      infra.syncResultCache.set(platform, {
+      // Cache the sync result for context assembly (scoped by agency)
+      infra.syncResultCache.set(`${agencyId}:${platform}`, {
         platform,
         status: 'success',
         rows,
