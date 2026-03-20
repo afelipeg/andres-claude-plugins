@@ -48,6 +48,10 @@ CREATE INDEX IF NOT EXISTS idx_execution_log_agency_id ON execution_log(agency_i
 -- 2. Add missing FK constraints (safe — skip if already exists)
 -- ═══════════════════════════════════════════════════════════════
 
+-- Fix: agency_connections.agency_id may contain user IDs instead of agency IDs
+UPDATE agency_connections SET agency_id = 'cerebro'
+  WHERE agency_id NOT IN (SELECT id FROM agencies);
+
 DO $$ BEGIN
   ALTER TABLE agency_connections ADD CONSTRAINT fk_agency_connections_agency
     FOREIGN KEY (agency_id) REFERENCES agencies(id) ON DELETE CASCADE;
