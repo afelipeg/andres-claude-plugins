@@ -77,14 +77,15 @@ export function createMcpServer(
   // Register all skills as MCP tools
   for (const entry of SKILL_SCHEMAS) {
     const toolName = `${entry.engineId}_${entry.skillId}`.replace(/-/g, '_');
-    const jsonSchema = zodToJsonSchema(entry.inputSchema, {
-      target: 'openApi3',
-    }) as Record<string, unknown>;
+    const fullSchema = zodToJsonSchema(entry.inputSchema) as Record<string, unknown>;
+    // Extract properties for MCP tool registration — McpServer.tool() expects
+    // a flat { propName: { type, description } } map, not a full JSON Schema.
+    const properties = (fullSchema['properties'] ?? {}) as Record<string, { type: string; description?: string }>;
 
     server.tool(
       toolName,
       entry.description,
-      jsonSchema as Record<string, { type: string }>,
+      properties,
       async (args: Record<string, unknown>) => {
         try {
           const coercedArgs = coerceArgs(args, entry.inputSchema);
