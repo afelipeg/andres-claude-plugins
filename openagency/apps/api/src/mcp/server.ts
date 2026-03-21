@@ -4,6 +4,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { OpenAgency } from '@openagency/core';
+import { calculateBillingFromEngines } from '@openagency/core';
+import type { EngineOutputs } from '@openagency/core';
 import { parseFile } from '@openagency/core/data/file-parser';
 import { detectPlatform } from '@openagency/core/data/platform-detect';
 import { SKILL_SCHEMAS, type DynamicSkillRegistry } from '@openagency/schemas';
@@ -11,6 +13,7 @@ import type { OodaRuntime, MeshCoordinator, A2AClient, McpClientRegistry, Pipeli
 import type { HFLCoordinator } from '@openagency/hfl';
 import type { ConnectorPlatform, OAuthTokens } from '@openagency/types';
 import { getConnector, hasConnector } from '@openagency/connectors';
+import { generateChartSvg, extractChartsFromLayerOne } from '@openagency/engines';
 import type { ConnectorInfra } from '../connectors/setup.js';
 import type { FileRepo, AgencyRepo, QuotaRepo } from '@openagency/memory';
 
@@ -90,14 +93,30 @@ export function createMcpServer(
         try {
           const coercedArgs = coerceArgs(args, entry.inputSchema);
           const result = await agency.run(entry.engineId, entry.skillId, coercedArgs);
-          return {
-            content: [
-              {
-                type: 'text' as const,
-                text: JSON.stringify(result, null, 2),
-              },
-            ],
-          };
+
+          const contentBlocks: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [
+            { type: 'text' as const, text: JSON.stringify(result, null, 2) },
+          ];
+
+          // Generate inline charts for analytical engine results
+          const chartableEngines = ['leak-detector', 'media-architect', 'campaign-ops', 'executive-bridge'];
+          if (chartableEngines.includes(entry.engineId)) {
+            try {
+              const resultData = (result as unknown as Record<string, unknown>)?.data ?? result;
+              const layerOneKey = entry.engineId.replace(/-/g, '_');
+              const charts = extractChartsFromLayerOne({ [layerOneKey]: resultData });
+              for (const chart of charts) {
+                const svg = generateChartSvg(chart);
+                contentBlocks.push({
+                  type: 'image' as const,
+                  data: Buffer.from(svg).toString('base64'),
+                  mimeType: 'image/svg+xml',
+                });
+              }
+            } catch { /* charts are best-effort */ }
+          }
+
+          return { content: contentBlocks };
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Unknown error';
           return {
@@ -917,6 +936,277 @@ export function createMcpServer(
       }
     },
   );
+
+  // ─── Analyze Ad Data — Bridge Tool for MCP Composition ─────────────
+  // This is the PRIMARY tool for the composition flow:
+  //   Google Ads MCP (data) → Plinth MCP (analyze_ad_data) → results + billing
+  // Accepts raw campaign metrics from ANY source (Google Ads MCP, Meta MCP,
+  // CSV upload, manual input) and runs the full 4-engine pipeline.
+  server.tool(
+    'analyze_ad_data',
+    'Run the full Plinth analytical pipeline on advertising data. Accepts raw campaign metrics from any source (Google Ads, Meta, TikTok, Amazon, CSV exports, or manual input). Runs 4 engines: Leak Detector (waste waterfall) → Media Architect (MMM optimization) → Campaign Ops (reallocation) → Executive Bridge (revenue translation). Returns waste analysis, optimization recommendations, and billing summary. This is the main tool for MCP composition — feed it data from platform MCPs.',
+    {
+      ad_spend: { type: 'number', description: 'Total ad spend in the period (USD). Required.' },
+      gross_spend: { type: 'number', description: 'Gross spend before agency fees (defaults to ad_spend if omitted)' },
+      impressions: { type: 'number', description: 'Total impressions across all campaigns' },
+      clicks: { type: 'number', description: 'Total clicks across all campaigns' },
+      conversions: { type: 'number', description: 'Total conversions (purchases, signups, etc.)' },
+      revenue: { type: 'number', description: 'Total revenue attributed to ads' },
+      cost_per_conversion: { type: 'number', description: 'Average cost per conversion' },
+      ctr: { type: 'number', description: 'Click-through rate as decimal (e.g. 0.02 for 2%)' },
+      roas: { type: 'number', description: 'Return on ad spend ratio (e.g. 3.5 means $3.50 revenue per $1 spent)' },
+      platform: { type: 'string', description: 'Source platform: google_ads, meta_ads, tiktok_ads, amazon_ads, dv360, mixed' },
+      campaigns: {
+        type: 'array',
+        description: 'Optional array of per-campaign data objects with fields like name, spend, impressions, clicks, conversions, revenue',
+      },
+      channels: {
+        type: 'array',
+        description: 'Optional array of channel spend breakdown: [{channel: "search", spend: 50000}, {channel: "display", spend: 30000}]',
+      },
+      period_days: { type: 'number', description: 'Number of days in the reporting period (default: 30)' },
+      client_id: { type: 'string', description: 'Client identifier for billing and file storage (default: "mcp-client")' },
+      engines: {
+        type: 'array',
+        description: 'Optional engine filter. Default runs all 4: ["leak-detector","media-architect","campaign-ops","executive-bridge"]',
+      },
+      generate_report: { type: 'boolean', description: 'If true, also generate a PDF/PPTX monthly report deliverable after analysis' },
+    } as Record<string, unknown>,
+    async (args: Record<string, unknown>) => {
+      try {
+        const coercedArgs = coerceArgs(args, null); // basic coercion for top-level
+        // Manual coercion for known numeric fields
+        const numFields = ['ad_spend', 'gross_spend', 'impressions', 'clicks', 'conversions', 'revenue', 'cost_per_conversion', 'ctr', 'roas', 'period_days'];
+        for (const f of numFields) {
+          if (typeof coercedArgs[f] === 'string') {
+            const n = Number(coercedArgs[f]);
+            if (!isNaN(n)) coercedArgs[f] = n;
+          }
+        }
+        if (typeof coercedArgs['generate_report'] === 'string') {
+          coercedArgs['generate_report'] = coercedArgs['generate_report'] === 'true' || coercedArgs['generate_report'] === '1';
+        }
+        // Parse JSON arrays if passed as strings
+        for (const arrField of ['campaigns', 'channels', 'engines']) {
+          if (typeof coercedArgs[arrField] === 'string') {
+            try { coercedArgs[arrField] = JSON.parse(coercedArgs[arrField] as string); } catch { /* keep */ }
+          }
+        }
+
+        const adSpend = coercedArgs['ad_spend'] as number;
+        if (!adSpend || adSpend <= 0) {
+          return { content: [{ type: 'text' as const, text: 'ad_spend is required and must be > 0' }], isError: true };
+        }
+
+        const clientId = (coercedArgs['client_id'] as string) || 'mcp-client';
+
+        // Build engine input from the provided metrics
+        const data: Record<string, unknown> = {
+          gross_spend: (coercedArgs['gross_spend'] as number) || adSpend,
+          ad_spend: adSpend,
+          impressions: coercedArgs['impressions'] ?? 0,
+          clicks: coercedArgs['clicks'] ?? 0,
+          conversions: coercedArgs['conversions'] ?? 0,
+          revenue: coercedArgs['revenue'] ?? 0,
+          cost_per_conversion: coercedArgs['cost_per_conversion'] ?? 0,
+          historical_ctr: coercedArgs['ctr'] ?? 0,
+          roas: coercedArgs['roas'] ?? 0,
+          platform: coercedArgs['platform'] ?? 'mixed',
+          campaigns: coercedArgs['campaigns'] ?? [],
+          channels: coercedArgs['channels'] ?? [],
+          period_days: coercedArgs['period_days'] ?? 30,
+          client_id: clientId,
+        };
+
+        // Determine which engines to run
+        const engineIds = (coercedArgs['engines'] as string[]) ?? [
+          'leak-detector', 'media-architect', 'campaign-ops', 'executive-bridge',
+        ];
+        const skillMap: Record<string, string> = {
+          'leak-detector': 'waste-waterfall',
+          'media-architect': 'mmm-optimize',
+          'campaign-ops': 'optimization-analyze',
+          'executive-bridge': 'revenue-translate',
+        };
+
+        // Run engines concurrently
+        const engineOutputs: EngineOutputs = { ad_spend: adSpend };
+        const engineResults: Record<string, unknown> = {};
+
+        const tasks = engineIds.map(async (engineId) => {
+          const skillId = skillMap[engineId];
+          if (!skillId) return { engineId, result: null, error: `Unknown engine: ${engineId}` };
+          try {
+            const result = await agency.run(engineId, skillId, data);
+            return { engineId, skillId, result, error: null };
+          } catch (err) {
+            return { engineId, skillId: skillId, result: null, error: err instanceof Error ? err.message : String(err) };
+          }
+        });
+
+        const settled = await Promise.all(tasks);
+
+        for (const { engineId, skillId, result, error } of settled) {
+          if (error) {
+            engineResults[engineId] = { error };
+          } else if (result && skillId) {
+            engineResults[engineId] = result;
+            // Map to billing outputs
+            const innerData = ((result as unknown as Record<string, unknown>).data ?? {}) as Record<string, unknown>;
+            if (engineId === 'leak-detector' && skillId === 'waste-waterfall') {
+              if (!engineOutputs.leak_detector) engineOutputs.leak_detector = {};
+              engineOutputs.leak_detector.waste_waterfall = innerData;
+            } else if (engineId === 'media-architect' && skillId === 'mmm-optimize') {
+              if (!engineOutputs.media_architect) engineOutputs.media_architect = {};
+              engineOutputs.media_architect.mmm_optimize = innerData;
+            } else if (engineId === 'campaign-ops' && skillId === 'optimization-analyze') {
+              if (!engineOutputs.campaign_ops) engineOutputs.campaign_ops = {};
+              engineOutputs.campaign_ops.optimization_analyze = innerData;
+            } else if (engineId === 'executive-bridge' && skillId === 'revenue-translate') {
+              if (!engineOutputs.executive_bridge) engineOutputs.executive_bridge = {};
+              engineOutputs.executive_bridge.revenue_translate = innerData;
+            }
+          }
+        }
+
+        const billing = calculateBillingFromEngines(engineOutputs);
+
+        // Optionally generate a report deliverable
+        let deliverable: unknown = undefined;
+        if (coercedArgs['generate_report']) {
+          try {
+            const reportResult = await agency.run('delivery', 'monthly-report', {
+              client_id: clientId,
+              run_id: `mcp-${Date.now()}`,
+              layer_one_results: {
+                leak_detector: engineResults['leak-detector'],
+                media_architect: engineResults['media-architect'],
+                campaign_ops: engineResults['campaign-ops'],
+                executive_bridge: engineResults['executive-bridge'],
+                client_id: clientId,
+              },
+            });
+            deliverable = reportResult;
+          } catch (err) {
+            deliverable = { error: err instanceof Error ? err.message : String(err) };
+          }
+        }
+
+        const response: Record<string, unknown> = {
+          ad_spend: adSpend,
+          client_id: clientId,
+          engines_executed: engineIds,
+          engine_results: engineResults,
+          billing,
+          ...(deliverable ? { report: deliverable } : {}),
+        };
+
+        // Build multi-content response: text summary + inline SVG charts
+        const contentBlocks: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [];
+
+        // 1. Text block with full JSON results
+        contentBlocks.push({ type: 'text' as const, text: JSON.stringify(response, null, 2) });
+
+        // 2. Generate inline SVG charts from engine results
+        try {
+          const layerOneData = {
+            leak_detector: engineResults['leak-detector'],
+            media_architect: engineResults['media-architect'],
+            campaign_ops: engineResults['campaign-ops'],
+            executive_bridge: engineResults['executive-bridge'],
+          };
+          const charts = extractChartsFromLayerOne(layerOneData);
+
+          // Also generate a spend overview bar chart from input data if channels provided
+          if (Array.isArray(data.channels) && (data.channels as Array<{ channel: string; spend: number }>).length > 0) {
+            const channelData = data.channels as Array<{ channel: string; spend: number }>;
+            charts.unshift({
+              type: 'bar' as const,
+              title: 'Spend by Channel',
+              data: channelData.map(ch => ({ label: ch.channel, value: ch.spend })),
+            });
+          }
+
+          for (const chart of charts) {
+            const svg = generateChartSvg(chart);
+            const svgBase64 = Buffer.from(svg).toString('base64');
+            contentBlocks.push({
+              type: 'image' as const,
+              data: svgBase64,
+              mimeType: 'image/svg+xml',
+            });
+          }
+        } catch {
+          // Charts are best-effort — don't fail the response
+        }
+
+        return { content: contentBlocks };
+      } catch (err) {
+        return {
+          content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  // ─── Get File Content — Base64 artifact delivery for Claude Desktop ──
+  // Claude Desktop can't open URLs. This tool returns the raw file as base64
+  // so Claude can display it or offer to save it locally.
+  if (fileRepo) {
+    server.tool(
+      'get_file_content',
+      'Download a delivery file as base64-encoded content. Use this after analyze_ad_data with generate_report=true, or after running any delivery skill. Returns the file bytes as base64 that Claude can save locally or display.',
+      {
+        file_id: { type: 'string', description: 'The file ID from the delivery skill output' },
+      } as Record<string, { type: string; description?: string }>,
+      async (args: Record<string, unknown>) => {
+        try {
+          const fileId = args['file_id'] as string;
+          if (!fileId) {
+            return { content: [{ type: 'text' as const, text: 'file_id is required' }], isError: true };
+          }
+
+          const record = await fileRepo.get(fileId);
+          if (!record) {
+            return { content: [{ type: 'text' as const, text: `File not found: ${fileId}` }], isError: true };
+          }
+
+          // Read file from storage backend
+          const { createFileStorage } = await import('@openagency/engines');
+          const storage = createFileStorage();
+          const buffer = await storage.readBuffer(record.file_path);
+          const base64 = buffer.toString('base64');
+
+          const mimeMap: Record<string, string> = {
+            pdf: 'application/pdf',
+            pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          };
+
+          return {
+            content: [{
+              type: 'text' as const,
+              text: JSON.stringify({
+                file_id: record.id,
+                file_type: record.file_type,
+                filename: `${record.skill_id}-${record.id}.${record.file_type}`,
+                mime_type: mimeMap[record.file_type] ?? 'application/octet-stream',
+                size_bytes: record.size_bytes,
+                base64_content: base64,
+              }),
+            }],
+          };
+        } catch (err) {
+          return {
+            content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
+            isError: true,
+          };
+        }
+      },
+    );
+  }
 
   return server;
 }

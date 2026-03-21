@@ -542,8 +542,13 @@ export function toPptxChartData(chart: ChartData): PptxChartSeries[] {
 
 /**
  * Extract chart data from Layer-1 engine results.
- * Attempts to pull spend-by-channel, ROAS, waste decomposition, etc.
- * Returns an array of ChartData ready for rendering.
+ * Produces comprehensive visualizations from all 4 analytical engines:
+ *   - Leak Detector: waterfall, benchmark comparison, recovery impact, productive vs waste
+ *   - Media Architect: response curves, model fit, contribution waterfall, ROI intervals, spend vs contribution
+ *   - Campaign Ops: priority ranking, alert distribution, pacing, CPA performance
+ *   - Executive Bridge: channel performance matrix, L1 metrics, Shapley attribution
+ *
+ * Returns an array of ChartData ready for SVG rendering.
  * Gracefully returns empty array if data is missing or malformed.
  */
 export function extractChartsFromLayerOne(layerOne: unknown): ChartData[] {
@@ -553,66 +558,28 @@ export function extractChartsFromLayerOne(layerOne: unknown): ChartData[] {
   const obj = layerOne as Record<string, unknown>;
 
   try {
-    // ── Leak Detector waste decomposition → waterfall ──────────
-    const leak = obj.leak_detector as Record<string, unknown> | undefined;
+    // ── Leak Detector ─────────────────────────────────────────────
+    const leak = resolveEngineData(obj, 'leak_detector');
     if (leak) {
-      const wasteItems = extractWasteItems(leak);
-      if (wasteItems.length > 0) {
-        charts.push({
-          type: 'waterfall',
-          title: 'Waste Decomposition',
-          data: wasteItems,
-        });
-      }
+      extractLeakDetectorCharts(leak, charts);
     }
 
-    // ── Media Architect channel spend → bar chart ─────────────
-    const media = obj.media_architect as Record<string, unknown> | undefined;
+    // ── Media Architect ───────────────────────────────────────────
+    const media = resolveEngineData(obj, 'media_architect');
     if (media) {
-      const channelSpend = extractChannelSpend(media);
-      if (channelSpend.length > 0) {
-        charts.push({
-          type: 'bar',
-          title: 'Spend by Channel',
-          data: channelSpend,
-        });
-      }
-
-      const channelRoas = extractChannelRoas(media);
-      if (channelRoas.length > 0) {
-        charts.push({
-          type: 'bar',
-          title: 'ROAS by Channel',
-          data: channelRoas,
-          options: { colors: ['#059669'] },
-        });
-      }
+      extractMediaArchitectCharts(media, charts);
     }
 
-    // ── Campaign Ops → pie chart of budget allocation ─────────
-    const campaigns = obj.campaign_ops as Record<string, unknown> | undefined;
+    // ── Campaign Ops ──────────────────────────────────────────────
+    const campaigns = resolveEngineData(obj, 'campaign_ops');
     if (campaigns) {
-      const alloc = extractBudgetAllocation(campaigns);
-      if (alloc.length > 0) {
-        charts.push({
-          type: 'pie',
-          title: 'Budget Allocation',
-          data: alloc,
-        });
-      }
+      extractCampaignOpsCharts(campaigns, charts);
     }
 
-    // ── Executive Bridge → line chart for KPI trends ──────────
-    const exec = (obj.executive_bridge ?? obj.l1_metrics) as Record<string, unknown> | undefined;
+    // ── Executive Bridge ──────────────────────────────────────────
+    const exec = resolveEngineData(obj, 'executive_bridge');
     if (exec) {
-      const trends = extractKpiTrends(exec);
-      if (trends.length > 0) {
-        charts.push({
-          type: 'line',
-          title: 'KPI Trends',
-          data: trends,
-        });
-      }
+      extractExecutiveBridgeCharts(exec, charts);
     }
   } catch {
     // Graceful — return whatever charts we managed to extract
@@ -621,120 +588,486 @@ export function extractChartsFromLayerOne(layerOne: unknown): ChartData[] {
   return charts;
 }
 
-// ─── Data extractors (best-effort from engine outputs) ──────────────
+// ─── Helpers ────────────────────────────────────────────────────────
 
-function extractWasteItems(leak: Record<string, unknown>): ChartDataPoint[] {
-  const items: ChartDataPoint[] = [];
-  // Look for waste_categories, waste_breakdown, or similar arrays
-  const candidates = ['waste_categories', 'waste_breakdown', 'categories', 'breakdown'];
-  for (const key of candidates) {
-    const arr = leak[key];
-    if (Array.isArray(arr)) {
-      for (const item of arr) {
-        if (item && typeof item === 'object') {
-          const label = (item as Record<string, unknown>).category ?? (item as Record<string, unknown>).name ?? (item as Record<string, unknown>).label;
-          const value = (item as Record<string, unknown>).amount ?? (item as Record<string, unknown>).waste ?? (item as Record<string, unknown>).value;
-          if (typeof label === 'string' && typeof value === 'number') {
-            items.push({ label, value: -Math.abs(value) }); // waste is negative
-          }
-        }
-      }
-      if (items.length > 0) break;
+/** Resolve engine data which may be nested under .data or a skill key */
+function resolveEngineData(obj: Record<string, unknown>, key: string): Record<string, unknown> | null {
+  const raw = obj[key] ?? obj[key.replace(/_/g, '-')];
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  // Engine output may be wrapped: { data: { ... } } or { waste-waterfall: { data: { ... } } }
+  if (r.data && typeof r.data === 'object') return r.data as Record<string, unknown>;
+  // May be nested under skill key (e.g., { 'waste-waterfall': { data: ... } })
+  for (const v of Object.values(r)) {
+    if (v && typeof v === 'object' && 'data' in (v as Record<string, unknown>)) {
+      return (v as Record<string, unknown>).data as Record<string, unknown>;
     }
   }
-  // Add total spend as starting positive if we have it
-  const totalSpend = leak.total_spend ?? leak.gross_spend ?? leak.ad_spend;
-  if (typeof totalSpend === 'number' && items.length > 0) {
-    items.unshift({ label: 'Total Spend', value: totalSpend });
-  }
-  return items;
+  return r;
 }
 
-function extractChannelSpend(media: Record<string, unknown>): ChartDataPoint[] {
-  const items: ChartDataPoint[] = [];
-  const candidates = ['channels', 'channel_breakdown', 'channel_performance', 'channel_spend'];
-  for (const key of candidates) {
-    const arr = media[key];
-    if (Array.isArray(arr)) {
-      for (const item of arr) {
-        if (item && typeof item === 'object') {
-          const r = item as Record<string, unknown>;
-          const label = r.channel ?? r.platform ?? r.name ?? r.label;
-          const value = r.spend ?? r.budget ?? r.cost ?? r.value;
-          if (typeof label === 'string' && typeof value === 'number') {
-            items.push({ label, value });
-          }
-        }
-      }
-      if (items.length > 0) break;
-    }
+function arrFrom(obj: Record<string, unknown>, ...keys: string[]): Array<Record<string, unknown>> {
+  for (const k of keys) {
+    const v = obj[k];
+    if (Array.isArray(v)) return v.filter(x => x && typeof x === 'object') as Array<Record<string, unknown>>;
   }
-  return items;
+  return [];
 }
 
-function extractChannelRoas(media: Record<string, unknown>): ChartDataPoint[] {
-  const items: ChartDataPoint[] = [];
-  const candidates = ['channels', 'channel_breakdown', 'channel_performance'];
-  for (const key of candidates) {
-    const arr = media[key];
-    if (Array.isArray(arr)) {
-      for (const item of arr) {
-        if (item && typeof item === 'object') {
-          const r = item as Record<string, unknown>;
-          const label = r.channel ?? r.platform ?? r.name ?? r.label;
-          const roas = r.roas ?? r.roi;
-          if (typeof label === 'string' && typeof roas === 'number') {
-            items.push({ label, value: roas });
-          }
+// ─── LEAK DETECTOR charts ───────────────────────────────────────────
+
+function extractLeakDetectorCharts(data: Record<string, unknown>, charts: ChartData[]): void {
+  // 1. Waste Waterfall (primary)
+  const waterfall = arrFrom(data, 'waterfall');
+  if (waterfall.length > 0) {
+    const grossSpend = typeof data.gross_spend === 'number' ? data.gross_spend : null;
+    const wfData: ChartDataPoint[] = [];
+    if (grossSpend) wfData.push({ label: 'Gross Spend', value: grossSpend, color: '#1e40af' });
+    for (const stage of waterfall) {
+      const label = (stage.label ?? stage.category ?? '') as string;
+      const waste = (stage.waste_amount ?? stage.value ?? 0) as number;
+      if (label && waste) wfData.push({ label, value: -Math.abs(waste), color: '#dc2626' });
+    }
+    const productive = data.productive_spend as Record<string, unknown> | undefined;
+    if (productive?.amount && typeof productive.amount === 'number') {
+      wfData.push({ label: 'Productive Spend', value: productive.amount as number, color: '#059669' });
+    }
+    if (wfData.length > 1) charts.push({ type: 'waterfall', title: 'Waste Waterfall', data: wfData });
+  }
+
+  // 2. Waste vs Benchmark comparison (grouped bars)
+  if (waterfall.length > 0) {
+    const benchData: ChartDataPoint[] = [];
+    for (const stage of waterfall) {
+      const label = (stage.label ?? stage.category ?? '') as string;
+      const wastePct = stage.waste_pct as number | undefined;
+      const benchPct = stage.benchmark_pct as number | undefined;
+      if (label && typeof wastePct === 'number') {
+        benchData.push({ label, value: wastePct, series: 'Actual', color: '#dc2626' });
+        if (typeof benchPct === 'number') {
+          benchData.push({ label, value: benchPct, series: 'Benchmark', color: '#6b7280' });
         }
       }
-      if (items.length > 0) break;
+    }
+    if (benchData.length > 2) charts.push({ type: 'bar', title: 'Waste % vs Industry Benchmark', data: benchData });
+  }
+
+  // 3. Productive vs Waste pie
+  const wasteSummary = data.waste_summary as Record<string, unknown> | undefined;
+  const productiveSpend = data.productive_spend as Record<string, unknown> | undefined;
+  if (wasteSummary && productiveSpend) {
+    const wasteAmt = wasteSummary.total_waste as number | undefined;
+    const prodAmt = productiveSpend.amount as number | undefined;
+    if (typeof wasteAmt === 'number' && typeof prodAmt === 'number') {
+      charts.push({
+        type: 'pie',
+        title: 'Spend Effectiveness',
+        data: [
+          { label: 'Productive Spend', value: prodAmt, color: '#059669' },
+          { label: 'Total Waste', value: wasteAmt, color: '#dc2626' },
+        ],
+      });
     }
   }
-  return items;
+
+  // 4. Recovery Roadmap (ranked bars)
+  const roadmap = arrFrom(data, 'recovery_roadmap');
+  if (roadmap.length > 0) {
+    const recoveryData: ChartDataPoint[] = [];
+    for (const item of roadmap) {
+      const label = (item.category ?? item.action ?? '') as string;
+      const savings = item.estimated_savings as number | undefined;
+      if (label && typeof savings === 'number' && savings > 0) {
+        const diff = item.difficulty as string | undefined;
+        const color = diff === 'easy' ? '#059669' : diff === 'medium' ? '#f59e0b' : '#dc2626';
+        recoveryData.push({ label: label.slice(0, 20), value: savings, color });
+      }
+    }
+    if (recoveryData.length > 0) {
+      recoveryData.sort((a, b) => b.value - a.value);
+      charts.push({ type: 'bar', title: 'Recovery Opportunities ($)', data: recoveryData });
+    }
+  }
+
+  // 5. Quality Score by channel (media-quality-score output)
+  const qualityChannels = arrFrom(data, 'channels');
+  if (qualityChannels.length > 0 && qualityChannels[0]?.composite_score !== undefined) {
+    const scoreData: ChartDataPoint[] = [];
+    for (const ch of qualityChannels) {
+      const label = (ch.channel ?? ch.name ?? '') as string;
+      const score = ch.composite_score as number | undefined;
+      if (label && typeof score === 'number') {
+        const color = score >= 80 ? '#059669' : score >= 60 ? '#f59e0b' : '#dc2626';
+        scoreData.push({ label, value: score, color });
+      }
+    }
+    if (scoreData.length > 0) charts.push({ type: 'bar', title: 'Media Quality Score by Channel', data: scoreData });
+
+    // Quality waste by channel
+    const wasteData: ChartDataPoint[] = [];
+    for (const ch of qualityChannels) {
+      const label = (ch.channel ?? ch.name ?? '') as string;
+      const waste = ch.quality_waste_dollars as number | undefined;
+      if (label && typeof waste === 'number' && waste > 0) {
+        wasteData.push({ label, value: waste, color: '#dc2626' });
+      }
+    }
+    if (wasteData.length > 0) charts.push({ type: 'bar', title: 'Quality Waste by Channel ($)', data: wasteData });
+  }
+
+  // 6. Supply Chain — working media ratio
+  const dollarFlow = data.dollar_flow as Record<string, unknown> | undefined;
+  if (dollarFlow) {
+    const totalFees = dollarFlow.total_fees as number | undefined;
+    const workingMedia = dollarFlow.working_media as number | undefined;
+    if (typeof totalFees === 'number' && typeof workingMedia === 'number') {
+      charts.push({
+        type: 'pie',
+        title: 'Dollar Flow: Fees vs Working Media',
+        data: [
+          { label: 'Working Media', value: workingMedia, color: '#059669' },
+          { label: 'Intermediary Fees', value: totalFees, color: '#dc2626' },
+        ],
+      });
+    }
+  }
+
+  const partnerComparison = arrFrom(data, 'partner_comparison');
+  if (partnerComparison.length > 0) {
+    const compData: ChartDataPoint[] = [];
+    for (const p of partnerComparison) {
+      const label = (p.channel ?? '') as string;
+      const ratio = p.working_media_ratio as number | undefined;
+      if (label && typeof ratio === 'number') {
+        const color = ratio >= 70 ? '#059669' : ratio >= 50 ? '#f59e0b' : '#dc2626';
+        compData.push({ label, value: ratio, color });
+      }
+    }
+    if (compData.length > 0) charts.push({ type: 'bar', title: 'Working Media Ratio by Channel (%)', data: compData });
+  }
 }
 
-function extractBudgetAllocation(campaigns: Record<string, unknown>): ChartDataPoint[] {
-  const items: ChartDataPoint[] = [];
-  const candidates = ['allocation', 'budget_allocation', 'campaigns', 'campaign_breakdown'];
-  for (const key of candidates) {
-    const arr = campaigns[key];
-    if (Array.isArray(arr)) {
-      for (const item of arr) {
-        if (item && typeof item === 'object') {
-          const r = item as Record<string, unknown>;
-          const label = r.campaign ?? r.channel ?? r.name ?? r.label;
-          const value = r.budget ?? r.spend ?? r.allocation ?? r.value;
-          if (typeof label === 'string' && typeof value === 'number' && value > 0) {
-            items.push({ label, value });
-          }
+// ─── MEDIA ARCHITECT charts ─────────────────────────────────────────
+
+function extractMediaArchitectCharts(data: Record<string, unknown>, charts: ChartData[]): void {
+  // 1. Response Curves (line charts per channel)
+  const responseCurves = arrFrom(data, 'response_curves');
+  if (responseCurves.length > 0) {
+    const curveData: ChartDataPoint[] = [];
+    for (const curve of responseCurves) {
+      const channel = (curve.channel ?? '') as string;
+      const points = curve.points as Array<{ spend: number; response: number }> | undefined;
+      if (channel && Array.isArray(points)) {
+        // Sample ~10 points for readability
+        const step = Math.max(1, Math.floor(points.length / 10));
+        for (let i = 0; i < points.length; i += step) {
+          const p = points[i]!;
+          curveData.push({ label: fmt(p.spend), value: p.response, series: channel });
         }
+        // Always include last point
+        const last = points[points.length - 1];
+        if (last) curveData.push({ label: fmt(last.spend), value: last.response, series: channel });
       }
-      if (items.length > 0) break;
+    }
+    if (curveData.length > 0) charts.push({ type: 'line', title: 'Response Curves (Spend → KPI)', data: curveData });
+  }
+
+  // 2. Model Fit (actual vs predicted)
+  const modelFit = data.model_fit as Record<string, unknown> | undefined;
+  if (modelFit) {
+    const periods = modelFit.periods as string[] | undefined;
+    const actual = modelFit.actual as number[] | undefined;
+    const predicted = modelFit.predicted as number[] | undefined;
+    if (periods && actual && predicted && periods.length === actual.length) {
+      const fitData: ChartDataPoint[] = [];
+      // Sample for readability (max 15 points)
+      const step = Math.max(1, Math.floor(periods.length / 15));
+      for (let i = 0; i < periods.length; i += step) {
+        fitData.push({ label: periods[i]!, value: actual[i]!, series: 'Actual' });
+        fitData.push({ label: periods[i]!, value: predicted[i]!, series: 'Predicted' });
+      }
+      if (fitData.length > 2) charts.push({ type: 'line', title: 'Model Fit: Actual vs Predicted', data: fitData });
     }
   }
-  return items;
+
+  // 3. Contribution Waterfall
+  const contribWaterfall = arrFrom(data, 'contribution_waterfall');
+  if (contribWaterfall.length > 0) {
+    const wfData: ChartDataPoint[] = [];
+    for (const item of contribWaterfall) {
+      const label = (item.channel ?? '') as string;
+      const contrib = item.contribution as number | undefined;
+      if (label && typeof contrib === 'number') {
+        const isBase = label.toLowerCase().includes('base');
+        wfData.push({ label, value: contrib, color: isBase ? '#6b7280' : undefined });
+      }
+    }
+    if (wfData.length > 0) charts.push({ type: 'bar', title: 'KPI Contribution by Channel', data: wfData });
+  }
+
+  // 4. Spend Share vs Contribution Share (paired bars)
+  const channelModels = arrFrom(data, 'channel_models');
+  if (channelModels.length > 0) {
+    const shareData: ChartDataPoint[] = [];
+    for (const ch of channelModels) {
+      const label = (ch.channel ?? '') as string;
+      const spendShare = ch.spend_share_pct as number | undefined;
+      const results = ch.results as Record<string, unknown> | undefined;
+      const contribShare = results?.contribution_share_pct as number | undefined;
+      if (label && typeof spendShare === 'number' && typeof contribShare === 'number') {
+        shareData.push({ label, value: spendShare, series: 'Spend Share %' });
+        shareData.push({ label, value: contribShare, series: 'Contribution Share %' });
+      }
+    }
+    if (shareData.length > 2) charts.push({ type: 'bar', title: 'Spend Share vs Contribution Share', data: shareData });
+  }
+
+  // 5. ROI with Confidence Intervals (bar chart — CI rendered as value labels)
+  const roiIntervals = arrFrom(data, 'roi_intervals');
+  if (roiIntervals.length > 0) {
+    const roiData: ChartDataPoint[] = [];
+    for (const ch of roiIntervals) {
+      const label = (ch.channel ?? '') as string;
+      const roi = ch.roi as number | undefined;
+      if (label && typeof roi === 'number') {
+        const color = roi >= 2 ? '#059669' : roi >= 1 ? '#f59e0b' : '#dc2626';
+        roiData.push({ label, value: roi, color });
+      }
+    }
+    if (roiData.length > 0) charts.push({ type: 'bar', title: 'ROI by Channel', data: roiData });
+
+    // Marginal ROI ranking
+    const mroiData: ChartDataPoint[] = [];
+    for (const ch of roiIntervals) {
+      const label = (ch.channel ?? '') as string;
+      const mroi = ch.mroi as number | undefined;
+      if (label && typeof mroi === 'number') {
+        mroiData.push({ label, value: mroi });
+      }
+    }
+    if (mroiData.length > 0) {
+      mroiData.sort((a, b) => b.value - a.value);
+      charts.push({ type: 'bar', title: 'Marginal ROI Ranking', data: mroiData, options: { colors: ['#8b5cf6'] } });
+    }
+  }
+
+  // 6. Saturation by channel
+  if (channelModels.length > 0) {
+    const satData: ChartDataPoint[] = [];
+    for (const ch of channelModels) {
+      const label = (ch.channel ?? '') as string;
+      const results = ch.results as Record<string, unknown> | undefined;
+      const satPct = results?.saturation_pct as number | undefined;
+      if (label && typeof satPct === 'number') {
+        const color = satPct >= 80 ? '#dc2626' : satPct >= 50 ? '#f59e0b' : '#059669';
+        satData.push({ label, value: satPct, color });
+      }
+    }
+    if (satData.length > 0) charts.push({ type: 'bar', title: 'Channel Saturation (%)', data: satData });
+  }
+
+  // 7. Fallback: generic channel spend + ROAS (from any structure)
+  const channels = arrFrom(data, 'channels', 'channel_breakdown', 'channel_performance', 'channel_spend');
+  if (channels.length > 0 && channelModels.length === 0) {
+    const spendData: ChartDataPoint[] = [];
+    const roasData: ChartDataPoint[] = [];
+    for (const ch of channels) {
+      const label = (ch.channel ?? ch.platform ?? ch.name ?? ch.label ?? '') as string;
+      const spend = (ch.spend ?? ch.budget ?? ch.cost) as number | undefined;
+      const roas = (ch.roas ?? ch.roi) as number | undefined;
+      if (label && typeof spend === 'number') spendData.push({ label, value: spend });
+      if (label && typeof roas === 'number') roasData.push({ label, value: roas });
+    }
+    if (spendData.length > 0) charts.push({ type: 'bar', title: 'Spend by Channel', data: spendData });
+    if (roasData.length > 0) charts.push({ type: 'bar', title: 'ROAS by Channel', data: roasData, options: { colors: ['#059669'] } });
+  }
 }
 
-function extractKpiTrends(exec: Record<string, unknown>): ChartDataPoint[] {
-  const items: ChartDataPoint[] = [];
-  const candidates = ['trends', 'kpi_trends', 'time_series', 'monthly_metrics'];
-  for (const key of candidates) {
-    const arr = exec[key];
-    if (Array.isArray(arr)) {
-      for (const item of arr) {
-        if (item && typeof item === 'object') {
-          const r = item as Record<string, unknown>;
-          const label = r.period ?? r.month ?? r.date ?? r.label;
-          const value = r.value ?? r.roas ?? r.roi ?? r.cpa;
-          const series = r.metric ?? r.kpi ?? r.series;
-          if (typeof label === 'string' && typeof value === 'number') {
-            items.push({ label, value, series: typeof series === 'string' ? series : undefined });
-          }
-        }
-      }
-      if (items.length > 0) break;
+// ─── CAMPAIGN OPS charts ────────────────────────────────────────────
+
+function extractCampaignOpsCharts(data: Record<string, unknown>, charts: ChartData[]): void {
+  const campaigns = arrFrom(data, 'campaigns');
+  if (campaigns.length === 0) return;
+
+  // 1. Priority Score Ranking
+  const priorityData: ChartDataPoint[] = [];
+  for (const c of campaigns) {
+    const label = (c.campaign ?? c.name ?? '') as string;
+    const score = c.priority_score as number | undefined;
+    if (label && typeof score === 'number') {
+      const color = score >= 0.7 ? '#dc2626' : score >= 0.4 ? '#f59e0b' : '#059669';
+      priorityData.push({ label: label.slice(0, 20), value: +(score * 100).toFixed(0), color });
     }
   }
-  return items;
+  if (priorityData.length > 0) {
+    priorityData.sort((a, b) => b.value - a.value);
+    charts.push({ type: 'bar', title: 'Campaign Priority Score', data: priorityData });
+  }
+
+  // 2. Alert Distribution (stacked bar by severity)
+  const alertData: ChartDataPoint[] = [];
+  for (const c of campaigns) {
+    const label = (c.campaign ?? c.name ?? '') as string;
+    const alertCount = c.alert_count as Record<string, number> | undefined;
+    if (label && alertCount) {
+      if (alertCount.critical) alertData.push({ label: label.slice(0, 15), value: alertCount.critical, series: 'Critical', color: '#dc2626' });
+      if (alertCount.warning) alertData.push({ label: label.slice(0, 15), value: alertCount.warning, series: 'Warning', color: '#f59e0b' });
+      if (alertCount.info) alertData.push({ label: label.slice(0, 15), value: alertCount.info, series: 'Info', color: '#3b82f6' });
+    }
+  }
+  if (alertData.length > 0) charts.push({ type: 'stacked_bar', title: 'Alerts by Campaign', data: alertData });
+
+  // 3. CPA Performance (bar chart)
+  const cpaData: ChartDataPoint[] = [];
+  for (const c of campaigns) {
+    const label = (c.campaign ?? c.name ?? '') as string;
+    const metrics = c.metrics as Record<string, unknown> | undefined;
+    const cpa = metrics?.cpa as number | undefined;
+    if (label && typeof cpa === 'number' && cpa > 0) {
+      cpaData.push({ label: label.slice(0, 15), value: cpa });
+    }
+  }
+  if (cpaData.length > 0) charts.push({ type: 'bar', title: 'CPA by Campaign ($)', data: cpaData, options: { colors: ['#0891b2'] } });
+
+  // 4. ROAS by Campaign
+  const roasData: ChartDataPoint[] = [];
+  for (const c of campaigns) {
+    const label = (c.campaign ?? c.name ?? '') as string;
+    const metrics = c.metrics as Record<string, unknown> | undefined;
+    const roas = metrics?.roas as number | undefined;
+    if (label && typeof roas === 'number') {
+      const color = roas >= 3 ? '#059669' : roas >= 1 ? '#f59e0b' : '#dc2626';
+      roasData.push({ label: label.slice(0, 15), value: roas, color });
+    }
+  }
+  if (roasData.length > 0) charts.push({ type: 'bar', title: 'ROAS by Campaign', data: roasData });
+
+  // 5. Pacing (% of budget spent)
+  const pacingData: ChartDataPoint[] = [];
+  for (const c of campaigns) {
+    const label = (c.campaign ?? c.name ?? '') as string;
+    const metrics = c.metrics as Record<string, unknown> | undefined;
+    const pacing = metrics?.pacing_pct as number | undefined;
+    if (label && typeof pacing === 'number') {
+      const color = pacing > 110 ? '#dc2626' : pacing < 80 ? '#f59e0b' : '#059669';
+      pacingData.push({ label: label.slice(0, 15), value: pacing, color });
+    }
+  }
+  if (pacingData.length > 0) charts.push({ type: 'bar', title: 'Budget Pacing (%)', data: pacingData });
+
+  // Fallback: generic budget allocation
+  if (campaigns.length > 0 && priorityData.length === 0) {
+    const allocData: ChartDataPoint[] = [];
+    for (const c of campaigns) {
+      const label = (c.campaign ?? c.channel ?? c.name ?? c.label ?? '') as string;
+      const value = (c.budget ?? c.spend ?? c.allocation ?? c.value) as number | undefined;
+      if (typeof label === 'string' && typeof value === 'number' && value > 0) {
+        allocData.push({ label, value });
+      }
+    }
+    if (allocData.length > 0) charts.push({ type: 'pie', title: 'Budget Allocation', data: allocData });
+  }
+}
+
+// ─── EXECUTIVE BRIDGE charts ────────────────────────────────────────
+
+function extractExecutiveBridgeCharts(data: Record<string, unknown>, charts: ChartData[]): void {
+  // 1. Channel Performance (spend vs revenue vs ROAS)
+  const channels = arrFrom(data, 'channels');
+  if (channels.length > 0) {
+    // Spend by channel
+    const spendData: ChartDataPoint[] = [];
+    const roasData: ChartDataPoint[] = [];
+    for (const ch of channels) {
+      const label = (ch.channel ?? ch.name ?? '') as string;
+      const spend = ch.spend as number | undefined;
+      const l2 = ch.l2_metrics as Record<string, unknown> | undefined;
+      const roas = l2?.roas as number | undefined;
+      if (label && typeof spend === 'number') {
+        spendData.push({ label, value: spend, series: 'Spend' });
+        const revenue = ch.revenue as number | undefined;
+        if (typeof revenue === 'number') {
+          spendData.push({ label, value: revenue, series: 'Revenue' });
+        }
+      }
+      if (label && typeof roas === 'number') {
+        const color = roas >= 3 ? '#059669' : roas >= 1 ? '#f59e0b' : '#dc2626';
+        roasData.push({ label, value: roas, color });
+      }
+    }
+    if (spendData.length > 0) charts.push({ type: 'bar', title: 'Spend vs Revenue by Channel', data: spendData });
+    if (roasData.length > 0) charts.push({ type: 'bar', title: 'ROAS by Channel', data: roasData });
+
+    // CPA by channel
+    const cpaData: ChartDataPoint[] = [];
+    for (const ch of channels) {
+      const label = (ch.channel ?? ch.name ?? '') as string;
+      const l2 = ch.l2_metrics as Record<string, unknown> | undefined;
+      const cpa = l2?.cpa as number | undefined;
+      if (label && typeof cpa === 'number' && cpa > 0) {
+        cpaData.push({ label, value: cpa });
+      }
+    }
+    if (cpaData.length > 0) charts.push({ type: 'bar', title: 'CPA by Channel ($)', data: cpaData, options: { colors: ['#0891b2'] } });
+  }
+
+  // 2. L1 Financial Metrics pie (spend vs margin)
+  const l1 = data.l1_metrics as Record<string, unknown> | undefined;
+  if (l1) {
+    const totalSpend = l1.total_spend as number | undefined;
+    const totalRevenue = l1.total_revenue as number | undefined;
+    if (typeof totalSpend === 'number' && typeof totalRevenue === 'number' && totalRevenue > totalSpend) {
+      charts.push({
+        type: 'pie',
+        title: 'Revenue Composition',
+        data: [
+          { label: 'Marketing Cost', value: totalSpend, color: '#dc2626' },
+          { label: 'Marketing Margin', value: totalRevenue - totalSpend, color: '#059669' },
+        ],
+      });
+    }
+  }
+
+  // 3. Shapley Attribution (shapley-attribute output)
+  const shapleyChannels = arrFrom(data, 'channels');
+  if (shapleyChannels.length > 0 && shapleyChannels[0]?.shapley_value !== undefined) {
+    // Shapley share pie
+    const shapleyPie: ChartDataPoint[] = [];
+    for (const ch of shapleyChannels) {
+      const label = (ch.channel ?? '') as string;
+      const value = ch.shapley_value as number | undefined;
+      if (label && typeof value === 'number' && value > 0) {
+        shapleyPie.push({ label, value });
+      }
+    }
+    if (shapleyPie.length > 0) charts.push({ type: 'pie', title: 'Shapley Attribution', data: shapleyPie });
+
+    // Shapley vs Last-Click comparison
+    const compData: ChartDataPoint[] = [];
+    for (const ch of shapleyChannels) {
+      const label = (ch.channel ?? '') as string;
+      const shapleyPct = ch.shapley_share_pct as number | undefined;
+      const lastClickPct = ch.last_click_share_pct as number | undefined;
+      if (label && typeof shapleyPct === 'number' && typeof lastClickPct === 'number') {
+        compData.push({ label, value: shapleyPct, series: 'Shapley' });
+        compData.push({ label, value: lastClickPct, series: 'Last-Click' });
+      }
+    }
+    if (compData.length > 2) charts.push({ type: 'bar', title: 'Shapley vs Last-Click Attribution', data: compData });
+  }
+
+  // 4. KPI Trends fallback
+  const trends = arrFrom(data, 'trends', 'kpi_trends', 'time_series', 'monthly_metrics');
+  if (trends.length > 0) {
+    const trendData: ChartDataPoint[] = [];
+    for (const item of trends) {
+      const label = (item.period ?? item.month ?? item.date ?? item.label ?? '') as string;
+      const value = (item.value ?? item.roas ?? item.roi ?? item.cpa) as number | undefined;
+      const series = item.metric ?? item.kpi ?? item.series;
+      if (label && typeof value === 'number') {
+        trendData.push({ label, value, series: typeof series === 'string' ? series : undefined });
+      }
+    }
+    if (trendData.length > 0) charts.push({ type: 'line', title: 'KPI Trends', data: trendData });
+  }
 }
