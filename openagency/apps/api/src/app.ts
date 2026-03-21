@@ -525,10 +525,19 @@ export async function createApp() {
     const { createMcpServer: createMcp } = await import('./mcp/server.js');
 
     app.post('/mcp', async (c) => {
-      const server = createMcp(agency, agentMap, mesh, connectorInfra, a2aClient, mcpClientRegistry, dynamicSkillRegistry, hflCoordinator, scheduler, fileRepo, agencyRepo ?? undefined, quotaRepo ?? undefined);
-      const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-      await server.connect(transport);
-      return transport.handleRequest(c.req.raw);
+      try {
+        const server = createMcp(agency, agentMap, mesh, connectorInfra, a2aClient, mcpClientRegistry, dynamicSkillRegistry, hflCoordinator, scheduler, fileRepo, agencyRepo ?? undefined, quotaRepo ?? undefined);
+        const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+        await server.connect(transport);
+        const response = await transport.handleRequest(c.req.raw);
+        return new Response(response.body, {
+          status: response.status,
+          headers: response.headers,
+        });
+      } catch (err) {
+        log.error({ err }, 'MCP POST /mcp error');
+        return c.json({ error: 'mcp_error', message: err instanceof Error ? err.message : String(err) }, 500);
+      }
     });
 
     // MCP also needs GET for server-sent events and DELETE for session cleanup
