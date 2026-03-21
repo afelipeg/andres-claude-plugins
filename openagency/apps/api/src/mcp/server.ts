@@ -42,6 +42,38 @@ export function createMcpServer(
     version: '3.0.0',
   });
 
+  // ─── Type coercion for MCP transport ───────────────────────────────
+  // MCP transports may serialize all values as strings. This function
+  // coerces string values back to their expected types using the Zod schema.
+  function coerceArgs(args: Record<string, unknown>, schema: unknown): Record<string, unknown> {
+    if (!schema || typeof schema !== 'object' || !('shape' in (schema as Record<string, unknown>))) return args;
+    const shape = (schema as { shape: Record<string, unknown> }).shape;
+    const coerced = { ...args };
+    for (const [key, value] of Object.entries(coerced)) {
+      if (typeof value !== 'string') continue;
+      const fieldSchema = shape[key];
+      if (!fieldSchema || typeof fieldSchema !== 'object') continue;
+      // Unwrap ZodOptional / ZodDefault
+      let inner = fieldSchema as Record<string, unknown>;
+      while (inner && '_def' in inner) {
+        const def = inner['_def'] as { typeName?: string; innerType?: unknown };
+        if (def.typeName === 'ZodOptional' || def.typeName === 'ZodDefault') {
+          inner = def.innerType as Record<string, unknown>;
+        } else break;
+      }
+      const typeName = (inner?.['_def'] as { typeName?: string } | undefined)?.typeName;
+      if (typeName === 'ZodNumber') {
+        const num = Number(value);
+        if (!isNaN(num)) coerced[key] = num;
+      } else if (typeName === 'ZodBoolean') {
+        coerced[key] = value === 'true' || value === '1';
+      } else if (typeName === 'ZodArray' || typeName === 'ZodObject') {
+        try { coerced[key] = JSON.parse(value); } catch { /* keep as string */ }
+      }
+    }
+    return coerced;
+  }
+
   // Register all skills as MCP tools
   for (const entry of SKILL_SCHEMAS) {
     const toolName = `${entry.engineId}_${entry.skillId}`.replace(/-/g, '_');
@@ -55,7 +87,8 @@ export function createMcpServer(
       jsonSchema as Record<string, { type: string }>,
       async (args: Record<string, unknown>) => {
         try {
-          const result = await agency.run(entry.engineId, entry.skillId, args);
+          const coercedArgs = coerceArgs(args, entry.inputSchema);
+          const result = await agency.run(entry.engineId, entry.skillId, coercedArgs);
           return {
             content: [
               {
