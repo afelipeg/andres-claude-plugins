@@ -2,7 +2,7 @@
 // Registers all engine skills + agent management as MCP tools.
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+// zodToJsonSchema removed — McpServer.tool() expects Zod shapes, not JSON Schema
 import type { OpenAgency } from '@openagency/core';
 import { calculateBillingFromEngines } from '@openagency/core';
 import type { EngineOutputs } from '@openagency/core';
@@ -80,15 +80,14 @@ export function createMcpServer(
   // Register all skills as MCP tools
   for (const entry of SKILL_SCHEMAS) {
     const toolName = `${entry.engineId}_${entry.skillId}`.replace(/-/g, '_');
-    const fullSchema = zodToJsonSchema(entry.inputSchema) as Record<string, unknown>;
-    // Extract properties for MCP tool registration — McpServer.tool() expects
-    // a flat { propName: { type, description } } map, not a full JSON Schema.
-    const properties = (fullSchema['properties'] ?? {}) as Record<string, { type: string; description?: string }>;
+    // McpServer.tool() expects a ZodRawShape — the .shape property of a ZodObject.
+    // NOT a JSON Schema. Passing JSON Schema produces empty properties: {}.
+    const zodShape = ('shape' in entry.inputSchema ? entry.inputSchema.shape : {}) as Record<string, unknown>;
 
     server.tool(
       toolName,
       entry.description,
-      properties,
+      zodShape,
       async (args: Record<string, unknown>) => {
         try {
           const coercedArgs = coerceArgs(args, entry.inputSchema);
