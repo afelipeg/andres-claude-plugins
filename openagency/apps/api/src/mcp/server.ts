@@ -853,46 +853,9 @@ export function createMcpServer(
   }
 
   // ─── Delivery Engine MCP tools ───────────────────────────────────
-  const DELIVERY_SKILLS: Array<{ id: string; name: string; description: string }> = [
-    { id: 'monthly-report', name: 'Monthly Report', description: 'Generate a monthly PDF/PPTX performance report from engine outputs' },
-    { id: 'competitive-analysis', name: 'Competitive Analysis', description: 'Fetch live competitor ads and generate competitive analysis deck' },
-    { id: 'industry-benchmarks', name: 'Industry Benchmarks', description: 'Search industry benchmarks and produce a PDF/XLSX comparison' },
-    { id: 'budget-proposal', name: 'Budget Proposal', description: 'Create a data-driven budget proposal PDF/DOCX' },
-    { id: 'campaign-brief', name: 'Campaign Brief', description: 'Generate a campaign brief DOCX/PDF from strategy inputs' },
-    { id: 'project-status', name: 'Project Status', description: 'Produce a KPI scorecard and milestone tracking report' },
-    { id: 'quarterly-review', name: 'Quarterly Review', description: 'Generate a QBR executive PPTX/PDF presentation' },
-    { id: 'media-plan-deck', name: 'Media Plan Deck', description: 'Create a media plan PPTX/PDF with channel allocation and flight calendar' },
-    { id: 'learnings-digest', name: 'Learnings Digest', description: 'Distil key learnings, patterns, and hypotheses into a PDF/DOCX' },
-    { id: 'client-scorecard-export', name: 'Client Scorecard Export', description: 'Export client scorecard as XLSX + PDF with grades and action priorities' },
-  ];
-
-  for (const skill of DELIVERY_SKILLS) {
-    const toolName = `delivery_${skill.id.replace(/-/g, '_')}`;
-    server.tool(
-      toolName,
-      `${skill.description}. Requires client_id, run_id, and layer_one_results from a prior engine run.`,
-      {
-        client_id: { type: 'string', description: 'Client identifier' },
-        run_id: { type: 'string', description: 'Run ID linking this to engine outputs' },
-        layer_one_results: { type: 'object', description: 'Outputs from Layer-1 engines (leak_detector, media_architect, etc.)' },
-        context: { type: 'object', description: 'Skill-specific context (period_start, period_end, competitors, etc.)' },
-      } as Record<string, { type: string; description?: string }>,
-      async (args: Record<string, unknown>) => {
-        try {
-          const input = {
-            client_id: args['client_id'],
-            run_id: args['run_id'],
-            layer_one_results: args['layer_one_results'] ?? {},
-            ...(args['context'] as Record<string, unknown> ?? {}),
-          };
-          const result = await agency.run('delivery', skill.id, input);
-          return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
-        } catch (err) {
-          return { content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
-        }
-      },
-    );
-  }
+  // NOTE: The 10 delivery skills are already registered by the SKILL_SCHEMAS
+  // loop above (they are in the schemas registry as engineId='delivery').
+  // Only register the additional delivery_list_files tool here.
 
   // delivery_list_files — list delivery files for a client or run
   server.tool(
