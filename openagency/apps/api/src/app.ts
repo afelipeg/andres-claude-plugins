@@ -518,6 +518,29 @@ export async function createApp() {
   // ─── OAuth Storage (Google Drive, OneDrive — callbacks must be public) ──
   app.route('/', oauthStorageRoutes(db));
 
+  // ─── Public MCP endpoint (for Claude Desktop / external AI clients) ──
+  // Mounted BEFORE auth gate so Claude Desktop can connect without JWT.
+  {
+    const { WebStandardStreamableHTTPServerTransport } = await import('@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js');
+    const { createMcpServer: createMcp } = await import('./mcp/server.js');
+
+    app.post('/mcp', async (c) => {
+      const server = createMcp(agency, agentMap, mesh, connectorInfra, a2aClient, mcpClientRegistry, dynamicSkillRegistry, hflCoordinator, scheduler, fileRepo, agencyRepo ?? undefined, quotaRepo ?? undefined);
+      const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+      await server.connect(transport);
+      return transport.handleRequest(c.req.raw);
+    });
+
+    // MCP also needs GET for server-sent events and DELETE for session cleanup
+    app.get('/mcp', async (c) => {
+      return c.json({ name: 'openagency-plinth', version: '3.2.0', status: 'ready', tools: 63 });
+    });
+
+    app.delete('/mcp', async (c) => {
+      return c.json({ status: 'ok' });
+    });
+  }
+
   // ─── Global auth gate: ALL routes below require authentication ──
   app.use('/v1/*', authMiddleware());
 

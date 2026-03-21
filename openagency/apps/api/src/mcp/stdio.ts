@@ -2,6 +2,34 @@
 // ─── MCP stdio Entry Point (Full Infrastructure for Claude Desktop) ──
 // Boots the complete OpenAgency stack (DB, mesh, connectors, HFL, all 5
 // engines, 63+ MCP tools) over stdio transport for Claude Desktop.
+//
+// CRITICAL: stdout is reserved EXCLUSIVELY for MCP JSON-RPC messages.
+// ALL other output (logs, DB warnings, errors) MUST go to stderr.
+
+// MUST be set before any import so pino writes to stderr, not stdout
+process.env['MCP_STDIO'] = '1';
+
+// Redirect ALL console output to stderr — stdout is for MCP JSON-RPC only
+const stderrWrite = (...args: unknown[]) => {
+  process.stderr.write(args.map(String).join(' ') + '\n');
+};
+console.log = stderrWrite;
+console.info = stderrWrite;
+console.warn = stderrWrite;
+console.error = stderrWrite;
+console.debug = stderrWrite;
+
+// Intercept process.stdout.write — only allow valid JSON-RPC messages through.
+// Pino and postgres driver write directly to stdout bypassing console.
+const originalStdoutWrite = process.stdout.write.bind(process.stdout) as (chunk: Buffer | string) => boolean;
+(process.stdout as unknown as { write: (chunk: Buffer | string, cb?: unknown) => boolean }).write = (chunk: Buffer | string, cb?: unknown): boolean => {
+  const str = typeof chunk === 'string' ? chunk : chunk.toString();
+  if (str.trimStart().startsWith('{') && str.includes('"jsonrpc"')) {
+    return originalStdoutWrite(chunk);
+  }
+  process.stderr.write(chunk);
+  return true;
+};
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { OpenAgency, detectLLMConfig, createLogger } from '@openagency/core';
