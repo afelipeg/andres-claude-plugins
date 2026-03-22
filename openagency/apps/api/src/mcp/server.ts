@@ -13,7 +13,7 @@ import type { OodaRuntime, MeshCoordinator, A2AClient, McpClientRegistry, Pipeli
 import type { HFLCoordinator } from '@openagency/hfl';
 import type { ConnectorPlatform, OAuthTokens } from '@openagency/types';
 import { getConnector, hasConnector } from '@openagency/connectors';
-import { generateChartSvg, extractChartsFromLayerOne } from '@openagency/engines';
+import { extractChartsFromLayerOne } from '@openagency/engines';
 import type { ConnectorInfra } from '../connectors/setup.js';
 import type { FileRepo, AgencyRepo, QuotaRepo } from '@openagency/memory';
 
@@ -157,29 +157,33 @@ export function createMcpServer(
           const coercedArgs = coerceArgs(args, entry.inputSchema);
           const result = await agency.run(entry.engineId, entry.skillId, coercedArgs);
 
-          const contentBlocks: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [
-            { type: 'text' as const, text: JSON.stringify(result, null, 2) },
-          ];
-
-          // Generate inline charts for analytical engine results
+          // Build response with visualization hints for Claude to create interactive artifacts
           const chartableEngines = ['leak-detector', 'media-architect', 'campaign-ops', 'executive-bridge'];
+          let response = result as unknown as Record<string, unknown>;
+
           if (chartableEngines.includes(entry.engineId)) {
             try {
-              const resultData = (result as unknown as Record<string, unknown>)?.data ?? result;
+              const resultData = response?.data ?? response;
               const layerOneKey = entry.engineId.replace(/-/g, '_');
               const charts = extractChartsFromLayerOne({ [layerOneKey]: resultData });
-              for (const chart of charts) {
-                const svg = generateChartSvg(chart);
-                contentBlocks.push({
-                  type: 'image' as const,
-                  data: Buffer.from(svg).toString('base64'),
-                  mimeType: 'image/svg+xml',
-                });
+              if (charts.length > 0) {
+                response = {
+                  ...response,
+                  visualization_hints: charts.map(c => ({
+                    chart_type: c.type,
+                    title: c.title,
+                    data: c.data,
+                    options: c.options,
+                  })),
+                  _viz_instruction: 'Create interactive React artifacts using Recharts for each visualization_hint. Use KPI cards for summary metrics, color-coded bars, and tooltips. Style with a professional dark/light theme.',
+                };
               }
-            } catch { /* charts are best-effort */ }
+            } catch { /* hints are best-effort */ }
           }
 
-          return { content: contentBlocks };
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(response, null, 2) }],
+          };
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Unknown error';
           return {
@@ -1132,13 +1136,7 @@ export function createMcpServer(
           ...(deliverable ? { report: deliverable } : {}),
         };
 
-        // Build multi-content response: text summary + inline SVG charts
-        const contentBlocks: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [];
-
-        // 1. Text block with full JSON results
-        contentBlocks.push({ type: 'text' as const, text: JSON.stringify(response, null, 2) });
-
-        // 2. Generate inline SVG charts from engine results
+        // Extract visualization hints for Claude to create interactive artifacts
         try {
           const layerOneData = {
             leak_detector: engineResults['leak-detector'],
@@ -1148,7 +1146,7 @@ export function createMcpServer(
           };
           const charts = extractChartsFromLayerOne(layerOneData);
 
-          // Also generate a spend overview bar chart from input data if channels provided
+          // Add spend overview from input channels
           if (Array.isArray(data.channels) && (data.channels as Array<{ channel: string; spend: number }>).length > 0) {
             const channelData = data.channels as Array<{ channel: string; spend: number }>;
             charts.unshift({
@@ -1158,20 +1156,22 @@ export function createMcpServer(
             });
           }
 
-          for (const chart of charts) {
-            const svg = generateChartSvg(chart);
-            const svgBase64 = Buffer.from(svg).toString('base64');
-            contentBlocks.push({
-              type: 'image' as const,
-              data: svgBase64,
-              mimeType: 'image/svg+xml',
-            });
+          if (charts.length > 0) {
+            response.visualization_hints = charts.map(c => ({
+              chart_type: c.type,
+              title: c.title,
+              data: c.data,
+              options: c.options,
+            }));
+            response._viz_instruction = 'Create interactive React artifacts using Recharts for each visualization_hint. Include: KPI summary cards (ad_spend, waste, productive spend, ROAS, billing fees) with color-coded deltas, interactive charts with tooltips, and a formatted data table. Use a professional dashboard layout. Group charts by engine: Leak Detector, Media Architect, Campaign Ops, Executive Bridge.';
           }
         } catch {
-          // Charts are best-effort — don't fail the response
+          // Hints are best-effort
         }
 
-        return { content: contentBlocks };
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(response, null, 2) }],
+        };
       } catch (err) {
         return {
           content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
