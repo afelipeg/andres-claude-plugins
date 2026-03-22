@@ -64,6 +64,8 @@ export interface RevenueBridgeInput {
   aov?: number;
   retention_rate?: number;
   avg_customer_months?: number;
+  /** Organic baseline as fraction (0-1). E.g. 0.535 = 53.5% of revenue is organic/baseline. */
+  baseline_pct?: number;
 }
 
 export interface L3Metrics {
@@ -88,6 +90,16 @@ export interface L1Metrics {
   marketing_margin_pct: number;
   total_revenue: number;
   total_spend: number;
+  /** Incremental metrics (MMM-adjusted, only present when baseline_pct provided) */
+  incremental?: {
+    baseline_pct: number;
+    incremental_revenue: number;
+    iroas: number;
+    iroi_pct: number;
+    imarketing_margin_pct: number;
+    iclv_cac_ratio: number;
+    icac: number;
+  };
 }
 
 export interface RevenueBridgeOutput {
@@ -101,6 +113,8 @@ export interface RevenueBridgeOutput {
     l2_metrics: L2Metrics;
   }>;
   csuite_summary: CSuiteSummary;
+  /** Warning when no baseline_pct provided — metrics assume 100% media-driven */
+  baseline_warning?: string;
 }
 
 // ─── Revenue Reconciliation ─────────────────────────────────────────

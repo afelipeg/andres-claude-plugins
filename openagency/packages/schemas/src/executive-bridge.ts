@@ -73,6 +73,7 @@ export const RevenueBridgeInputSchema = z.object({
   aov: z.number().optional(),
   retention_rate: z.number().optional(),
   avg_customer_months: z.number().optional(),
+  baseline_pct: z.number().min(0).max(1).optional().describe('Organic baseline as fraction (0-1). E.g. 0.535 = 53.5% of revenue is organic. From MMM baseline decomposition.'),
 });
 
 const L3MetricsSchema = z.object({
@@ -97,6 +98,15 @@ const L1MetricsSchema = z.object({
   marketing_margin_pct: z.number(),
   total_revenue: z.number(),
   total_spend: z.number(),
+  incremental: z.object({
+    baseline_pct: z.number(),
+    incremental_revenue: z.number(),
+    iroas: z.number(),
+    iroi_pct: z.number(),
+    imarketing_margin_pct: z.number(),
+    iclv_cac_ratio: z.number(),
+    icac: z.number(),
+  }).optional(),
 });
 
 export const RevenueBridgeOutputSchema = z.object({
@@ -112,6 +122,7 @@ export const RevenueBridgeOutputSchema = z.object({
     }),
   ),
   csuite_summary: CSuiteSummarySchema,
+  baseline_warning: z.string().optional(),
 });
 
 // FIX 5: Revenue Compare — matches actual compareChannels() in revenue-bridge.ts

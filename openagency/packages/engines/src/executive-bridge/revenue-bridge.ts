@@ -17,6 +17,7 @@ export function translate(data: RevenueBridgeInput): RevenueBridgeOutput {
   const aov = data.aov ?? 100;
   const retentionRate = data.retention_rate ?? 0.3;
   const avgCustomerMonths = data.avg_customer_months ?? 12;
+  const baselinePct = data.baseline_pct; // 0-1 fraction, e.g. 0.535 = 53.5% organic
 
   let totalSpend = 0;
   let totalRevenue = 0;
@@ -57,7 +58,7 @@ export function translate(data: RevenueBridgeInput): RevenueBridgeOutput {
     });
   }
 
-  // L1 Financial Metrics
+  // L1 Financial Metrics (raw — assumes 100% media-driven)
   const cac = totalConversions > 0 ? round(totalSpend / totalConversions) : 0;
   const clv = round(aov * retentionRate * avgCustomerMonths);
   const clvCacRatio = cac > 0 ? round(clv / cac) : 0;
@@ -77,41 +78,85 @@ export function translate(data: RevenueBridgeInput): RevenueBridgeOutput {
     total_spend: totalSpend,
   };
 
-  // Efficiency Score (0-100)
+  // Incremental metrics (MMM-adjusted) when baseline_pct is provided
+  if (baselinePct != null && baselinePct >= 0 && baselinePct < 1) {
+    const incrementalRevenue = round(totalRevenue * (1 - baselinePct));
+    const iroas = totalSpend > 0 ? round(incrementalRevenue / totalSpend) : 0;
+    const iroi = totalSpend > 0 ? round(((incrementalRevenue - totalSpend) / totalSpend) * 100, 1) : 0;
+    const imargin = incrementalRevenue > 0
+      ? round(((incrementalRevenue - totalSpend) / incrementalRevenue) * 100, 1)
+      : 0;
+    // Incremental conversions proportional to incremental revenue share
+    const iConversions = totalRevenue > 0
+      ? totalConversions * (incrementalRevenue / totalRevenue)
+      : 0;
+    const icac = iConversions > 0 ? round(totalSpend / iConversions) : 0;
+    const iclvCac = icac > 0 ? round(clv / icac) : 0;
+
+    l1.incremental = {
+      baseline_pct: baselinePct,
+      incremental_revenue: incrementalRevenue,
+      iroas,
+      iroi_pct: iroi,
+      imarketing_margin_pct: imargin,
+      iclv_cac_ratio: iclvCac,
+      icac,
+    };
+  }
+
+  // Efficiency Score — use incremental metrics when available, else raw
+  const effectiveRoas = l1.incremental ? l1.incremental.iroas : roas;
+  const effectiveClvCac = l1.incremental ? l1.incremental.iclv_cac_ratio : clvCacRatio;
+  const effectiveMargin = l1.incremental ? l1.incremental.imarketing_margin_pct : marketingMargin;
+
   const scores: number[] = [];
-  if (clvCacRatio >= 3) scores.push(100);
-  else if (clvCacRatio >= 1) scores.push(Math.round((clvCacRatio / 3) * 100));
+  if (effectiveClvCac >= 3) scores.push(100);
+  else if (effectiveClvCac >= 1) scores.push(Math.round((effectiveClvCac / 3) * 100));
   else scores.push(0);
 
-  if (roas >= 4) scores.push(100);
-  else if (roas >= 1) scores.push(Math.round((roas / 4) * 100));
+  if (effectiveRoas >= 4) scores.push(100);
+  else if (effectiveRoas >= 1) scores.push(Math.round((effectiveRoas / 4) * 100));
   else scores.push(0);
 
-  if (marketingMargin > 0) scores.push(Math.min(100, Math.round(marketingMargin * 2)));
+  if (effectiveMargin > 0) scores.push(Math.min(100, Math.round(effectiveMargin * 2)));
   else scores.push(0);
 
   const efficiencyScore = scores.length > 0
     ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
     : 0;
 
-  // C-Suite Summaries
+  // C-Suite Summaries — use incremental when available
   const topChannel = channelResults.length > 0
     ? channelResults.reduce((best, ch) =>
         (ch.l2_metrics.roas > best.l2_metrics.roas ? ch : best))
     : null;
 
-  const csuite: CSuiteSummary = {
-    ceo: `Marketing investment of $${totalSpend.toLocaleString()} generated $${totalRevenue.toLocaleString()} in revenue (${totalConversions.toLocaleString()} customers). Customer lifetime value is $${clv.toLocaleString()} vs acquisition cost of $${cac.toLocaleString()} (CLV:CAC = ${clvCacRatio}:1). ROI: ${roi}%.`,
-    cfo: `Total spend: $${totalSpend.toLocaleString()}. Revenue: $${totalRevenue.toLocaleString()}. Marketing margin: ${marketingMargin}%. ROI: ${roi}%. Blended ROAS: ${roas.toFixed(2)}x. Efficiency score: ${efficiencyScore}/100.`,
-    cmo: `Campaign delivered ${totalConversions.toLocaleString()} conversions across ${channels.length} channels at $${cac.toLocaleString()} CPA. ROAS: ${roas.toFixed(2)}x. Top channel by ROAS: ${topChannel?.channel ?? 'N/A'}.`,
-  };
+  const inc = l1.incremental;
+  const csuite: CSuiteSummary = inc
+    ? {
+        ceo: `Marketing investment of $${totalSpend.toLocaleString()} generated $${totalRevenue.toLocaleString()} total revenue, of which $${inc.incremental_revenue.toLocaleString()} is incremental (${round((1 - inc.baseline_pct) * 100, 1)}% media-driven, ${round(inc.baseline_pct * 100, 1)}% organic baseline). iROI: ${inc.iroi_pct}%. iCLV:CAC = ${inc.iclv_cac_ratio}:1.`,
+        cfo: `Total spend: $${totalSpend.toLocaleString()}. Incremental revenue: $${inc.incremental_revenue.toLocaleString()} (baseline ${round(inc.baseline_pct * 100, 1)}% excluded). iROAS: ${inc.iroas.toFixed(2)}x. iMarketing margin: ${inc.imarketing_margin_pct}%. Efficiency score: ${efficiencyScore}/100.`,
+        cmo: `Campaign delivered ${totalConversions.toLocaleString()} total conversions across ${channels.length} channels. iROAS: ${inc.iroas.toFixed(2)}x (vs raw ${roas.toFixed(2)}x). Top channel: ${topChannel?.channel ?? 'N/A'}. Organic baseline: ${round(inc.baseline_pct * 100, 1)}%.`,
+      }
+    : {
+        ceo: `Marketing investment of $${totalSpend.toLocaleString()} generated $${totalRevenue.toLocaleString()} in revenue (${totalConversions.toLocaleString()} customers). CLV: $${clv.toLocaleString()} vs CAC: $${cac.toLocaleString()} (CLV:CAC = ${clvCacRatio}:1). ROI: ${roi}%. ⚠️ No baseline deduction — assumes 100% media-driven.`,
+        cfo: `Total spend: $${totalSpend.toLocaleString()}. Revenue: $${totalRevenue.toLocaleString()}. Marketing margin: ${marketingMargin}%. ROI: ${roi}%. ROAS: ${roas.toFixed(2)}x. ⚠️ Pass baseline_pct from MMM for incremental metrics.`,
+        cmo: `Campaign delivered ${totalConversions.toLocaleString()} conversions across ${channels.length} channels at $${cac.toLocaleString()} CPA. ROAS: ${roas.toFixed(2)}x. Top channel: ${topChannel?.channel ?? 'N/A'}. ⚠️ Raw metrics — no organic baseline applied.`,
+      };
 
-  return {
+  const result: RevenueBridgeOutput = {
     l1_metrics: l1,
     efficiency_score: efficiencyScore,
     channels: channelResults,
     csuite_summary: csuite,
   };
+
+  if (!inc) {
+    result.baseline_warning =
+      'Metrics assume 100% of revenue is media-driven. Pass baseline_pct (0-1) from MMM baseline decomposition for incremental metrics (iROAS, iROI, iCLV:CAC). Without baseline deduction, ROAS/ROI are inflated.';
+  }
+
+  return result;
 }
 
 export function compareChannels(data: {

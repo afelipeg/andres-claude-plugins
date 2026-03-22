@@ -289,7 +289,7 @@ export const SKILL_SCHEMAS: SkillSchemaEntry[] = [
     skillId: 'revenue-translate',
     name: 'Revenue Translate',
     description:
-      'Translate L3 media metrics to L2 efficiency to L1 business outcomes',
+      'Translate L3 media metrics → L2 efficiency → L1 business outcomes. IMPORTANT: pass baseline_pct (0-1 fraction, e.g. 0.535 = 53.5% organic) from MMM baseline decomposition for accurate incremental metrics (iROAS, iROI, iCLV:CAC). Without baseline_pct, output assumes 100% of revenue is media-driven which inflates ROAS/ROI.',
     inputSchema: RevenueBridgeInputSchema,
     outputSchema: RevenueBridgeOutputSchema,
   },
