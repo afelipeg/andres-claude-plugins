@@ -520,6 +520,7 @@ export async function createApp() {
 
   // ─── Public MCP endpoint (for Claude Desktop / external AI clients) ──
   // Mounted BEFORE auth gate so Claude Desktop can connect without JWT.
+  // Timeout: mesh pipelines can take 60-120s — Railway proxy default is 60s.
   {
     const { WebStandardStreamableHTTPServerTransport } = await import('@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js');
     const { createMcpServer: createMcp } = await import('./mcp/server.js');
@@ -530,9 +531,13 @@ export async function createApp() {
         const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined });
         await server.connect(transport);
         const response = await transport.handleRequest(c.req.raw);
+        // Set extended timeout headers for proxies (Railway, Cloudflare)
+        const headers = new Headers(response.headers);
+        headers.set('X-Request-Timeout', '300');
+        headers.set('Keep-Alive', 'timeout=300');
         return new Response(response.body, {
           status: response.status,
-          headers: response.headers,
+          headers,
         });
       } catch (err) {
         log.error({ err }, 'MCP POST /mcp error');

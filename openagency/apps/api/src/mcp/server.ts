@@ -544,7 +544,7 @@ export function createMcpServer(
 
     server.tool(
       'mesh_execute_pipeline',
-      'Execute a multi-agent optimization pipeline. Triggers a full 4-stage Leak Detector → Media Architect → Campaign Ops → Executive Bridge workflow. Set auto_sync=true to pull fresh data from all connected platforms before running. This single tool call replaces an entire agency engagement.',
+      'Execute a multi-agent optimization pipeline. Triggers a full 4-stage Leak Detector → Media Architect → Campaign Ops → Executive Bridge workflow. Set auto_sync=true to pull fresh data from all connected platforms before running. This single tool call replaces an entire agency engagement. NOTE: This can take 60-120 seconds for multi-stage pipelines. Use pipeline_id "full-optimization" for the standard 4-engine pipeline or "full-with-deliverables" for 5-engine pipeline including report generation.',
       {
         pipeline_id: z.string().describe('Pipeline ID to execute (e.g. "full-optimization")'),
         goal_id: z.string().optional().describe('Optional goal ID to associate with this run'),

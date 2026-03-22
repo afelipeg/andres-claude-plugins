@@ -90,7 +90,7 @@ export const SKILL_SCHEMAS: SkillSchemaEntry[] = [
     skillId: 'waste-waterfall',
     name: 'Waste Waterfall',
     description:
-      '6-stage waste decomposition of ad spend: non-working, supply chain, quality, audience, optimization, measurement',
+      '6-stage waste decomposition of ad spend. Pass gross_spend (required) plus waste category data: non_working (agency fees, production costs), supply_chain (intermediary fees, DSP/SSP markup), quality (IVT/fraud, viewability, brand safety, MFA — pass as {ivt: amount, viewability: amount} or a single number), audience (overlap, frequency cap waste), optimization (bid inefficiency, daypart waste), measurement (attribution gaps). If you only have gross_spend, use waste_estimate instead which auto-fills from industry benchmarks. Also accepts: industry (retail/cpg/saas/etc), actual_revenue (for ROI impact calc).',
     inputSchema: WasteWaterfallInputSchema,
     outputSchema: WasteWaterfallOutputSchema,
   },
@@ -99,7 +99,7 @@ export const SKILL_SCHEMAS: SkillSchemaEntry[] = [
     skillId: 'waste-estimate',
     name: 'Waste Estimate',
     description:
-      'Quick waste estimate from budget alone using industry benchmarks',
+      'Quick waste estimate from gross_spend alone using industry benchmarks. Use this when you do NOT have actual IVT/viewability/fee data — it auto-fills all 6 waste categories from benchmarks for the given industry. Returns the same waterfall output as waste_waterfall but marked as estimates.',
     inputSchema: WasteEstimateInputSchema,
     outputSchema: WasteWaterfallOutputSchema,
   },
