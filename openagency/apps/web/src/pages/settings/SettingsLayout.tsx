@@ -1,6 +1,4 @@
 // ─── Settings Layout ────────────────────────────────────────────────
-// Sub-nav for /app/settings/* pages
-
 import { Outlet, NavLink } from 'react-router-dom';
 
 const SETTINGS_NAV = [
@@ -15,8 +13,8 @@ export function SettingsLayout() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-        <p className="mt-1 text-sm text-gray-500">Manage your account, team, and preferences.</p>
+        <h1 className="text-2xl font-bold text-white">Settings</h1>
+        <p className="mt-1 text-sm text-white/50">Manage your account, team, and preferences.</p>
       </div>
 
       <div className="flex gap-6">
@@ -30,8 +28,8 @@ export function SettingsLayout() {
                   className={({ isActive }) =>
                     `block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                       isActive
-                        ? 'bg-zinc-900 text-white'
-                        : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900'
+                        ? 'bg-[#00F5FF]/10 text-[#00F5FF] border border-[#00F5FF]/20'
+                        : 'text-white/60 hover:bg-white/5 hover:text-white/90'
                     }`
                   }
                 >

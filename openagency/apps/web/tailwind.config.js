@@ -4,11 +4,29 @@ export default {
   theme: {
     extend: {
       colors: {
-        // App accent (matches login page green CTA)
+        // Protocol design system
         accent: {
-          DEFAULT: '#00e5a0',
-          hover: '#00c98d',
-          foreground: '#09090B',
+          DEFAULT: '#00F5FF',
+          hover: '#00D4DD',
+          foreground: '#0A0A0F',
+        },
+        secondary: {
+          DEFAULT: '#FF00FF',
+          hover: '#DD00DD',
+          foreground: '#0A0A0F',
+        },
+        tertiary: {
+          DEFAULT: '#7000FF',
+          hover: '#5C00DD',
+          foreground: '#FFFFFF',
+        },
+        // Glass tokens
+        glass: {
+          bg: 'rgba(255, 255, 255, 0.05)',
+          'bg-hover': 'rgba(255, 255, 255, 0.10)',
+          'bg-active': 'rgba(255, 255, 255, 0.15)',
+          border: 'rgba(255, 255, 255, 0.10)',
+          'border-hover': 'rgba(255, 255, 255, 0.20)',
         },
         // Legacy brand (blue) — kept for chart colors & demo pages
         brand: {
@@ -26,6 +44,23 @@ export default {
         waste: '#ef4444',
         productive: '#22c55e',
         warning: '#f59e0b',
+      },
+      backdropBlur: {
+        xs: '2px',
+      },
+      animation: {
+        'glow-pulse': 'glow-pulse 2s ease-in-out infinite',
+        'glass-shimmer': 'glass-shimmer 2s ease-in-out infinite',
+      },
+      keyframes: {
+        'glow-pulse': {
+          '0%, 100%': { opacity: '0.4' },
+          '50%': { opacity: '0.8' },
+        },
+        'glass-shimmer': {
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
+        },
       },
     },
   },

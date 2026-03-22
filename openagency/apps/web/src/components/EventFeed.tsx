@@ -1,19 +1,19 @@
-// ─── Event Feed ────────────────────────────────────────────────────
+// ─── Event Feed (Glassmorphism) ────────────────────────────────────
 
 import type { StreamEvent } from '../hooks/useEventStream';
 import { StatusBadge } from './StatusBadge';
 
 const EVENT_TYPE_COLORS: Record<string, string> = {
-  'agent.cycle.started': 'bg-blue-50 border-blue-200',
-  'agent.cycle.completed': 'bg-green-50 border-green-200',
-  'agent.cycle.failed': 'bg-red-50 border-red-200',
-  'agent.decision.made': 'bg-purple-50 border-purple-200',
-  'mesh.pipeline.started': 'bg-indigo-50 border-indigo-200',
-  'mesh.pipeline.completed': 'bg-emerald-50 border-emerald-200',
-  'mesh.stage.started': 'bg-sky-50 border-sky-200',
-  'mesh.stage.completed': 'bg-teal-50 border-teal-200',
-  'domain.waste_detected': 'bg-amber-50 border-amber-200',
-  'domain.budget_reallocated': 'bg-orange-50 border-orange-200',
+  'agent.cycle.started': 'bg-[#00F5FF]/10 border-[#00F5FF]/20',
+  'agent.cycle.completed': 'bg-emerald-500/10 border-emerald-400/20',
+  'agent.cycle.failed': 'bg-red-500/10 border-red-400/20',
+  'agent.decision.made': 'bg-[#7000FF]/10 border-[#7000FF]/20',
+  'mesh.pipeline.started': 'bg-[#7000FF]/10 border-[#7000FF]/20',
+  'mesh.pipeline.completed': 'bg-emerald-500/10 border-emerald-400/20',
+  'mesh.stage.started': 'bg-[#00F5FF]/10 border-[#00F5FF]/20',
+  'mesh.stage.completed': 'bg-emerald-500/10 border-emerald-400/20',
+  'domain.waste_detected': 'bg-amber-500/10 border-amber-400/20',
+  'domain.budget_reallocated': 'bg-[#FF00FF]/10 border-[#FF00FF]/20',
 };
 
 interface EventFeedProps {
@@ -24,16 +24,16 @@ interface EventFeedProps {
 export function EventFeed({ events, connected }: EventFeedProps) {
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-2">
-        <h3 className="text-sm font-semibold text-gray-900">Live Feed</h3>
+      <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-2">
+        <h3 className="text-sm font-semibold text-white/95">Live Feed</h3>
         <div className="flex items-center gap-1.5">
-          <div className={`h-2 w-2 rounded-full ${connected ? 'bg-green-500' : 'bg-gray-300'}`} />
-          <span className="text-xs text-gray-500">{connected ? 'Connected' : 'Disconnected'}</span>
+          <div className={`h-2 w-2 rounded-full ${connected ? 'bg-[#00F5FF] shadow-[0_0_8px_rgba(0,245,255,0.5)]' : 'bg-white/20'}`} />
+          <span className="text-xs text-white/50">{connected ? 'Connected' : 'Disconnected'}</span>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-2">
         {events.length === 0 ? (
-          <p className="py-8 text-center text-sm text-gray-400">
+          <p className="py-8 text-center text-sm text-white/30">
             {connected ? 'Waiting for events...' : 'Connect to API to see live events'}
           </p>
         ) : (
@@ -49,21 +49,21 @@ export function EventFeed({ events, connected }: EventFeedProps) {
 }
 
 function EventRow({ event }: { event: StreamEvent }) {
-  const colorClass = EVENT_TYPE_COLORS[event.type] ?? 'bg-gray-50 border-gray-200';
+  const colorClass = EVENT_TYPE_COLORS[event.type] ?? 'bg-white/[0.05] border-white/[0.10]';
   const payload = event.payload as Record<string, unknown> | null;
   const agentId = payload?.['agent_id'] as string | undefined;
   const time = new Date(event.timestamp).toLocaleTimeString();
 
   return (
-    <div className={`rounded-md border px-3 py-2 ${colorClass}`}>
+    <div className={`rounded-md border px-3 py-2 backdrop-blur-sm ${colorClass}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <StatusBadge status={event.type.split('.').pop() ?? event.type} />
-          {agentId && <span className="text-xs text-gray-500">{agentId}</span>}
+          {agentId && <span className="text-xs text-white/50">{agentId}</span>}
         </div>
-        <span className="text-xs text-gray-400">{time}</span>
+        <span className="text-xs text-white/40">{time}</span>
       </div>
-      <p className="mt-0.5 text-xs text-gray-600 truncate">{event.type}</p>
+      <p className="mt-0.5 text-xs text-white/50 truncate">{event.type}</p>
     </div>
   );
 }

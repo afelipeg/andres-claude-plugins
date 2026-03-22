@@ -2,7 +2,6 @@
 // Outcome-based billing transparency: tiers, fee structure, calculator.
 
 import { useState, useEffect, useCallback } from 'react';
-import { Card, MetricCard } from '../components/Card';
 import { Spinner } from '../components/Spinner';
 import type {
   ScorecardSummary,
@@ -12,6 +11,23 @@ import type {
 import { listScorecards, getLatestScorecard, getTierPreview } from '../api/scorecard';
 import { calculateBilling } from '@openagency/core';
 import type { BillingInput } from '@openagency/core';
+import {
+  GlassCard,
+  GlassCardHeader,
+  GlassCardTitle,
+  GlassCardContent,
+  GlassButton,
+
+  GlassBadge,
+  GlassTable,
+  GlassTableHeader,
+  GlassTableBody,
+  GlassTableRow,
+  GlassTableHead,
+  GlassTableCell,
+  StatCard,
+  StatsGrid,
+} from '../components/ui/glass';
 
 // ─── Tier Data (mirrors packages/core/src/billing.ts) ─────────────
 
@@ -23,10 +39,10 @@ const TIERS: Array<{
   lift: string;
   efficiency: string;
 }> = [
-  { tier: 'starter', label: 'Starter', spend: '< $500K', recovery: '5%', lift: '0.5% – 1.5%', efficiency: '0.5% – 1.5%' },
-  { tier: 'growth', label: 'Growth', spend: '$500K - $2M', recovery: '4.5%', lift: '0.5% – 1.5%', efficiency: '0.5% – 1.5%' },
-  { tier: 'scale', label: 'Scale', spend: '$2M - $5M', recovery: '4%', lift: '0.5% – 1.5%', efficiency: '0.5% – 1.5%' },
-  { tier: 'enterprise', label: 'Enterprise', spend: '> $5M', recovery: '3%', lift: '0.5% – 1.5%', efficiency: '0.5% – 1.5%' },
+  { tier: 'starter', label: 'Starter', spend: '< $500K', recovery: '5%', lift: '0.5% - 1.5%', efficiency: '0.5% - 1.5%' },
+  { tier: 'growth', label: 'Growth', spend: '$500K - $2M', recovery: '4.5%', lift: '0.5% - 1.5%', efficiency: '0.5% - 1.5%' },
+  { tier: 'scale', label: 'Scale', spend: '$2M - $5M', recovery: '4%', lift: '0.5% - 1.5%', efficiency: '0.5% - 1.5%' },
+  { tier: 'enterprise', label: 'Enterprise', spend: '> $5M', recovery: '3%', lift: '0.5% - 1.5%', efficiency: '0.5% - 1.5%' },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -106,80 +122,82 @@ function BillingCalculatorForm({ onResult }: { onResult: (r: BillingResult) => v
   };
 
   return (
-    <Card title="Billing Calculator">
-      <p className="mb-4 text-sm text-gray-500">
-        Enter estimated values to preview your outcome-based fee. All calculations run locally.
-      </p>
+    <GlassCard>
+      <GlassCardHeader>
+        <GlassCardTitle>Billing Calculator</GlassCardTitle>
+      </GlassCardHeader>
+      <GlassCardContent>
+        <p className="mb-4 text-sm text-white/50">
+          Enter estimated values to preview your outcome-based fee. All calculations run locally.
+        </p>
 
-      {/* Ad Spend */}
-      <div className="mb-5">
-        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Monthly Ad Spend</label>
-        <NumberInput value={adSpend} onChange={setAdSpend} placeholder="1000000" />
-      </div>
-
-      {/* Client Rate Selection */}
-      <div className="mb-5 grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Lift Fee Rate</label>
-          <select
-            value={liftRate}
-            onChange={(e) => setLiftRate(e.target.value)}
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-          >
-            {RATE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+        {/* Ad Spend */}
+        <div className="mb-5">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-white/50 mb-1">Monthly Ad Spend</label>
+          <NumberInput value={adSpend} onChange={setAdSpend} placeholder="1000000" />
         </div>
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Efficiency Fee Rate</label>
-          <select
-            value={efficiencyRate}
-            onChange={(e) => setEfficiencyRate(e.target.value)}
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-          >
-            {RATE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+
+        {/* Client Rate Selection */}
+        <div className="mb-5 grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-white/50 mb-1">Lift Fee Rate</label>
+            <select
+              value={liftRate}
+              onChange={(e) => setLiftRate(e.target.value)}
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/95 focus:border-[#00F5FF]/50 focus:outline-none focus:ring-1 focus:ring-[#00F5FF]/30"
+            >
+              {RATE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value} className="bg-[#0A0A0F] text-white">{o.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-white/50 mb-1">Efficiency Fee Rate</label>
+            <select
+              value={efficiencyRate}
+              onChange={(e) => setEfficiencyRate(e.target.value)}
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/95 focus:border-[#00F5FF]/50 focus:outline-none focus:ring-1 focus:ring-[#00F5FF]/30"
+            >
+              {RATE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value} className="bg-[#0A0A0F] text-white">{o.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
-      </div>
 
-      {/* Recovery */}
-      <FieldGroup title="Recovery Sources" color="green">
-        <NumberInput label="Waste detected (Leak Detector)" value={wasteTotal} onChange={setWasteTotal} />
-        <NumberInput label="Quality waste" value={qualityWaste} onChange={setQualityWaste} />
-        <NumberInput label="Supply chain savings" value={supplyChainSavings} onChange={setSupplyChainSavings} />
-        <NumberInput label="CPA overshoot savings" value={cpaOvershoot} onChange={setCpaOvershoot} />
-        <NumberInput label="Reallocation savings" value={reallocationSavings} onChange={setReallocationSavings} />
-        <NumberInput label="Measurement waste" value={measurementWaste} onChange={setMeasurementWaste} />
-      </FieldGroup>
+        {/* Recovery */}
+        <FieldGroup title="Recovery Sources">
+          <NumberInput label="Waste detected (Leak Detector)" value={wasteTotal} onChange={setWasteTotal} />
+          <NumberInput label="Quality waste" value={qualityWaste} onChange={setQualityWaste} />
+          <NumberInput label="Supply chain savings" value={supplyChainSavings} onChange={setSupplyChainSavings} />
+          <NumberInput label="CPA overshoot savings" value={cpaOvershoot} onChange={setCpaOvershoot} />
+          <NumberInput label="Reallocation savings" value={reallocationSavings} onChange={setReallocationSavings} />
+          <NumberInput label="Measurement waste" value={measurementWaste} onChange={setMeasurementWaste} />
+        </FieldGroup>
 
-      {/* Lift */}
-      <FieldGroup title="Lift Sources" color="blue">
-        <NumberInput label="KPI lift from optimization" value={kpiLift} onChange={setKpiLift} />
-        <NumberInput label="ROAS improvement value" value={roasLift} onChange={setRoasLift} />
-        <NumberInput label="ROI improvement value" value={roiLift} onChange={setRoiLift} />
-        <NumberInput label="Attribution revenue (MDS)" value={attributionRevenue} onChange={setAttributionRevenue} />
-        <NumberInput label="Modeled contribution (MDS)" value={modeledContribution} onChange={setModeledContribution} />
-      </FieldGroup>
+        {/* Lift */}
+        <FieldGroup title="Lift Sources">
+          <NumberInput label="KPI lift from optimization" value={kpiLift} onChange={setKpiLift} />
+          <NumberInput label="ROAS improvement value" value={roasLift} onChange={setRoasLift} />
+          <NumberInput label="ROI improvement value" value={roiLift} onChange={setRoiLift} />
+          <NumberInput label="Attribution revenue (MDS)" value={attributionRevenue} onChange={setAttributionRevenue} />
+          <NumberInput label="Modeled contribution (MDS)" value={modeledContribution} onChange={setModeledContribution} />
+        </FieldGroup>
 
-      {/* Efficiency */}
-      <FieldGroup title="Efficiency Savings" color="purple">
-        <NumberInput label="CPC reduction savings" value={cpcSavings} onChange={setCpcSavings} />
-        <NumberInput label="CPM optimization savings" value={cpmSavings} onChange={setCpmSavings} />
-        <NumberInput label="CTR improvement revenue" value={ctrRevenue} onChange={setCtrRevenue} />
-        <NumberInput label="Viewability savings" value={viewability} onChange={setViewability} />
-        <NumberInput label="Brand safety savings" value={brandSafety} onChange={setBrandSafety} />
-      </FieldGroup>
+        {/* Efficiency */}
+        <FieldGroup title="Efficiency Savings">
+          <NumberInput label="CPC reduction savings" value={cpcSavings} onChange={setCpcSavings} />
+          <NumberInput label="CPM optimization savings" value={cpmSavings} onChange={setCpmSavings} />
+          <NumberInput label="CTR improvement revenue" value={ctrRevenue} onChange={setCtrRevenue} />
+          <NumberInput label="Viewability savings" value={viewability} onChange={setViewability} />
+          <NumberInput label="Brand safety savings" value={brandSafety} onChange={setBrandSafety} />
+        </FieldGroup>
 
-      <button
-        onClick={handleCalculate}
-        className="mt-4 w-full rounded-lg bg-zinc-900 px-5 py-3 text-sm font-semibold text-white hover:bg-zinc-800"
-      >
-        Calculate Fee
-      </button>
-    </Card>
+        <GlassButton variant="primary" className="mt-4 w-full" onClick={handleCalculate}>
+          Calculate Fee
+        </GlassButton>
+      </GlassCardContent>
+    </GlassCard>
   );
 }
 
@@ -191,27 +209,25 @@ function NumberInput({ label, value, onChange, placeholder }: {
 }) {
   return (
     <div>
-      {label && <label className="block text-xs text-gray-500 mb-0.5">{label}</label>}
+      {label && <label className="block text-xs text-white/50 mb-0.5">{label}</label>}
       <div className="relative">
-        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs">$</span>
+        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/40 text-xs">$</span>
         <input
           type="number"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="w-full rounded-lg border border-gray-200 pl-6 pr-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+          className="w-full rounded-lg border border-white/10 bg-white/5 pl-6 pr-3 py-2 text-sm text-white/95 placeholder:text-white/30 focus:border-[#00F5FF]/50 focus:outline-none focus:ring-1 focus:ring-[#00F5FF]/30"
         />
       </div>
     </div>
   );
 }
 
-function FieldGroup({ title, children }: { title: string; color?: string; children: React.ReactNode }) {
-  const borderColor = 'border-zinc-200';
-  const titleColor = 'text-zinc-600';
+function FieldGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className={`mb-4 rounded-lg border ${borderColor} p-4`}>
-      <h4 className={`text-xs font-semibold uppercase tracking-wider ${titleColor} mb-3`}>{title}</h4>
+    <div className="mb-4 rounded-lg border border-white/10 bg-white/5 p-4">
+      <h4 className="text-xs font-semibold uppercase tracking-wider text-white/50 mb-3">{title}</h4>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {children}
       </div>
@@ -239,7 +255,6 @@ function TierCalculator() {
       const tier = await getTierPreview(val);
       setPreview(tier);
     } catch {
-      // Fallback: calculate locally
       const numSpend = val;
       if (numSpend >= 5_000_000) setPreview({ tier: 'enterprise', label: 'Enterprise', min_spend: 5_000_000, max_spend: null, recovery_rate: 0.03, lift_rate: 0.01, efficiency_rate: 0.01 });
       else if (numSpend >= 2_000_000) setPreview({ tier: 'scale', label: 'Scale', min_spend: 2_000_000, max_spend: 5_000_000, recovery_rate: 0.04, lift_rate: 0.01, efficiency_rate: 0.01 });
@@ -251,83 +266,76 @@ function TierCalculator() {
   };
 
   return (
-    <Card title="Tier Calculator">
-      <p className="text-sm text-gray-500 mb-4">
-        Enter your monthly ad spend to see which tier and rates apply.
-      </p>
-      <div className="flex gap-3">
-        <div className="relative flex-1">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
-          <input
-            type="number"
-            value={spend}
-            onChange={(e) => setSpend(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handlePreview()}
-            placeholder="2,500,000"
-            className="w-full rounded-lg border border-gray-200 pl-7 pr-3 py-2.5 text-sm text-gray-700 placeholder:text-gray-400 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900"
-          />
+    <GlassCard>
+      <GlassCardHeader>
+        <GlassCardTitle>Tier Calculator</GlassCardTitle>
+      </GlassCardHeader>
+      <GlassCardContent>
+        <p className="text-sm text-white/50 mb-4">
+          Enter your monthly ad spend to see which tier and rates apply.
+        </p>
+        <div className="flex gap-3">
+          <div className="relative flex-1">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-sm">$</span>
+            <input
+              type="number"
+              value={spend}
+              onChange={(e) => setSpend(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handlePreview()}
+              placeholder="2,500,000"
+              className="w-full rounded-lg border border-white/10 bg-white/5 pl-7 pr-3 py-2.5 text-sm text-white/95 placeholder:text-white/30 focus:border-[#00F5FF]/50 focus:outline-none focus:ring-1 focus:ring-[#00F5FF]/30"
+            />
+          </div>
+          <GlassButton variant="primary" onClick={() => void handlePreview()} disabled={loading || !spend}>
+            {loading ? '...' : 'Calculate'}
+          </GlassButton>
         </div>
-        <button
-          onClick={() => void handlePreview()}
-          disabled={loading || !spend}
-          className="rounded-lg bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:opacity-50"
-        >
-          {loading ? '...' : 'Calculate'}
-        </button>
-      </div>
 
-      {preview && (
-        <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-zinc-900">{preview.label} Tier</span>
-            <span className="rounded-full bg-zinc-200 px-2.5 py-0.5 text-xs font-medium text-zinc-700">
-              {fmtUsd(parseFloat(spend))} spend
-            </span>
+        {preview && (
+          <div className="mt-4 rounded-lg border border-white/10 bg-white/5 p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-white/95">{preview.label} Tier</span>
+              <GlassBadge>{fmtUsd(parseFloat(spend))} spend</GlassBadge>
+            </div>
+            <div className="mt-3 grid grid-cols-3 gap-4 text-center">
+              <div>
+                <p className="text-xs text-white/50">Recovery</p>
+                <p className="text-lg font-bold text-emerald-400">{fmtPct(preview.recovery_rate * 100)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-white/50">Lift</p>
+                <p className="text-lg font-bold text-white/95">{fmtPct(preview.lift_rate * 100)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-white/50">Efficiency</p>
+                <p className="text-lg font-bold text-[#7000FF]">{fmtPct(preview.efficiency_rate * 100)}</p>
+              </div>
+            </div>
           </div>
-          <div className="mt-3 grid grid-cols-3 gap-4 text-center">
-            <div>
-              <p className="text-xs text-gray-500">Recovery</p>
-              <p className="text-lg font-bold text-green-600">{fmtPct(preview.recovery_rate * 100)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Lift</p>
-              <p className="text-lg font-bold text-zinc-900">{fmtPct(preview.lift_rate * 100)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Efficiency</p>
-              <p className="text-lg font-bold text-purple-600">{fmtPct(preview.efficiency_rate * 100)}</p>
-            </div>
-          </div>
-        </div>
-      )}
-    </Card>
+        )}
+      </GlassCardContent>
+    </GlassCard>
   );
 }
 
 // ─── Billing History Row ──────────────────────────────────────────
 
 function BillingHistoryRow({ record }: { record: ScorecardSummary }) {
-  const statusColor: Record<string, string> = {
-    pending: 'bg-yellow-100 text-yellow-700',
-    accepted: 'bg-green-100 text-green-700',
-    rejected: 'bg-red-100 text-red-700',
-  };
-
   return (
-    <div className="flex items-center gap-4 border-b border-gray-100 py-3 last:border-b-0">
+    <div className="flex items-center gap-4 border-b border-white/5 py-3 last:border-b-0">
       <div className="flex-1">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-900">{fmtUsd(record.ad_spend)}</span>
-          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusColor[record.status] ?? ''}`}>
+          <span className="text-sm font-medium text-white/95">{fmtUsd(record.ad_spend)}</span>
+          <GlassBadge variant={record.status === 'accepted' ? 'success' : record.status === 'rejected' ? 'destructive' : 'warning'}>
             {record.status}
-          </span>
-          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">{record.tier}</span>
+          </GlassBadge>
+          <GlassBadge>{record.tier}</GlassBadge>
         </div>
-        <p className="mt-0.5 text-xs text-gray-500">{new Date(record.created_at).toLocaleString()}</p>
+        <p className="mt-0.5 text-xs text-white/50">{new Date(record.created_at).toLocaleString()}</p>
       </div>
       <div className="text-right">
-        <p className="text-sm font-semibold text-gray-900">{fmtUsd(record.total_fee)} fee</p>
-        <p className="text-xs text-gray-500">{fmtUsd(record.value_delivered)} value | {record.roi_on_fee.toFixed(1)}x</p>
+        <p className="text-sm font-semibold text-white/95">{fmtUsd(record.total_fee)} fee</p>
+        <p className="text-xs text-white/50">{fmtUsd(record.value_delivered)} value | {record.roi_on_fee.toFixed(1)}x</p>
       </div>
     </div>
   );
@@ -337,40 +345,45 @@ function BillingHistoryRow({ record }: { record: ScorecardSummary }) {
 
 function FeeBreakdownCard({ billing }: { billing: BillingResult }) {
   return (
-    <Card title="Fee Breakdown">
-      <div className="space-y-4">
-        {[billing.recovery_fee, billing.lift_fee, billing.efficiency_fee].map((fee) => (
-          <div key={fee.category} className="rounded-lg border border-gray-100 bg-gray-50 p-4">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-semibold text-gray-900 capitalize">{fee.category} Fee</h4>
-              <div className="flex items-center gap-3 text-sm">
-                <span className="text-gray-500">{fmtUsd(fee.base_amount)} x {fmtPct(fee.rate * 100)}</span>
-                <span className="font-bold text-gray-900">= {fmtUsd(fee.fee)}</span>
+    <GlassCard>
+      <GlassCardHeader>
+        <GlassCardTitle>Fee Breakdown</GlassCardTitle>
+      </GlassCardHeader>
+      <GlassCardContent>
+        <div className="space-y-4">
+          {[billing.recovery_fee, billing.lift_fee, billing.efficiency_fee].map((fee) => (
+            <div key={fee.category} className="rounded-lg border border-white/10 bg-white/5 p-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-white/95 capitalize">{fee.category} Fee</h4>
+                <div className="flex items-center gap-3 text-sm">
+                  <span className="text-white/50">{fmtUsd(fee.base_amount)} x {fmtPct(fee.rate * 100)}</span>
+                  <span className="font-bold text-white/95">= {fmtUsd(fee.fee)}</span>
+                </div>
               </div>
+              {fee.line_items.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {fee.line_items.map((item, i) => (
+                    <div key={i} className="flex justify-between text-xs text-white/50">
+                      <span>{item.label}</span>
+                      <span>{fmtUsd(item.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            {fee.line_items.length > 0 && (
-              <div className="mt-2 space-y-1">
-                {fee.line_items.map((item, i) => (
-                  <div key={i} className="flex justify-between text-xs text-gray-500">
-                    <span>{item.label}</span>
-                    <span>{fmtUsd(item.amount)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-        <div className="flex items-center justify-between rounded-lg bg-gray-900 p-4 text-white">
-          <span className="font-semibold">Total Fee</span>
-          <div className="text-right">
-            <span className="text-xl font-bold">{fmtUsd(billing.total_fee)}</span>
-            <span className="ml-3 rounded-full bg-green-500/20 px-2.5 py-0.5 text-xs font-medium text-green-300">
-              {billing.roi_on_fee.toFixed(1)}x ROI on fee
-            </span>
+          ))}
+          <div className="flex items-center justify-between rounded-lg bg-gradient-to-r from-[#00F5FF]/20 to-[#7000FF]/20 border border-[#00F5FF]/30 p-4 text-white">
+            <span className="font-semibold">Total Fee</span>
+            <div className="text-right">
+              <span className="text-xl font-bold">{fmtUsd(billing.total_fee)}</span>
+              <span className="ml-3 rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-xs font-medium text-emerald-300">
+                {billing.roi_on_fee.toFixed(1)}x ROI on fee
+              </span>
+            </div>
           </div>
         </div>
-      </div>
-    </Card>
+      </GlassCardContent>
+    </GlassCard>
   );
 }
 
@@ -400,12 +413,11 @@ export function BillingPage() {
 
   useEffect(() => { void loadData(); }, [loadData]);
 
-  // Aggregate billing stats from history
   const totalFees = history.filter(h => h.status === 'accepted').reduce((sum, h) => sum + h.total_fee, 0);
   const totalValue = history.filter(h => h.status === 'accepted').reduce((sum, h) => sum + h.value_delivered, 0);
-  const avgRoi = totalFees > 0 ? totalValue / totalFees : 0;
+  
+  const avgRoi = totalFees > 0 ? totalValue / totalFees : 0; void avgRoi;
 
-  // Active billing = from scorecard if available, otherwise from calculator
   const activeBilling = billing ?? calcResult;
 
   if (loading) {
@@ -416,133 +428,140 @@ export function BillingPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">Billing</h2>
-        <p className="mt-1 text-sm text-gray-500">
+        <h2 className="text-2xl font-bold text-white">Billing</h2>
+        <p className="mt-1 text-sm text-white/50">
           Outcome-based pricing: OpenAgency earns only when you save or earn more.
         </p>
       </div>
 
       {/* Summary Metrics */}
       {activeBilling && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <MetricCard
+        <StatsGrid columns={4}>
+          <StatCard
             label="Current Fee"
             value={fmtUsd(activeBilling.total_fee)}
-            sub={`${activeBilling.tier.label} tier`}
-            color="blue"
           />
-          <MetricCard
+          <StatCard
             label="Value Delivered"
             value={fmtUsd(activeBilling.value_delivered)}
-            sub={`${activeBilling.roi_on_fee.toFixed(1)}x ROI`}
-            color="green"
           />
-          <MetricCard
+          <StatCard
             label="Fee % of Spend"
             value={fmtPct(activeBilling.fee_as_pct_of_spend)}
-            sub="outcome-based"
-            color="gray"
           />
-          <MetricCard
+          <StatCard
             label="Total Accepted Fees"
             value={fmtUsd(totalFees)}
-            sub={avgRoi > 0 ? `${avgRoi.toFixed(1)}x avg ROI` : 'no accepted scorecards yet'}
-            color="yellow"
           />
-        </div>
+        </StatsGrid>
       )}
 
       {/* How It Works */}
-      <Card title="How Outcome-Based Billing Works">
-        <div className="space-y-4 text-sm text-gray-600">
-          <p>
-            OpenAgency charges three fee streams, each a percentage of the <strong>value we deliver</strong> — not your ad spend.
-            If we find no waste, generate no lift, and create no efficiency gains, you pay nothing.
-          </p>
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-              <h4 className="font-semibold text-green-700">Recovery Fee</h4>
-              <p className="mt-1 text-xs text-green-600">
-                % of waste eliminated: budget waste, quality waste, supply chain savings, CPA overshoot, measurement waste.
-              </p>
-            </div>
-            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
-              <h4 className="font-semibold text-zinc-700">Lift Fee</h4>
-              <p className="mt-1 text-xs text-zinc-500">
-                % of performance improvement: KPI lift, ROAS improvement, ROI improvement, Media-Driven Sales.
-              </p>
-            </div>
-            <div className="rounded-lg border border-purple-200 bg-purple-50 p-4">
-              <h4 className="font-semibold text-purple-700">Efficiency Fee</h4>
-              <p className="mt-1 text-xs text-purple-600">
-                % of execution savings: CPC reduction, CPM optimization, CTR revenue impact, viewability, brand safety.
-              </p>
+      <GlassCard>
+        <GlassCardHeader>
+          <GlassCardTitle>How Outcome-Based Billing Works</GlassCardTitle>
+        </GlassCardHeader>
+        <GlassCardContent>
+          <div className="space-y-4 text-sm text-white/70">
+            <p>
+              OpenAgency charges three fee streams, each a percentage of the <strong className="text-white/95">value we deliver</strong> — not your ad spend.
+              If we find no waste, generate no lift, and create no efficiency gains, you pay nothing.
+            </p>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4">
+                <h4 className="font-semibold text-emerald-300">Recovery Fee</h4>
+                <p className="mt-1 text-xs text-emerald-300/70">
+                  % of waste eliminated: budget waste, quality waste, supply chain savings, CPA overshoot, measurement waste.
+                </p>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/5 p-4">
+                <h4 className="font-semibold text-white/95">Lift Fee</h4>
+                <p className="mt-1 text-xs text-white/50">
+                  % of performance improvement: KPI lift, ROAS improvement, ROI improvement, Media-Driven Sales.
+                </p>
+              </div>
+              <div className="rounded-lg border border-[#7000FF]/30 bg-[#7000FF]/10 p-4">
+                <h4 className="font-semibold text-purple-300">Efficiency Fee</h4>
+                <p className="mt-1 text-xs text-purple-300/70">
+                  % of execution savings: CPC reduction, CPM optimization, CTR revenue impact, viewability, brand safety.
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-      </Card>
+        </GlassCardContent>
+      </GlassCard>
 
       {/* Tier Structure */}
-      <Card title="Tier Structure">
-        <p className="mb-4 text-sm text-gray-500">
-          Recovery rates decrease as your ad spend increases. Lift and Efficiency rates are client-selectable between 0.5% and 1.5% (default 1.0%).
-        </p>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="pb-3 text-left font-semibold text-gray-900">Tier</th>
-                <th className="pb-3 text-left font-semibold text-gray-900">Monthly Spend</th>
-                <th className="pb-3 text-center font-semibold text-green-700">Recovery</th>
-                <th className="pb-3 text-center font-semibold text-zinc-700">Lift</th>
-                <th className="pb-3 text-center font-semibold text-purple-700">Efficiency</th>
-              </tr>
-            </thead>
-            <tbody>
-              {TIERS.map((t) => (
-                <tr
-                  key={t.tier}
-                  className={`border-b border-gray-50 ${activeBilling?.tier.tier === t.tier ? 'bg-zinc-50' : ''}`}
-                >
-                  <td className="py-3">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-gray-900">{t.label}</span>
-                      {activeBilling?.tier.tier === t.tier && (
-                        <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-xs font-medium text-zinc-700">Current</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="py-3 text-gray-600">{t.spend}</td>
-                  <td className="py-3 text-center font-medium text-green-600">{t.recovery}</td>
-                  <td className="py-3 text-center font-medium text-zinc-700">{t.lift}</td>
-                  <td className="py-3 text-center font-medium text-purple-600">{t.efficiency}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <GlassCard>
+        <GlassCardHeader>
+          <GlassCardTitle>Tier Structure</GlassCardTitle>
+        </GlassCardHeader>
+        <GlassCardContent>
+          <p className="mb-4 text-sm text-white/50">
+            Recovery rates decrease as your ad spend increases. Lift and Efficiency rates are client-selectable between 0.5% and 1.5% (default 1.0%).
+          </p>
+          <div className="overflow-x-auto">
+            <GlassTable>
+              <GlassTableHeader>
+                <GlassTableRow>
+                  <GlassTableHead>Tier</GlassTableHead>
+                  <GlassTableHead>Monthly Spend</GlassTableHead>
+                  <GlassTableHead className="text-center text-emerald-400">Recovery</GlassTableHead>
+                  <GlassTableHead className="text-center">Lift</GlassTableHead>
+                  <GlassTableHead className="text-center text-purple-400">Efficiency</GlassTableHead>
+                </GlassTableRow>
+              </GlassTableHeader>
+              <GlassTableBody>
+                {TIERS.map((t) => (
+                  <GlassTableRow
+                    key={t.tier}
+                    className={activeBilling?.tier.tier === t.tier ? 'bg-[#00F5FF]/5' : ''}
+                  >
+                    <GlassTableCell>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-white/95">{t.label}</span>
+                        {activeBilling?.tier.tier === t.tier && (
+                          <GlassBadge variant="info">Current</GlassBadge>
+                        )}
+                      </div>
+                    </GlassTableCell>
+                    <GlassTableCell className="text-white/70">{t.spend}</GlassTableCell>
+                    <GlassTableCell className="text-center font-medium text-emerald-400">{t.recovery}</GlassTableCell>
+                    <GlassTableCell className="text-center font-medium text-white/70">{t.lift}</GlassTableCell>
+                    <GlassTableCell className="text-center font-medium text-purple-400">{t.efficiency}</GlassTableCell>
+                  </GlassTableRow>
+                ))}
+              </GlassTableBody>
+            </GlassTable>
+          </div>
+        </GlassCardContent>
+      </GlassCard>
 
       {/* Tier Calculator */}
       <TierCalculator />
 
-      {/* Fee Breakdown — from scorecard or calculator */}
+      {/* Fee Breakdown */}
       {activeBilling && <FeeBreakdownCard billing={activeBilling} />}
 
-      {/* Billing Calculator Form — shown as empty state or always available */}
+      {/* Billing Calculator Form */}
       {!billing && (
         <BillingCalculatorForm onResult={setCalcResult} />
       )}
 
       {/* Billing History */}
       {history.length > 0 && (
-        <Card title="Billing History">
-          <div className="divide-y divide-gray-100">
-            {history.map((record) => (
-              <BillingHistoryRow key={record.id} record={record} />
-            ))}
-          </div>
-        </Card>
+        <GlassCard>
+          <GlassCardHeader>
+            <GlassCardTitle>Billing History</GlassCardTitle>
+          </GlassCardHeader>
+          <GlassCardContent>
+            <div className="divide-y divide-white/5">
+              {history.map((record) => (
+                <BillingHistoryRow key={record.id} record={record} />
+              ))}
+            </div>
+          </GlassCardContent>
+        </GlassCard>
       )}
     </div>
   );

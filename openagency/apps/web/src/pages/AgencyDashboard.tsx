@@ -34,10 +34,10 @@ function ProgressBar({ used, limit, color, label }: { used: number; limit: numbe
   const pct = limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
   const barColor = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : color;
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5">
-      <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">{label}</p>
-      <p className="mt-2 text-2xl font-bold text-zinc-900">{used} <span className="text-sm font-normal text-gray-400">/ {limit}</span></p>
-      <div className="mt-2 h-2 w-full rounded-full bg-gray-100">
+    <div className="rounded-xl border border-white/10 bg-white/5 p-5">
+      <p className="text-xs font-semibold uppercase tracking-wider text-white/50">{label}</p>
+      <p className="mt-2 text-2xl font-bold text-white/95">{used} <span className="text-sm font-normal text-white/40">/ {limit}</span></p>
+      <div className="mt-2 h-2 w-full rounded-full bg-white/10">
         <div className="h-2 rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: barColor }} />
       </div>
     </div>
@@ -46,11 +46,11 @@ function ProgressBar({ used, limit, color, label }: { used: number; limit: numbe
 
 function StatCard({ label, value, Icon, color }: { label: string; value: string | number; Icon: React.ComponentType<{ className?: string }>; color: string }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5">
+    <div className="rounded-xl border border-white/10 bg-white/5 p-5">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">{label}</p>
-          <p className="mt-2 text-2xl font-bold text-zinc-900">{value}</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-white/50">{label}</p>
+          <p className="mt-2 text-2xl font-bold text-white/95">{value}</p>
         </div>
         <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${color}`}>
           <Icon className="h-5 w-5" />
@@ -61,12 +61,12 @@ function StatCard({ label, value, Icon, color }: { label: string; value: string 
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  completed: 'bg-emerald-100 text-emerald-700',
-  running: 'bg-blue-100 text-blue-700',
-  failed: 'bg-red-100 text-red-700',
-  pending: 'bg-amber-100 text-amber-700',
-  accepted: 'bg-emerald-100 text-emerald-700',
-  rejected: 'bg-red-100 text-red-700',
+  completed: 'bg-emerald-500/100/20 text-emerald-300',
+  running: 'bg-[#00F5FF]/20 text-[#00F5FF]',
+  failed: 'bg-red-100 text-red-400',
+  pending: 'bg-amber-500/100/20 text-amber-300',
+  accepted: 'bg-emerald-500/100/20 text-emerald-300',
+  rejected: 'bg-red-100 text-red-400',
 };
 
 const TABS = ['overview', 'runs', 'usage', 'scorecards'] as const;
@@ -100,24 +100,24 @@ export function AgencyDashboard() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-zinc-900">{overview?.agency_name ?? 'Agency Dashboard'}</h2>
-          <p className="text-sm text-gray-500">Your agency performance and usage</p>
+          <h2 className="text-2xl font-bold text-white/95">{overview?.agency_name ?? 'Agency Dashboard'}</h2>
+          <p className="text-sm text-white/50">Your agency performance and usage</p>
         </div>
-        <button onClick={() => void loadData()} className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50">
+        <button onClick={() => void loadData()} className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/60 hover:bg-white/5">
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
         </button>
       </div>
 
-      <div className="flex gap-1 border-b border-gray-200">
+      <div className="flex gap-1 border-b border-white/10">
         {TABS.map((t) => (
-          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === t ? 'border-[#02c98d] text-[#02c98d]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === t ? 'border-[#02c98d] text-[#02c98d]' : 'border-transparent text-white/50 hover:text-white/70'}`}>
             {TAB_LABELS[t]}
           </button>
         ))}
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-20"><RefreshCw className="h-6 w-6 animate-spin text-gray-400" /></div>
+        <div className="flex justify-center py-20"><RefreshCw className="h-6 w-6 animate-spin text-white/40" /></div>
       ) : (
         <>
           {tab === 'overview' && overview && (
@@ -125,13 +125,13 @@ export function AgencyDashboard() {
               <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
                 <ProgressBar used={overview.runs_used} limit={overview.runs_limit} color="#3b82f6" label="Pipeline Runs (this month)" />
                 <ProgressBar used={overview.assistant_sessions_used} limit={overview.assistant_sessions_limit} color="#8b5cf6" label="Assistant Sessions" />
-                <StatCard label="Brands" value={overview.brand_count} Icon={Building2} color="bg-blue-100 text-blue-600" />
-                <StatCard label="Connectors" value={overview.active_connectors} Icon={Plug} color="bg-emerald-100 text-emerald-600" />
-                <StatCard label="Total Runs" value={overview.total_runs} Icon={Zap} color="bg-amber-100 text-amber-600" />
-                <StatCard label="Scorecards" value={overview.total_scorecards} Icon={FileText} color="bg-violet-100 text-violet-600" />
+                <StatCard label="Brands" value={overview.brand_count} Icon={Building2} color="bg-[#00F5FF]/20 text-[#00F5FF]" />
+                <StatCard label="Connectors" value={overview.active_connectors} Icon={Plug} color="bg-emerald-500/100/20 text-emerald-300" />
+                <StatCard label="Total Runs" value={overview.total_runs} Icon={Zap} color="bg-amber-500/100/20 text-amber-300" />
+                <StatCard label="Scorecards" value={overview.total_scorecards} Icon={FileText} color="bg-violet-500/20 text-violet-300" />
               </div>
               {overview.last_run && (
-                <p className="text-xs text-gray-400">Last run: {fmtDate(overview.last_run)}</p>
+                <p className="text-xs text-white/40">Last run: {fmtDate(overview.last_run)}</p>
               )}
             </div>
           )}
@@ -152,12 +152,12 @@ export function AgencyDashboard() {
                   <TableRow key={i}>
                     <TableCell className="font-mono text-xs">{String(r['id'] ?? '').slice(0, 12)}...</TableCell>
                     <TableCell className="text-xs">{String(r['pipeline_id'] ?? '')}</TableCell>
-                    <TableCell><span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[String(r['status'])] ?? 'bg-gray-100 text-gray-600'}`}>{String(r['status'])}</span></TableCell>
-                    <TableCell className="text-xs text-gray-500">{fmtDate(String(r['started_at'] ?? ''))}</TableCell>
+                    <TableCell><span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[String(r['status'])] ?? 'bg-white/10 text-white/60'}`}>{String(r['status'])}</span></TableCell>
+                    <TableCell className="text-xs text-white/50">{fmtDate(String(r['started_at'] ?? ''))}</TableCell>
                     <TableCell className="text-xs">{fmtDuration(Number(r['total_duration_ms'] ?? 0))}</TableCell>
                   </TableRow>
                 ))}
-                {runs.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-gray-400 py-8">No pipeline runs yet</TableCell></TableRow>}
+                {runs.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-white/40 py-8">No pipeline runs yet</TableCell></TableRow>}
               </TableBody>
             </Table>
           )}
@@ -165,7 +165,7 @@ export function AgencyDashboard() {
           {tab === 'usage' && (
             <div className="space-y-4">
               {usage.length > 0 ? (
-                <div className="rounded-xl border border-gray-200 bg-white p-4">
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
                   <HighchartsReact highcharts={Highcharts} options={{
                     chart: { type: 'area', height: 280 },
                     title: { text: 'Daily Token Usage (30 days)', style: { fontSize: '14px' } },
@@ -181,7 +181,7 @@ export function AgencyDashboard() {
                   } satisfies Highcharts.Options} />
                 </div>
               ) : (
-                <p className="text-center text-sm text-gray-400 py-12">No usage data yet. Run your first pipeline to see metrics.</p>
+                <p className="text-center text-sm text-white/40 py-12">No usage data yet. Run your first pipeline to see metrics.</p>
               )}
             </div>
           )}
@@ -205,12 +205,12 @@ export function AgencyDashboard() {
                       <TableCell className="font-mono text-xs">{String(s['id'] ?? '').slice(0, 12)}...</TableCell>
                       <TableCell>{fmtUsd(Number(s['ad_spend'] ?? 0))}</TableCell>
                       <TableCell className="font-semibold">{fmtUsd(Number(billing['total_fee'] ?? 0))}</TableCell>
-                      <TableCell><span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[String(s['status'])] ?? 'bg-gray-100 text-gray-600'}`}>{String(s['status'])}</span></TableCell>
-                      <TableCell className="text-xs text-gray-500">{fmtDate(String(s['created_at'] ?? ''))}</TableCell>
+                      <TableCell><span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[String(s['status'])] ?? 'bg-white/10 text-white/60'}`}>{String(s['status'])}</span></TableCell>
+                      <TableCell className="text-xs text-white/50">{fmtDate(String(s['created_at'] ?? ''))}</TableCell>
                     </TableRow>
                   );
                 })}
-                {scorecards.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-gray-400 py-8">No scorecards yet</TableCell></TableRow>}
+                {scorecards.length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-white/40 py-8">No scorecards yet</TableCell></TableRow>}
               </TableBody>
             </Table>
           )}

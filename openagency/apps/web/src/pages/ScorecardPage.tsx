@@ -1,10 +1,11 @@
-// ─── Recovery Scorecard Page ────────────────────────────────────────
+// ─── Recovery Scorecard Page (Glassmorphism) ────────────────────────
 // The core A2H surface: humans see value delivered + fee, then accept/reject.
 
 import { useState, useEffect, useCallback } from 'react';
 import { Card, MetricCard } from '../components/Card';
 import { Spinner } from '../components/Spinner';
 import { AgentChat } from '../components/AgentChat';
+import { GlassBadge } from '../components/ui/glass';
 import type { ScorecardRecord, ScorecardSummary, FeeBreakdown } from '../api/scorecard';
 import {
   getLatestScorecard,
@@ -32,9 +33,15 @@ function fmtRate(n: number): string {
 
 function FeeBreakdownCard({ fee, color }: { fee: FeeBreakdown; color: string }) {
   const colorMap: Record<string, string> = {
-    green: 'border-green-200 bg-green-50',
-    blue: 'border-zinc-200 bg-zinc-50',
-    purple: 'border-purple-200 bg-purple-50',
+    green: 'border-emerald-400/20 bg-emerald-500/10',
+    blue: 'border-[#00F5FF]/20 bg-[#00F5FF]/10',
+    purple: 'border-[#7000FF]/20 bg-[#7000FF]/10',
+  };
+
+  const accentMap: Record<string, string> = {
+    green: 'text-emerald-400',
+    blue: 'text-[#00F5FF]',
+    purple: 'text-[#a78bfa]',
   };
 
   const headerMap: Record<string, string> = {
@@ -44,23 +51,24 @@ function FeeBreakdownCard({ fee, color }: { fee: FeeBreakdown; color: string }) 
   };
 
   return (
-    <div className={`rounded-xl border p-5 ${colorMap[color] ?? 'border-gray-200 bg-gray-50'}`}>
+    <div className={`relative overflow-hidden rounded-xl border backdrop-blur-sm p-5 transition-all hover:bg-white/[0.03] ${colorMap[color] ?? 'border-white/[0.10] bg-white/[0.05]'}`}>
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold text-gray-900">{headerMap[fee.category]}</h4>
-        <span className="text-xs text-gray-500">Rate: {fmtRate(fee.rate)}</span>
+        <h4 className="text-sm font-semibold text-white/95">{headerMap[fee.category]}</h4>
+        <span className="text-xs text-white/40">Rate: {fmtRate(fee.rate)}</span>
       </div>
 
       <div className="mt-3 flex items-baseline gap-2">
-        <span className="text-2xl font-bold text-gray-900">{fmtUsd(fee.fee)}</span>
-        <span className="text-sm text-gray-500">on {fmtUsd(fee.base_amount)} value</span>
+        <span className={`text-2xl font-bold ${accentMap[color] ?? 'text-white/95'}`}>{fmtUsd(fee.fee)}</span>
+        <span className="text-sm text-white/40">on {fmtUsd(fee.base_amount)} value</span>
       </div>
 
       {fee.line_items.length > 0 && (
         <div className="mt-3 space-y-1.5">
           {fee.line_items.map((item, i) => (
             <div key={i} className="flex items-center justify-between text-xs">
-              <span className="text-gray-600">{item.label}</span>
-              <span className="font-medium text-gray-900">{fmtUsd(item.amount)}</span>
+              <span className="text-white/50">{item.label}</span>
+              <span className="font-medium text-white/80">{fmtUsd(item.amount)}</span>
             </div>
           ))}
         </div>
@@ -72,44 +80,44 @@ function FeeBreakdownCard({ fee, color }: { fee: FeeBreakdown; color: string }) 
 // ─── MDS Confidence Badge ───────────────────────────────────────────
 
 function ConfidenceBadge({ confidence, method }: { confidence: number; method: string }) {
-  const color =
-    confidence >= 0.8 ? 'bg-green-100 text-green-700' :
-    confidence >= 0.5 ? 'bg-yellow-100 text-yellow-700' :
-    'bg-red-100 text-red-700';
+  const variant =
+    confidence >= 0.8 ? 'success' as const :
+    confidence >= 0.5 ? 'warning' as const :
+    'destructive' as const;
 
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${color}`}>
+    <GlassBadge variant={variant}>
       {method} ({(confidence * 100).toFixed(0)}%)
-    </span>
+    </GlassBadge>
   );
 }
 
 // ─── Scorecard History Row ──────────────────────────────────────────
 
 function HistoryRow({ record }: { record: ScorecardSummary }) {
-  const statusColor: Record<string, string> = {
-    pending: 'bg-yellow-100 text-yellow-700',
-    accepted: 'bg-green-100 text-green-700',
-    rejected: 'bg-red-100 text-red-700',
+  const statusVariant: Record<string, 'warning' | 'success' | 'destructive'> = {
+    pending: 'warning',
+    accepted: 'success',
+    rejected: 'destructive',
   };
 
   return (
-    <div className="flex items-center gap-4 border-b border-gray-100 py-3 last:border-b-0">
+    <div className="flex items-center gap-4 border-b border-white/[0.06] py-3 last:border-b-0">
       <div className="flex-1">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-900">{fmtUsd(record.ad_spend)} spend</span>
-          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusColor[record.status] ?? ''}`}>
+          <span className="text-sm font-medium text-white/95">{fmtUsd(record.ad_spend)} spend</span>
+          <GlassBadge variant={statusVariant[record.status] ?? 'default'}>
             {record.status}
-          </span>
-          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">{record.tier}</span>
+          </GlassBadge>
+          <GlassBadge variant="default">{record.tier}</GlassBadge>
         </div>
-        <p className="mt-0.5 text-xs text-gray-500">
+        <p className="mt-0.5 text-xs text-white/40">
           {new Date(record.created_at).toLocaleString()}
         </p>
       </div>
       <div className="text-right">
-        <p className="text-sm font-semibold text-gray-900">{fmtUsd(record.total_fee)}</p>
-        <p className="text-xs text-gray-500">{fmtUsd(record.value_delivered)} value | {record.roi_on_fee.toFixed(1)}x ROI</p>
+        <p className="text-sm font-semibold text-white/95">{fmtUsd(record.total_fee)}</p>
+        <p className="text-xs text-white/40">{fmtUsd(record.value_delivered)} value | {record.roi_on_fee.toFixed(1)}x ROI</p>
       </div>
     </div>
   );
@@ -174,8 +182,8 @@ export function ScorecardPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">Recovery Scorecard</h2>
-        <p className="mt-1 text-sm text-gray-500">
+        <h2 className="text-2xl font-bold text-white/95">Recovery Scorecard</h2>
+        <p className="mt-1 text-sm text-white/50">
           Value delivered by OpenAgency engines and outcome-based billing transparency.
         </p>
       </div>
@@ -183,8 +191,8 @@ export function ScorecardPage() {
       {error && !scorecard && (
         <Card>
           <div className="py-8 text-center">
-            <p className="text-sm text-gray-500">{error}</p>
-            <p className="mt-2 text-xs text-gray-400">
+            <p className="text-sm text-white/50">{error}</p>
+            <p className="mt-2 text-xs text-white/30">
               Use POST /v1/scorecard/run or POST /v1/scorecard/compute to generate a scorecard.
             </p>
           </div>
@@ -223,7 +231,7 @@ export function ScorecardPage() {
 
           {/* Fee breakdown */}
           <div>
-            <h3 className="mb-3 text-lg font-semibold text-gray-900">Fee Breakdown</h3>
+            <h3 className="mb-3 text-lg font-semibold text-white/95">Fee Breakdown</h3>
             <div className="grid gap-4 lg:grid-cols-3">
               <FeeBreakdownCard fee={scorecard.billing.recovery_fee} color="green" />
               <FeeBreakdownCard fee={scorecard.billing.lift_fee} color="blue" />
@@ -236,22 +244,22 @@ export function ScorecardPage() {
             <Card title="Media-Driven Sales Triangulation">
               <div className="flex flex-wrap items-center gap-4">
                 <div>
-                  <p className="text-xs text-gray-500">Attribution Revenue</p>
-                  <p className="text-lg font-bold text-gray-900">
+                  <p className="text-xs text-white/40">Attribution Revenue</p>
+                  <p className="text-lg font-bold text-white/95">
                     {fmtUsd(scorecard.billing.media_driven_sales.attribution_revenue)}
                   </p>
                 </div>
-                <div className="text-gray-300">+</div>
+                <div className="text-white/20">+</div>
                 <div>
-                  <p className="text-xs text-gray-500">Modeled Contribution</p>
-                  <p className="text-lg font-bold text-gray-900">
+                  <p className="text-xs text-white/40">Modeled Contribution</p>
+                  <p className="text-lg font-bold text-white/95">
                     {fmtUsd(scorecard.billing.media_driven_sales.modeled_contribution)}
                   </p>
                 </div>
-                <div className="text-gray-300">=</div>
+                <div className="text-white/20">=</div>
                 <div>
-                  <p className="text-xs text-gray-500">Final Value</p>
-                  <p className="text-lg font-bold text-green-600">
+                  <p className="text-xs text-white/40">Final Value</p>
+                  <p className="text-lg font-bold text-emerald-400">
                     {fmtUsd(scorecard.billing.media_driven_sales.final_value)}
                   </p>
                 </div>
@@ -267,7 +275,7 @@ export function ScorecardPage() {
           {scorecard.status === 'pending' && (
             <Card title="Decision">
               <div className="space-y-4">
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-white/60">
                   Review the value delivered above. Accept to confirm and proceed with billing,
                   or reject to provide feedback for re-analysis.
                 </p>
@@ -275,21 +283,21 @@ export function ScorecardPage() {
                   value={feedback}
                   onChange={(e) => setFeedback(e.target.value)}
                   placeholder="Optional feedback (required for rejection)..."
-                  className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 placeholder:text-gray-400 focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400"
+                  className="w-full rounded-lg border border-white/[0.10] bg-white/[0.05] backdrop-blur-sm px-4 py-2.5 text-sm text-white/90 placeholder:text-white/25 focus:border-[#00F5FF]/30 focus:outline-none focus:ring-1 focus:ring-[#00F5FF]/30"
                   rows={3}
                 />
                 <div className="flex gap-3">
                   <button
                     onClick={() => handleAction('accepted')}
                     disabled={actionLoading}
-                    className="rounded-lg bg-green-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+                    className="rounded-lg bg-emerald-500/80 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:opacity-50 shadow-[0_0_15px_rgba(16,185,129,0.2)]"
                   >
                     {actionLoading ? 'Processing...' : 'Accept Scorecard'}
                   </button>
                   <button
                     onClick={() => handleAction('rejected')}
                     disabled={actionLoading || !feedback.trim()}
-                    className="rounded-lg bg-red-600 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                    className="rounded-lg bg-red-500/80 px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-red-500 disabled:opacity-50"
                   >
                     {actionLoading ? 'Processing...' : 'Reject & Request Re-analysis'}
                   </button>
@@ -302,17 +310,11 @@ export function ScorecardPage() {
           {scorecard.status !== 'pending' && (
             <Card>
               <div className="flex items-center gap-3">
-                <span
-                  className={`rounded-full px-3 py-1 text-sm font-medium ${
-                    scorecard.status === 'accepted'
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-red-100 text-red-700'
-                  }`}
-                >
+                <GlassBadge variant={scorecard.status === 'accepted' ? 'success' : 'destructive'} className="px-3 py-1 text-sm">
                   {scorecard.status === 'accepted' ? 'Accepted' : 'Rejected'}
-                </span>
+                </GlassBadge>
                 {scorecard.feedback && (
-                  <p className="text-sm text-gray-600">Feedback: {scorecard.feedback}</p>
+                  <p className="text-sm text-white/60">Feedback: {scorecard.feedback}</p>
                 )}
               </div>
             </Card>
@@ -321,8 +323,8 @@ export function ScorecardPage() {
           {/* Agent Chat — show after rejection for feedback loop */}
           {scorecard.status === 'rejected' && (
             <div>
-              <h3 className="mb-3 text-lg font-semibold text-gray-900">Re-analysis Feedback</h3>
-              <p className="mb-3 text-sm text-gray-500">
+              <h3 className="mb-3 text-lg font-semibold text-white/95">Re-analysis Feedback</h3>
+              <p className="mb-3 text-sm text-white/50">
                 Send feedback to guide the agent's next analysis. The agent will re-run with your input.
               </p>
               <AgentChat
@@ -337,7 +339,7 @@ export function ScorecardPage() {
       {/* History */}
       {history.length > 0 && (
         <Card title="Scorecard History">
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-white/[0.06]">
             {history.map((record) => (
               <HistoryRow key={record.id} record={record} />
             ))}

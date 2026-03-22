@@ -198,8 +198,8 @@ function ConvSidebarItem({
       className={cn(
         'group relative flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs cursor-pointer transition-colors',
         isActive
-          ? 'bg-[#02c98d]/10 text-[#02c98d]'
-          : 'text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-200',
+          ? 'bg-[#00F5FF]/10 text-[#00F5FF]'
+          : 'text-white/50 hover:bg-white/[0.05] hover:text-white/80',
       )}
       onClick={() => !renaming && onSelect(conv.id)}
       onMouseEnter={() => setHovered(true)}
@@ -219,7 +219,7 @@ function ConvSidebarItem({
           }}
           onBlur={() => onRenameSubmit(conv.id)}
           onClick={(e) => e.stopPropagation()}
-          className="flex-1 min-w-0 bg-transparent text-xs text-white outline-none border-b border-zinc-600 pb-0.5"
+          className="flex-1 min-w-0 bg-transparent text-xs text-white outline-none border-b border-white/20 pb-0.5"
         />
       ) : (
         <span className="flex-1 min-w-0 truncate">{conv.title}</span>
@@ -230,21 +230,21 @@ function ConvSidebarItem({
         <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={() => onRenameStart(conv.id, conv.title)}
-            className="rounded p-0.5 text-zinc-500 transition-colors hover:text-white"
+            className="rounded p-0.5 text-white/30 transition-colors hover:text-white"
             title="Rename"
           >
             <Pencil className="h-3 w-3" />
           </button>
           <button
             onClick={() => onStar(conv.id, conv.starred)}
-            className={cn('rounded p-0.5 transition-colors', conv.starred ? 'text-yellow-400 hover:text-yellow-300' : 'text-zinc-500 hover:text-yellow-400')}
+            className={cn('rounded p-0.5 transition-colors', conv.starred ? 'text-yellow-400 hover:text-yellow-300' : 'text-white/30 hover:text-yellow-400')}
             title={conv.starred ? 'Unstar' : 'Star'}
           >
             <Star className={cn('h-3 w-3', conv.starred && 'fill-yellow-400')} />
           </button>
           <button
             onClick={() => onDelete(conv.id)}
-            className="rounded p-0.5 text-zinc-500 transition-colors hover:text-red-400"
+            className="rounded p-0.5 text-white/30 transition-colors hover:text-red-400"
             title="Delete"
           >
             <Trash2 className="h-3 w-3" />
@@ -368,7 +368,7 @@ function AssistantNav({
         onClick={handleToggle}
         className={cn(
           'plinth-nav-item w-full',
-          isOnAssistant && 'bg-[rgba(2,201,141,0.12)] text-[#02c98d]',
+          isOnAssistant && 'bg-[rgba(0,245,255,0.12)] text-[#00F5FF]',
         )}
       >
         <Bot className="h-5 w-5 shrink-0" />
@@ -386,7 +386,7 @@ function AssistantNav({
           {/* New conversation */}
           <button
             onClick={handleNew}
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-zinc-500 transition-colors hover:bg-white/[0.05] hover:text-zinc-300"
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-white/30 transition-colors hover:bg-white/[0.05] hover:text-white/60"
           >
             <Plus className="h-3 w-3" />
             <span>New conversation</span>
@@ -427,7 +427,7 @@ function AssistantNav({
           ))}
 
           {conversations.length === 0 && (
-            <p className="px-2 py-1 text-[10px] text-zinc-600">No conversations yet</p>
+            <p className="px-2 py-1 text-[10px] text-white/20">No conversations yet</p>
           )}
         </div>
       )}
@@ -477,7 +477,7 @@ function NavGroupSection({
           ) : (
             <button
               onClick={() => setExpanded(!expanded)}
-              className={cn('plinth-nav-item plinth-nav-collapsed', isActive && 'text-[#02c98d]')}
+              className={cn('plinth-nav-item plinth-nav-collapsed', isActive && 'text-[#00F5FF]')}
             >
               <group.Icon className="h-5 w-5 shrink-0" />
             </button>
@@ -501,7 +501,7 @@ function NavGroupSection({
             to={`${base}${group.path}`}
             className={cn(
               'plinth-nav-item flex-1',
-              (isParentActive || isChildActive) && 'bg-[rgba(2,201,141,0.12)] text-[#02c98d]',
+              (isParentActive || isChildActive) && 'bg-[rgba(0,245,255,0.12)] text-[#00F5FF]',
             )}
           >
             <group.Icon className="h-5 w-5 shrink-0" />
@@ -509,7 +509,7 @@ function NavGroupSection({
           </NavLink>
           <button
             onClick={handleClick}
-            className="p-1 text-zinc-500 hover:text-zinc-300 transition-colors"
+            className="p-1 text-white/30 hover:text-white/70 transition-colors"
           >
             {expanded ? (
               <ChevronDown className="h-3.5 w-3.5" />
@@ -524,7 +524,7 @@ function NavGroupSection({
           onClick={handleClick}
           className={cn(
             'plinth-nav-item w-full',
-            isActive && 'text-[#02c98d]',
+            isActive && 'text-[#00F5FF]',
           )}
         >
           <group.Icon className="h-5 w-5 shrink-0" />
@@ -633,23 +633,23 @@ export function Layout() {
   );
 
   return (
-    <div className="flex h-screen overflow-hidden bg-zinc-50" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+    <div className="flex h-screen overflow-hidden bg-[#0A0A0F]" style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
       {/* ── Sidebar ───────────────────────────────────── */}
       <aside
         className={cn(
-          'relative flex flex-col shrink-0 bg-zinc-950 transition-[width] duration-300 ease-in-out',
+          'relative flex flex-col shrink-0 bg-white/[0.03] backdrop-blur-xl border-r border-white/[0.06] transition-[width] duration-300 ease-in-out',
           collapsed ? 'w-[68px]' : 'w-60',
         )}
       >
         {/* Logo */}
         <div className="flex h-16 shrink-0 items-center border-b border-white/[0.06] px-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-zinc-950">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#00F5FF] text-[#0A0A0F]">
             <PlinthLogo />
           </div>
           {!collapsed && (
             <div className="ml-3 flex flex-col leading-none min-w-0">
               <span className="text-[15px] font-bold text-white tracking-tight whitespace-nowrap">Plinth</span>
-              <span className="text-[10px] text-zinc-500 font-medium tracking-widest uppercase whitespace-nowrap">by Polanyi</span>
+              <span className="text-[10px] text-white/30 font-medium tracking-widest uppercase whitespace-nowrap">by Polanyi</span>
             </div>
           )}
         </div>
@@ -657,7 +657,7 @@ export function Layout() {
         {/* Collapse toggle */}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="absolute -right-3 top-[72px] z-10 flex h-6 w-6 items-center justify-center rounded-full border border-zinc-700 bg-zinc-950 text-zinc-400 hover:text-white shadow-md transition-colors"
+          className="absolute -right-3 top-[72px] z-10 flex h-6 w-6 items-center justify-center rounded-full border border-white/[0.10] bg-[#0A0A0F] text-white/40 hover:text-white hover:border-[#00F5FF]/50 shadow-md transition-colors"
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
@@ -712,7 +712,7 @@ export function Layout() {
                 <TooltipTrigger asChild>
                   <button
                     onClick={handleSignOut}
-                    className="flex w-full items-center justify-center rounded-lg p-2.5 text-zinc-400 hover:bg-white/[0.06] hover:text-red-400 transition-colors"
+                    className="flex w-full items-center justify-center rounded-lg p-2.5 text-white/40 hover:bg-white/[0.06] hover:text-red-400 transition-colors"
                   >
                     <LogOut className="h-5 w-5" />
                   </button>
@@ -728,14 +728,14 @@ export function Layout() {
                     <AvatarFallback>{initials}</AvatarFallback>
                   </Avatar>
                   <div className="flex-1 text-left min-w-0">
-                    <p className="text-sm font-medium text-white truncate leading-none">
+                    <p className="text-sm font-medium text-white/95 truncate leading-none">
                       {user?.name || 'Admin'}
                     </p>
-                    <p className="mt-0.5 text-xs text-zinc-500 truncate leading-none">
+                    <p className="mt-0.5 text-xs text-white/40 truncate leading-none">
                       {user?.email || '—'}
                     </p>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-zinc-600 shrink-0" />
+                  <ChevronRight className="h-4 w-4 text-white/20 shrink-0" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent side="right" align="end" className="w-56">
@@ -763,9 +763,9 @@ export function Layout() {
 
       {/* ── Main content ─────────────────────────────── */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-16 shrink-0 items-center gap-4 border-b border-zinc-200 bg-white px-6">
+        <header className="flex h-16 shrink-0 items-center gap-4 border-b border-white/[0.06] bg-white/[0.03] backdrop-blur-xl px-6">
           <div className="flex-1 min-w-0">
-            <h1 className="text-base font-semibold text-zinc-900 truncate">
+            <h1 className="text-base font-semibold text-white/95 truncate">
               {getPageTitle(pathname)}
             </h1>
           </div>

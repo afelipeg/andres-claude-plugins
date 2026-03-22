@@ -1,4 +1,4 @@
-// ─── Agent Row ─────────────────────────────────────────────────────
+// ─── Agent Row (Glassmorphism) ─────────────────────────────────────
 
 import { StatusBadge } from './StatusBadge';
 import type { AgentState } from '../api/agents';
@@ -32,14 +32,14 @@ export function AgentRow({ agent, onRefresh }: AgentRowProps) {
   };
 
   return (
-    <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-3">
+    <div className="flex items-center justify-between rounded-lg border border-white/[0.10] bg-white/[0.05] backdrop-blur-xl px-4 py-3 transition-all duration-300 hover:border-white/[0.15] hover:bg-white/[0.07]">
       <div className="flex items-center gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-gray-900 text-xs font-bold text-white">
+        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-white/[0.10] text-xs font-bold text-[#00F5FF]">
           {label.charAt(0)}
         </div>
         <div>
-          <p className="text-sm font-medium text-gray-900">{label}</p>
-          <p className="text-xs text-gray-500">{agent.cycles_completed} cycles</p>
+          <p className="text-sm font-medium text-white/95">{label}</p>
+          <p className="text-xs text-white/50">{agent.cycles_completed} cycles</p>
         </div>
       </div>
       <div className="flex items-center gap-2">
@@ -48,7 +48,7 @@ export function AgentRow({ agent, onRefresh }: AgentRowProps) {
           {canStart && (
             <button
               onClick={() => handleAction(startAgent)}
-              className="rounded px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-50"
+              className="rounded px-2 py-1 text-xs font-medium text-emerald-400 hover:bg-emerald-500/10 transition-colors"
             >
               Start
             </button>
@@ -56,7 +56,7 @@ export function AgentRow({ agent, onRefresh }: AgentRowProps) {
           {canPause && (
             <button
               onClick={() => handleAction(pauseAgent)}
-              className="rounded px-2 py-1 text-xs font-medium text-yellow-700 hover:bg-yellow-50"
+              className="rounded px-2 py-1 text-xs font-medium text-amber-400 hover:bg-amber-500/10 transition-colors"
             >
               Pause
             </button>
@@ -64,7 +64,7 @@ export function AgentRow({ agent, onRefresh }: AgentRowProps) {
           {canStop && (
             <button
               onClick={() => handleAction(stopAgent)}
-              className="rounded px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+              className="rounded px-2 py-1 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
             >
               Stop
             </button>

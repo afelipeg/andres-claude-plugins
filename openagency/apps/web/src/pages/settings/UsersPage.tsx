@@ -2,19 +2,19 @@
 
 import { useState, useEffect, FormEvent } from 'react';
 import { UserPlus, ChevronDown } from 'lucide-react';
-import { Button } from '../../components/ui/button';
-import { Badge } from '../../components/ui/badge';
-import { Card } from '../../components/ui/card';
-import { Input } from '../../components/ui/input';
-import { Select } from '../../components/ui/select';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../../components/ui/table';
+  GlassCard,
+  GlassCardContent,
+  GlassButton,
+  GlassInput,
+  GlassBadge,
+  GlassTable,
+  GlassTableBody,
+  GlassTableCell,
+  GlassTableHead,
+  GlassTableHeader,
+  GlassTableRow,
+} from '../../components/ui/glass';
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 
@@ -26,12 +26,6 @@ interface User {
   status: string;
   last_login_at?: string;
   created_at?: string;
-}
-
-function statusVariant(status: string) {
-  if (status === 'active') return 'success' as const;
-  if (status === 'invited') return 'info' as const;
-  return 'secondary' as const;
 }
 
 function roleLabel(role: string) {
@@ -86,10 +80,8 @@ export function UsersPage() {
 
   useEffect(() => { loadUsers(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load available advertisers when role changes to account_manager/engine_user
   useEffect(() => {
     if (inviteRole !== 'account_manager' && inviteRole !== 'engine_user') return;
-    // Fetch all advertiser scopes across platforms
     void fetch(`${API_URL}/v1/agency/connections`, { headers })
       .then((r) => r.ok ? r.json() : null)
       .then(async (data: { connections: Array<{ platform: string }> } | null) => {
@@ -126,7 +118,6 @@ export function UsersPage() {
     const data = await res.json();
     if (res.ok) {
       setMsg(`Invited ${inviteEmail}`);
-      // Build the accept-invite link from the token returned by the backend
       const token = data.token ?? data.invite_token ?? '';
       const acceptUrl = token
         ? `${window.location.origin}/accept-invite?token=${token}`
@@ -159,196 +150,177 @@ export function UsersPage() {
     }
   }
 
-  if (loading) return <p className="text-sm text-zinc-500">Loading...</p>;
+  if (loading) return <p className="text-sm text-white/50">Loading...</p>;
 
   return (
     <div className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-zinc-900">Team Members</h2>
-          <p className="text-sm text-zinc-500">{users.length} member{users.length !== 1 ? 's' : ''}</p>
+          <h2 className="text-lg font-semibold text-white">Team Members</h2>
+          <p className="text-sm text-white/50">{users.length} member{users.length !== 1 ? 's' : ''}</p>
         </div>
-        <Button
-          variant="dark"
+        <GlassButton
+          variant="primary"
           size="sm"
           onClick={() => setShowInvite(!showInvite)}
           className="gap-1.5"
         >
           {showInvite ? (
-            <>
-              <ChevronDown className="h-4 w-4" /> Cancel
-            </>
+            <><ChevronDown className="h-4 w-4" /> Cancel</>
           ) : (
-            <>
-              <UserPlus className="h-4 w-4" /> Invite User
-            </>
+            <><UserPlus className="h-4 w-4" /> Invite User</>
           )}
-        </Button>
+        </GlassButton>
       </div>
 
       {/* Alerts */}
       {msg && (
-        <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
-          {msg}
-        </div>
+        <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-4 py-3 text-sm text-emerald-300">{msg}</div>
       )}
       {error && (
-        <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
-          {error}
-        </div>
+        <div className="rounded-lg bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-300">{error}</div>
       )}
       {inviteLink && (
-        <div className="rounded-lg bg-zinc-50 border border-zinc-200 px-4 py-3 text-sm text-zinc-700">
+        <div className="rounded-lg bg-white/5 border border-white/10 px-4 py-3 text-sm text-white/70">
           <div className="flex items-center gap-3">
             <span className="shrink-0">Invite link:</span>
-            <code className="bg-zinc-100 px-1.5 py-0.5 rounded text-xs font-mono truncate flex-1">{inviteLink}</code>
+            <code className="bg-white/10 px-1.5 py-0.5 rounded text-xs font-mono truncate flex-1 text-white/90">{inviteLink}</code>
             <button
               onClick={() => void navigator.clipboard.writeText(inviteLink)}
-              className="shrink-0 rounded-md bg-zinc-900 px-2.5 py-1 text-xs font-medium text-white hover:bg-zinc-800"
+              className="shrink-0 rounded-md bg-[#00F5FF]/20 px-2.5 py-1 text-xs font-medium text-[#00F5FF] hover:bg-[#00F5FF]/30"
             >
               Copy
             </button>
           </div>
-          <p className="mt-1.5 text-xs text-zinc-500">Send this link to the invited user to set up their account.</p>
+          <p className="mt-1.5 text-xs text-white/40">Send this link to the invited user to set up their account.</p>
         </div>
       )}
 
       {/* Invite form */}
       {showInvite && (
-        <Card className="p-5">
-          <p className="text-sm font-semibold text-zinc-900 mb-4">New Invitation</p>
-          <form onSubmit={handleInvite} className="space-y-4">
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1.5">Email</label>
-                <Input
-                  type="email"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  required
-                  placeholder="user@agency.com"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1.5">Name</label>
-                <Input
-                  type="text"
-                  value={inviteName}
-                  onChange={(e) => setInviteName(e.target.value)}
-                  placeholder="Full name"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-500 mb-1.5">Role</label>
-                <Select
-                  value={inviteRole}
-                  onChange={(e) => { setInviteRole(e.target.value); setInviteJobTitle(''); setInviteAdvAccess([]); }}
-                >
-                  <option value="viewer">Viewer (read-only)</option>
-                  <option value="account_manager">Engine User</option>
-                  <option value="agency_admin">Admin</option>
-                </Select>
-              </div>
-            </div>
-
-            {/* Job title + advertiser access — shown for Engine User role */}
-            {(inviteRole === 'account_manager' || inviteRole === 'engine_user') && (
-              <div className="grid grid-cols-2 gap-4 border-t border-zinc-100 pt-4">
+        <GlassCard>
+          <GlassCardContent>
+            <p className="text-sm font-semibold text-white/95 mb-4">New Invitation</p>
+            <form onSubmit={handleInvite} className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-zinc-500 mb-1.5">Job Title</label>
-                  <Select value={inviteJobTitle} onChange={(e) => setInviteJobTitle(e.target.value)}>
-                    <option value="">Select...</option>
-                    {JOB_TITLES.map((t) => <option key={t} value={t}>{t}</option>)}
-                  </Select>
+                  <label className="block text-xs font-medium text-white/50 mb-1.5">Email</label>
+                  <GlassInput type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required placeholder="user@agency.com" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-zinc-500 mb-1.5">Advertiser Access</label>
-                  {availableAdvertisers.length > 0 ? (
-                    <div className="max-h-32 overflow-y-auto rounded-lg border border-zinc-200 p-2 space-y-1">
-                      {availableAdvertisers.map((adv) => (
-                        <label key={adv.id} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-zinc-50 rounded px-1 py-0.5">
-                          <input
-                            type="checkbox"
-                            checked={inviteAdvAccess.includes(adv.id)}
-                            onChange={(e) => {
-                              if (e.target.checked) setInviteAdvAccess([...inviteAdvAccess, adv.id]);
-                              else setInviteAdvAccess(inviteAdvAccess.filter((a) => a !== adv.id));
-                            }}
-                            className="h-3.5 w-3.5 rounded border-zinc-300"
-                          />
-                          <span className="text-zinc-700 truncate">{adv.name}</span>
-                        </label>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-zinc-400 py-2">No advertisers configured yet. Connect a platform first.</p>
-                  )}
+                  <label className="block text-xs font-medium text-white/50 mb-1.5">Name</label>
+                  <GlassInput type="text" value={inviteName} onChange={(e) => setInviteName(e.target.value)} placeholder="Full name" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-white/50 mb-1.5">Role</label>
+                  <select
+                    value={inviteRole}
+                    onChange={(e) => { setInviteRole(e.target.value); setInviteJobTitle(''); setInviteAdvAccess([]); }}
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/95 focus:border-[#00F5FF]/50 focus:outline-none"
+                  >
+                    <option value="viewer" className="bg-[#0A0A0F]">Viewer (read-only)</option>
+                    <option value="account_manager" className="bg-[#0A0A0F]">Engine User</option>
+                    <option value="agency_admin" className="bg-[#0A0A0F]">Admin</option>
+                  </select>
                 </div>
               </div>
-            )}
 
-            <Button type="submit" variant="dark" size="sm">
-              Send Invite
-            </Button>
-          </form>
-        </Card>
+              {(inviteRole === 'account_manager' || inviteRole === 'engine_user') && (
+                <div className="grid grid-cols-2 gap-4 border-t border-white/10 pt-4">
+                  <div>
+                    <label className="block text-xs font-medium text-white/50 mb-1.5">Job Title</label>
+                    <select value={inviteJobTitle} onChange={(e) => setInviteJobTitle(e.target.value)} className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/95 focus:border-[#00F5FF]/50 focus:outline-none">
+                      <option value="" className="bg-[#0A0A0F]">Select...</option>
+                      {JOB_TITLES.map((t) => <option key={t} value={t} className="bg-[#0A0A0F]">{t}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-white/50 mb-1.5">Advertiser Access</label>
+                    {availableAdvertisers.length > 0 ? (
+                      <div className="max-h-32 overflow-y-auto rounded-lg border border-white/10 bg-white/5 p-2 space-y-1">
+                        {availableAdvertisers.map((adv) => (
+                          <label key={adv.id} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-white/5 rounded px-1 py-0.5">
+                            <input
+                              type="checkbox"
+                              checked={inviteAdvAccess.includes(adv.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) setInviteAdvAccess([...inviteAdvAccess, adv.id]);
+                                else setInviteAdvAccess(inviteAdvAccess.filter((a) => a !== adv.id));
+                              }}
+                              className="h-3.5 w-3.5 rounded border-white/30"
+                            />
+                            <span className="text-white/70 truncate">{adv.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-white/30 py-2">No advertisers configured yet. Connect a platform first.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <GlassButton type="submit" variant="primary" size="sm">Send Invite</GlassButton>
+            </form>
+          </GlassCardContent>
+        </GlassCard>
       )}
 
       {/* Users table */}
-      <Card className="overflow-hidden p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Last Login</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {users.map((user) => (
-              <TableRow key={user.id}>
-                <TableCell className="font-medium text-zinc-900">{user.name || '—'}</TableCell>
-                <TableCell className="text-zinc-600">{user.email}</TableCell>
-                <TableCell>
-                  <Badge variant="secondary" className="capitalize">
-                    {roleLabel(user.role)}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={statusVariant(user.status)} className="capitalize">
-                    {user.status}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-zinc-500">
-                  {user.last_login_at ? new Date(user.last_login_at).toLocaleDateString() : 'Never'}
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
-                    {user.status === 'active' && (
+      <GlassCard className="overflow-hidden">
+        <GlassCardContent className="p-0">
+          <GlassTable>
+            <GlassTableHeader>
+              <GlassTableRow>
+                <GlassTableHead>Name</GlassTableHead>
+                <GlassTableHead>Email</GlassTableHead>
+                <GlassTableHead>Role</GlassTableHead>
+                <GlassTableHead>Status</GlassTableHead>
+                <GlassTableHead>Last Login</GlassTableHead>
+                <GlassTableHead className="text-right">Actions</GlassTableHead>
+              </GlassTableRow>
+            </GlassTableHeader>
+            <GlassTableBody>
+              {users.map((user) => (
+                <GlassTableRow key={user.id}>
+                  <GlassTableCell className="font-medium text-white/95">{user.name || '--'}</GlassTableCell>
+                  <GlassTableCell className="text-white/70">{user.email}</GlassTableCell>
+                  <GlassTableCell>
+                    <GlassBadge className="capitalize">{roleLabel(user.role)}</GlassBadge>
+                  </GlassTableCell>
+                  <GlassTableCell>
+                    <GlassBadge variant={user.status === 'active' ? 'success' : user.status === 'invited' ? 'info' : 'default'} className="capitalize">
+                      {user.status}
+                    </GlassBadge>
+                  </GlassTableCell>
+                  <GlassTableCell className="text-white/50">
+                    {user.last_login_at ? new Date(user.last_login_at).toLocaleDateString() : 'Never'}
+                  </GlassTableCell>
+                  <GlassTableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      {user.status === 'active' && (
+                        <button
+                          onClick={() => handleDeactivate(user.id)}
+                          className="text-xs text-amber-400 hover:text-amber-300 font-medium"
+                        >
+                          Deactivate
+                        </button>
+                      )}
                       <button
-                        onClick={() => handleDeactivate(user.id)}
-                        className="text-xs text-amber-600 hover:text-amber-800 font-medium"
+                        onClick={() => handleDelete(user.id)}
+                        className="text-xs text-red-400 hover:text-red-300 font-medium"
                       >
-                        Deactivate
+                        Delete
                       </button>
-                    )}
-                    <button
-                      onClick={() => handleDelete(user.id)}
-                      className="text-xs text-red-600 hover:text-red-800 font-medium"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
+                    </div>
+                  </GlassTableCell>
+                </GlassTableRow>
+              ))}
+            </GlassTableBody>
+          </GlassTable>
+        </GlassCardContent>
+      </GlassCard>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { Card } from '../components/Card';
 import { ReportHistory } from '../components/ReportHistory';
 import { listEngines } from '../api/agency';
 import { runFullDemo, DEMO_AD_SPEND } from '../api/demo';
+import { GlassBadge } from '../components/ui/glass';
 
 const ENGINE_ICONS: Record<string, string> = {
   'leak-detector': 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z',
@@ -21,10 +22,10 @@ const ENGINE_ROUTES: Record<string, string> = {
 };
 
 const ENGINE_COLORS: Record<string, string> = {
-  'leak-detector': 'from-zinc-800 to-zinc-700',
-  'media-architect': 'from-zinc-700 to-zinc-600',
-  'campaign-ops': 'from-zinc-700 to-zinc-600',
-  'executive-bridge': 'from-zinc-800 to-zinc-700',
+  'leak-detector': 'from-[#00F5FF]/20 to-[#00F5FF]/5',
+  'media-architect': 'from-[#7000FF]/20 to-[#7000FF]/5',
+  'campaign-ops': 'from-[#FF00FF]/20 to-[#FF00FF]/5',
+  'executive-bridge': 'from-[#00F5FF]/20 to-[#7000FF]/5',
 };
 
 export function HomePage() {
@@ -71,21 +72,21 @@ export function HomePage() {
     <div className="space-y-8">
       {/* Onboarding banner — shown only if not completed */}
       {!onboarded && (
-        <div className="rounded-xl border border-[#02c98d]/30 bg-[#02c98d]/5 p-5 flex items-center justify-between">
+        <div className="rounded-xl border border-[#00F5FF]/20 bg-[#00F5FF]/5 backdrop-blur-sm p-5 flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-semibold text-gray-900">Get started with Plinth</h3>
-            <p className="mt-0.5 text-xs text-gray-600">Connect your ad platforms and run your first analysis in 3 simple steps.</p>
+            <h3 className="text-sm font-semibold text-white/95">Get started with Plinth</h3>
+            <p className="mt-0.5 text-xs text-white/50">Connect your ad platforms and run your first analysis in 3 simple steps.</p>
           </div>
           <div className="flex gap-2">
             <button
               onClick={() => { localStorage.setItem('plinth_onboarded', 'true'); window.location.reload(); }}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50"
+              className="rounded-lg border border-white/[0.10] px-3 py-1.5 text-xs text-white/50 hover:bg-white/[0.05] transition-colors"
             >
               Dismiss
             </button>
             <Link
               to="/app/onboarding"
-              className="rounded-lg bg-zinc-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800"
+              className="rounded-lg bg-[#00F5FF] px-4 py-1.5 text-xs font-semibold text-[#0A0A0F] hover:bg-[#00F5FF]/90 transition-colors"
             >
               Start Onboarding
             </Link>
@@ -95,21 +96,21 @@ export function HomePage() {
 
       {/* Last run card */}
       {lastRun && (
-        <div className="mb-6 flex items-center gap-4 rounded-xl border border-zinc-200 bg-white px-5 py-4 shadow-sm">
+        <div className="mb-6 flex items-center gap-4 rounded-xl border border-white/[0.10] bg-white/[0.05] backdrop-blur-xl px-5 py-4">
           <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-            lastRun.status === 'completed' ? 'bg-emerald-50 text-emerald-600'
-            : lastRun.status === 'running' ? 'bg-blue-50 text-blue-600'
-            : 'bg-red-50 text-red-500'
+            lastRun.status === 'completed' ? 'bg-emerald-500/15 text-emerald-400'
+            : lastRun.status === 'running' ? 'bg-[#00F5FF]/15 text-[#00F5FF]'
+            : 'bg-red-500/15 text-red-400'
           }`}>
             {lastRun.status === 'completed' ? <CheckCircle2 className="h-5 w-5" />
               : lastRun.status === 'running' ? <Loader2 className="h-5 w-5 animate-spin" />
               : <XCircle className="h-5 w-5" />}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-zinc-800">
+            <p className="text-sm font-semibold text-white/95">
               Last run: {lastRun.pipeline_id} — <span className="capitalize">{lastRun.status}</span>
             </p>
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-white/50">
               {new Date(lastRun.started_at).toLocaleString()}
               {lastRun.total_duration_ms ? ` · ${(lastRun.total_duration_ms / 1000).toFixed(1)}s` : ''}
               {lastRun.hfl_decision ? ` · HFL: ${lastRun.hfl_decision.status.replace(/_/g, ' ')}` : ''}
@@ -118,14 +119,13 @@ export function HomePage() {
           <div className="flex shrink-0 gap-2">
             <button
               onClick={() => navigate('/app/scorecard')}
-              className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors"
+              className="rounded-lg border border-white/[0.10] px-3 py-1.5 text-xs font-medium text-white/70 hover:bg-white/[0.05] transition-colors"
             >
               Scorecard
             </button>
             <button
               onClick={() => navigate('/app/assistant')}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-colors"
-              style={{ backgroundColor: '#02c98d' }}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-[#0A0A0F] bg-[#00F5FF] hover:bg-[#00F5FF]/90 transition-colors"
             >
               <Bot className="h-3.5 w-3.5" />
               Review in Assistant
@@ -135,79 +135,81 @@ export function HomePage() {
       )}
 
       {/* Hero */}
-      <div className="rounded-2xl bg-gradient-to-br from-gray-900 to-gray-800 p-8 text-white">
-        <h2 className="text-3xl font-bold">Plinth by Polanyi</h2>
-        <p className="mt-2 max-w-xl text-gray-300">
-          A2A advertising intelligence infrastructure. Four autonomous engines analyze your ad spend,
-          find waste, optimize channels, and deliver transparent outcome-based billing.
-        </p>
-        <div className="mt-6 flex flex-wrap gap-3">
-          <button
-            onClick={() => void handleRunDemo()}
-            disabled={demoRunning}
-            className="rounded-lg bg-[#02c98d] px-6 py-2.5 text-sm font-semibold text-[#09090B] transition-colors hover:bg-[#00c98d] disabled:opacity-60"
-          >
-            {demoRunning ? (
-              <span className="flex items-center gap-2">
-                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
-                  <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" className="opacity-75" />
-                </svg>
-                Running all 4 engines...
-              </span>
-            ) : (
-              `Run Full Demo ($${(DEMO_AD_SPEND / 1_000_000).toFixed(1)}M spend)`
-            )}
-          </button>
-          <Link
-            to="/app/leak-detector"
-            className="rounded-lg bg-white/10 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/20"
-          >
-            Run Waste Analysis
-          </Link>
-          <Link
-            to="/app/command-center"
-            className="rounded-lg bg-white/10 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/20"
-          >
-            Command Center
-          </Link>
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#0A0A0F] via-[#0A0A0F] to-[#7000FF]/20 border border-white/[0.10] p-8 text-white">
+        {/* Glow accent */}
+        <div aria-hidden className="absolute top-0 right-0 w-96 h-96 bg-[#00F5FF]/5 rounded-full blur-3xl" />
+        <div aria-hidden className="absolute bottom-0 left-0 w-64 h-64 bg-[#FF00FF]/5 rounded-full blur-3xl" />
+        <div className="relative">
+          <h2 className="text-3xl font-bold text-white">Plinth by Polanyi</h2>
+          <p className="mt-2 max-w-xl text-white/60">
+            A2A advertising intelligence infrastructure. Four autonomous engines analyze your ad spend,
+            find waste, optimize channels, and deliver transparent outcome-based billing.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <button
+              onClick={() => void handleRunDemo()}
+              disabled={demoRunning}
+              className="rounded-lg bg-[#00F5FF] px-6 py-2.5 text-sm font-semibold text-[#0A0A0F] transition-colors hover:bg-[#00F5FF]/90 disabled:opacity-60 shadow-[0_0_20px_rgba(0,245,255,0.3)]"
+            >
+              {demoRunning ? (
+                <span className="flex items-center gap-2">
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                    <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" className="opacity-75" />
+                  </svg>
+                  Running all 4 engines...
+                </span>
+              ) : (
+                `Run Full Demo ($${(DEMO_AD_SPEND / 1_000_000).toFixed(1)}M spend)`
+              )}
+            </button>
+            <Link
+              to="/app/leak-detector"
+              className="rounded-lg bg-white/[0.08] border border-white/[0.10] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/[0.12]"
+            >
+              Run Waste Analysis
+            </Link>
+            <Link
+              to="/app/command-center"
+              className="rounded-lg bg-white/[0.08] border border-white/[0.10] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white/[0.12]"
+            >
+              Command Center
+            </Link>
+          </div>
+          {demoError && (
+            <p className="mt-3 rounded-lg bg-red-500/15 border border-red-400/20 px-4 py-2 text-sm text-red-300">{demoError}</p>
+          )}
+          <p className="mt-4 text-xs text-white/30">
+            Demo runs 8 campaigns across Meta, Google, DV360, TikTok, and Amazon through all 4 engines.
+          </p>
         </div>
-        {demoError && (
-          <p className="mt-3 rounded-lg bg-red-500/20 px-4 py-2 text-sm text-red-200">{demoError}</p>
-        )}
-        <p className="mt-4 text-xs text-gray-400">
-          Demo runs 8 campaigns across Meta, Google, DV360, TikTok, and Amazon through all 4 engines.
-        </p>
       </div>
 
       {/* Engine Cards */}
       <div>
-        <h3 className="mb-4 text-lg font-semibold text-gray-900">Engines</h3>
+        <h3 className="mb-4 text-lg font-semibold text-white/95">Engines</h3>
         <div className="grid gap-4 md:grid-cols-2">
           {engines.map((engine) => (
             <Link key={engine.id} to={ENGINE_ROUTES[engine.id] ?? '/'} className="group">
-              <Card className="transition-shadow group-hover:shadow-md">
+              <Card className="transition-all group-hover:border-[#00F5FF]/20">
                 <div className="flex items-start gap-4">
                   <div
-                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${ENGINE_COLORS[engine.id] ?? 'from-gray-500 to-gray-600'}`}
+                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${ENGINE_COLORS[engine.id] ?? 'from-white/10 to-white/5'} border border-white/[0.10]`}
                   >
-                    <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <svg className="h-6 w-6 text-[#00F5FF]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d={ENGINE_ICONS[engine.id] ?? ''} />
                     </svg>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h4 className="font-semibold text-gray-900 group-hover:text-zinc-700">
+                    <h4 className="font-semibold text-white/95 group-hover:text-[#00F5FF] transition-colors">
                       {engine.name}
                     </h4>
-                    <p className="mt-1 text-sm text-gray-500">{engine.description}</p>
+                    <p className="mt-1 text-sm text-white/50">{engine.description}</p>
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {engine.skills.map((skill) => (
-                        <span
-                          key={skill}
-                          className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600"
-                        >
+                        <GlassBadge key={skill} variant="default" className="text-[10px] px-2 py-0">
                           {skill}
-                        </span>
+                        </GlassBadge>
                       ))}
                     </div>
                   </div>
@@ -223,24 +225,24 @@ export function HomePage() {
 
       {/* Quick Start */}
       <Card title="Quick Start">
-        <div className="space-y-3 text-sm text-gray-600">
+        <div className="space-y-3 text-sm text-white/60">
           <p>
-            <span className="font-medium text-gray-900">1.</span> Choose an engine from the sidebar
+            <span className="font-medium text-white/95">1.</span> Choose an engine from the sidebar
             or click an engine card above.
           </p>
           <p>
-            <span className="font-medium text-gray-900">2.</span> Upload a CSV (auto-detects Google Ads,
+            <span className="font-medium text-white/95">2.</span> Upload a CSV (auto-detects Google Ads,
             Meta Ads, TikTok Ads) or paste data directly.
           </p>
           <p>
-            <span className="font-medium text-gray-900">3.</span> Explore results with interactive
+            <span className="font-medium text-white/95">3.</span> Explore results with interactive
             charts, then export as PDF or find them in your saved reports.
           </p>
         </div>
       </Card>
 
       {/* Footer */}
-      <p className="text-center text-xs text-gray-400">
+      <p className="text-center text-xs text-white/25">
         Plinth by Polanyi v3.2.0 &mdash; 5 engines, 39 skills
       </p>
     </div>

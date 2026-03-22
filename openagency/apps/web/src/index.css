@@ -2,12 +2,95 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Design system custom properties ──────────────────────────────── */
+:root {
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-bg-hover: rgba(255, 255, 255, 0.10);
+  --glass-bg-active: rgba(255, 255, 255, 0.15);
+  --glass-border: rgba(255, 255, 255, 0.10);
+  --glass-border-hover: rgba(255, 255, 255, 0.20);
+  --glass-blur: 16px;
+  --glass-blur-strong: 24px;
+  --glow-primary: rgba(0, 245, 255, 0.3);
+  --glow-secondary: rgba(255, 0, 255, 0.3);
+  --glow-tertiary: rgba(112, 0, 255, 0.3);
+  --text-primary: rgba(255, 255, 255, 0.95);
+  --text-secondary: rgba(255, 255, 255, 0.70);
+  --text-muted: rgba(255, 255, 255, 0.50);
+}
+
 @layer base {
   body {
-    @apply min-h-screen bg-zinc-50 text-zinc-900;
+    @apply min-h-screen bg-[#0A0A0F] text-white;
     font-family: 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    background: linear-gradient(to bottom right, #0A0A0F, #1a1035, #0A0A0F);
+    background-attachment: fixed;
+  }
+}
+
+/* ── Glass utility classes ────────────────────────────────────────── */
+@layer components {
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border);
+  }
+
+  .glass-strong {
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur-strong));
+    -webkit-backdrop-filter: blur(var(--glass-blur-strong));
+    border: 1px solid var(--glass-border);
+  }
+
+  .glass-hover:hover {
+    background: var(--glass-bg-hover);
+    border-color: var(--glass-border-hover);
+  }
+
+  .glass-active {
+    background: var(--glass-bg-active);
+    border-color: var(--glass-border-hover);
+  }
+
+  .glow-primary {
+    box-shadow: 0 0 20px var(--glow-primary), 0 0 60px rgba(0, 245, 255, 0.1);
+  }
+
+  .glow-secondary {
+    box-shadow: 0 0 20px var(--glow-secondary), 0 0 60px rgba(255, 0, 255, 0.1);
+  }
+
+  .glow-tertiary {
+    box-shadow: 0 0 20px var(--glow-tertiary), 0 0 60px rgba(112, 0, 255, 0.1);
+  }
+
+  .glass-gradient-border {
+    position: relative;
+  }
+
+  .glass-gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    padding: 1px;
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgba(0, 245, 255, 0.3), rgba(112, 0, 255, 0.3), rgba(255, 0, 255, 0.3));
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    -webkit-mask-composite: xor;
+    pointer-events: none;
+  }
+
+  .text-gradient-protocol {
+    background: linear-gradient(to right, #00F5FF, #7000FF, #FF00FF);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 }
 
@@ -24,19 +107,19 @@
   font-weight: 500;
   text-decoration: none;
   transition: color 150ms ease, background-color 150ms ease;
-  color: rgb(212 212 216); /* zinc-300 — clearly visible on zinc-950 */
+  color: rgba(255, 255, 255, 0.7);
   white-space: nowrap;
 }
 
 .plinth-nav-item:hover {
   background-color: rgba(255, 255, 255, 0.08);
-  color: #02c98d;
+  color: #00F5FF;
 }
 
 /* NavLink sets aria-current="page" on the active route */
 .plinth-nav-item[aria-current="page"] {
-  background-color: rgba(2, 201, 141, 0.12);
-  color: #02c98d;
+  background-color: rgba(0, 245, 255, 0.12);
+  color: #00F5FF;
 }
 
 .plinth-nav-collapsed {

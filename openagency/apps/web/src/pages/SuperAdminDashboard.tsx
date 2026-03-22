@@ -84,14 +84,14 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  active: 'bg-emerald-100 text-emerald-700',
-  invited: 'bg-blue-100 text-blue-700',
-  deactivated: 'bg-red-100 text-red-700',
-  completed: 'bg-emerald-100 text-emerald-700',
-  running: 'bg-blue-100 text-blue-700',
-  failed: 'bg-red-100 text-red-700',
-  success: 'bg-emerald-100 text-emerald-700',
-  timeout: 'bg-amber-100 text-amber-700',
+  active: 'bg-emerald-500/100/20 text-emerald-300',
+  invited: 'bg-[#00F5FF]/20 text-[#00F5FF]',
+  deactivated: 'bg-red-100 text-red-400',
+  completed: 'bg-emerald-500/100/20 text-emerald-300',
+  running: 'bg-[#00F5FF]/20 text-[#00F5FF]',
+  failed: 'bg-red-100 text-red-400',
+  success: 'bg-emerald-500/100/20 text-emerald-300',
+  timeout: 'bg-amber-500/100/20 text-amber-300',
 };
 
 // ─── Tab definitions ─────────────────────────────────────────────────
@@ -119,12 +119,12 @@ function StatCard({ label, value, sub, Icon, color }: {
   color: string;
 }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div className="rounded-xl border border-white/10 bg-white/5 p-5 shadow-sm shadow-black/20">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">{label}</p>
-          <p className="mt-2 text-2xl font-bold text-zinc-900">{value}</p>
-          {sub && <p className="mt-0.5 text-xs text-gray-400">{sub}</p>}
+          <p className="text-xs font-semibold uppercase tracking-wider text-white/50">{label}</p>
+          <p className="mt-2 text-2xl font-bold text-white/95">{value}</p>
+          {sub && <p className="mt-0.5 text-xs text-white/40">{sub}</p>}
         </div>
         <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${color}`}>
           <Icon className="h-5 w-5" />
@@ -140,14 +140,14 @@ function OverviewTab({ data }: { data: AdminOverview | null }) {
   if (!data) return <LoadingState />;
   return (
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-      <StatCard label="Agencies" value={fmtNum(data.total_agencies)} Icon={Building2} color="bg-blue-100 text-blue-600" />
-      <StatCard label="Users" value={fmtNum(data.total_users)} sub={`${data.active_users} active`} Icon={Users} color="bg-violet-100 text-violet-600" />
-      <StatCard label="Runs Today" value={fmtNum(data.runs_today)} Icon={Zap} color="bg-emerald-100 text-emerald-600" />
-      <StatCard label="Runs MTD" value={fmtNum(data.runs_mtd)} Icon={Activity} color="bg-cyan-100 text-cyan-600" />
-      <StatCard label="LLM Cost MTD" value={fmtUsd(data.llm_cost_mtd)} Icon={DollarSign} color="bg-amber-100 text-amber-600" />
-      <StatCard label="Outcome Fees MTD" value={fmtUsd(data.outcome_fees_mtd)} Icon={DollarSign} color="bg-emerald-100 text-emerald-600" />
-      <StatCard label="A2A Calls MTD" value={fmtNum(data.a2a_calls_mtd)} Icon={Globe} color="bg-indigo-100 text-indigo-600" />
-      <StatCard label="Stale Connectors" value={data.stale_connectors} sub={`of ${data.total_connectors}`} Icon={AlertTriangle} color={data.stale_connectors > 0 ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-500'} />
+      <StatCard label="Agencies" value={fmtNum(data.total_agencies)} Icon={Building2} color="bg-[#00F5FF]/20 text-[#00F5FF]" />
+      <StatCard label="Users" value={fmtNum(data.total_users)} sub={`${data.active_users} active`} Icon={Users} color="bg-violet-500/20 text-violet-300" />
+      <StatCard label="Runs Today" value={fmtNum(data.runs_today)} Icon={Zap} color="bg-emerald-500/100/20 text-emerald-300" />
+      <StatCard label="Runs MTD" value={fmtNum(data.runs_mtd)} Icon={Activity} color="bg-cyan-500/20 text-cyan-300" />
+      <StatCard label="LLM Cost MTD" value={fmtUsd(data.llm_cost_mtd)} Icon={DollarSign} color="bg-amber-500/100/20 text-amber-300" />
+      <StatCard label="Outcome Fees MTD" value={fmtUsd(data.outcome_fees_mtd)} Icon={DollarSign} color="bg-emerald-500/100/20 text-emerald-300" />
+      <StatCard label="A2A Calls MTD" value={fmtNum(data.a2a_calls_mtd)} Icon={Globe} color="bg-indigo-500/20 text-indigo-300" />
+      <StatCard label="Stale Connectors" value={data.stale_connectors} sub={`of ${data.total_connectors}`} Icon={AlertTriangle} color={data.stale_connectors > 0 ? 'bg-red-100 text-red-400' : 'bg-white/10 text-white/50'} />
     </div>
   );
 }
@@ -181,13 +181,13 @@ function AgenciesTab({ agencies, onImpersonate, onDelete }: {
             <TableCell>{a.advertiser_count}</TableCell>
             <TableCell>{a.user_count}</TableCell>
             <TableCell>{a.run_count}</TableCell>
-            <TableCell className="text-xs text-gray-500">{fmtDate(a.last_activity)}</TableCell>
+            <TableCell className="text-xs text-white/50">{fmtDate(a.last_activity)}</TableCell>
             <TableCell>
               <div className="flex gap-1">
-                <button onClick={() => onImpersonate(a.agency_id)} className="rounded p-1 text-gray-400 hover:bg-blue-50 hover:text-blue-600" title="Impersonate">
+                <button onClick={() => onImpersonate(a.agency_id)} className="rounded p-1 text-white/40 hover:bg-[#00F5FF]/10 hover:text-[#00F5FF]" title="Impersonate">
                   <Eye className="h-4 w-4" />
                 </button>
-                <button onClick={() => onDelete(a.agency_id)} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600" title="Delete">
+                <button onClick={() => onDelete(a.agency_id)} className="rounded p-1 text-white/40 hover:bg-red-500/100/10 hover:text-red-400" title="Delete">
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
@@ -218,14 +218,14 @@ function UsersTab({ users, onDeactivate, onReactivate }: {
   return (
     <div className="space-y-4">
       <div className="flex gap-3">
-        <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm">
+        <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="rounded-lg border border-white/10 px-3 py-1.5 text-sm">
           <option value="">All roles</option>
           <option value="super_admin">Super Admin</option>
           <option value="agency_admin">Admin</option>
           <option value="account_manager">Manager</option>
           <option value="viewer">Viewer</option>
         </select>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm">
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-lg border border-white/10 px-3 py-1.5 text-sm">
           <option value="">All status</option>
           <option value="active">Active</option>
           <option value="invited">Invited</option>
@@ -250,16 +250,16 @@ function UsersTab({ users, onDeactivate, onReactivate }: {
               <TableCell className="font-medium">{u.name || '—'}</TableCell>
               <TableCell className="text-xs">{u.email}</TableCell>
               <TableCell><Badge variant="outline" className="text-xs">{ROLE_LABELS[u.role] ?? u.role}</Badge></TableCell>
-              <TableCell><span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[u.status] ?? 'bg-gray-100 text-gray-600'}`}>{u.status}</span></TableCell>
-              <TableCell className="text-xs text-gray-500">{fmtDate(u.last_login_at)}</TableCell>
-              <TableCell className="text-xs text-gray-500">{fmtDate(u.created_at)}</TableCell>
+              <TableCell><span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[u.status] ?? 'bg-white/10 text-white/60'}`}>{u.status}</span></TableCell>
+              <TableCell className="text-xs text-white/50">{fmtDate(u.last_login_at)}</TableCell>
+              <TableCell className="text-xs text-white/50">{fmtDate(u.created_at)}</TableCell>
               <TableCell>
                 {u.status === 'active' ? (
-                  <button onClick={() => onDeactivate(u.id)} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600" title="Deactivate">
+                  <button onClick={() => onDeactivate(u.id)} className="rounded p-1 text-white/40 hover:bg-red-500/100/10 hover:text-red-400" title="Deactivate">
                     <UserX className="h-4 w-4" />
                   </button>
                 ) : u.status === 'deactivated' ? (
-                  <button onClick={() => onReactivate(u.id)} className="rounded p-1 text-gray-400 hover:bg-emerald-50 hover:text-emerald-600" title="Reactivate">
+                  <button onClick={() => onReactivate(u.id)} className="rounded p-1 text-white/40 hover:bg-emerald-500/100/10 hover:text-emerald-300" title="Reactivate">
                     <UserCheck className="h-4 w-4" />
                   </button>
                 ) : null}
@@ -310,17 +310,17 @@ function RunsTab({ runs }: { runs: AdminRun[] }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm">
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-lg border border-white/10 px-3 py-1.5 text-sm">
           <option value="">All status</option>
           <option value="completed">Completed</option>
           <option value="failed">Failed</option>
           <option value="running">Running</option>
         </select>
-        <span className="text-xs text-gray-400">{filtered.length} runs</span>
+        <span className="text-xs text-white/40">{filtered.length} runs</span>
       </div>
 
       {days.length > 0 && (
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
           <HighchartsReact highcharts={Highcharts} options={chartOpts} />
         </div>
       )}
@@ -342,8 +342,8 @@ function RunsTab({ runs }: { runs: AdminRun[] }) {
               <TableCell className="font-mono text-xs">{r.id.slice(0, 12)}...</TableCell>
               <TableCell className="text-xs">{r.pipeline_id}</TableCell>
               <TableCell className="text-xs">{r.client_id ?? '—'}</TableCell>
-              <TableCell><span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[r.status] ?? 'bg-gray-100 text-gray-600'}`}>{r.status}</span></TableCell>
-              <TableCell className="text-xs text-gray-500">{fmtDate(r.started_at)}</TableCell>
+              <TableCell><span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[r.status] ?? 'bg-white/10 text-white/60'}`}>{r.status}</span></TableCell>
+              <TableCell className="text-xs text-white/50">{fmtDate(r.started_at)}</TableCell>
               <TableCell className="text-xs">{fmtDuration(r.total_duration_ms)}</TableCell>
             </TableRow>
           ))}
@@ -406,22 +406,22 @@ function TokensTab({ data }: { data: TokenData | null }) {
     <div className="space-y-6">
       {/* MTD summary */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Tokens (Prompt)" value={fmtNum(Number(mtd['tokens_prompt'] ?? 0))} Icon={Zap} color="bg-indigo-100 text-indigo-600" />
-        <StatCard label="Tokens (Completion)" value={fmtNum(Number(mtd['tokens_completion'] ?? 0))} Icon={Zap} color="bg-amber-100 text-amber-600" />
-        <StatCard label="LLM Cost MTD" value={fmtUsd(Number(mtd['llm_cost_usd'] ?? 0))} Icon={DollarSign} color="bg-red-100 text-red-600" />
-        <StatCard label="Outcome Fees MTD" value={fmtUsd(Number(mtd['outcome_fees_usd'] ?? 0))} Icon={DollarSign} color="bg-emerald-100 text-emerald-600" />
+        <StatCard label="Tokens (Prompt)" value={fmtNum(Number(mtd['tokens_prompt'] ?? 0))} Icon={Zap} color="bg-indigo-500/20 text-indigo-300" />
+        <StatCard label="Tokens (Completion)" value={fmtNum(Number(mtd['tokens_completion'] ?? 0))} Icon={Zap} color="bg-amber-500/100/20 text-amber-300" />
+        <StatCard label="LLM Cost MTD" value={fmtUsd(Number(mtd['llm_cost_usd'] ?? 0))} Icon={DollarSign} color="bg-red-100 text-red-400" />
+        <StatCard label="Outcome Fees MTD" value={fmtUsd(Number(mtd['outcome_fees_usd'] ?? 0))} Icon={DollarSign} color="bg-emerald-500/100/20 text-emerald-300" />
       </div>
 
       {/* Charts */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4">
+      <div className="rounded-xl border border-white/10 bg-white/5 p-4">
         <HighchartsReact highcharts={Highcharts} options={areaOpts} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
           <HighchartsReact highcharts={Highcharts} options={donutOpts} />
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
           <HighchartsReact highcharts={Highcharts} options={barOpts} />
         </div>
       </div>
@@ -478,7 +478,7 @@ function ConnectorsTab({ connectors }: { connectors: AdminConnector[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="max-w-xs rounded-xl border border-gray-200 bg-white p-4">
+      <div className="max-w-xs rounded-xl border border-white/10 bg-white/5 p-4">
         <HighchartsReact highcharts={Highcharts} options={donutOpts} />
       </div>
       <Table>
@@ -498,9 +498,9 @@ function ConnectorsTab({ connectors }: { connectors: AdminConnector[] }) {
               <TableCell className="text-xs">{c.agency_id}</TableCell>
               <TableCell className="font-medium">{c.platform}</TableCell>
               <TableCell className="text-xs">{c.connection_type}</TableCell>
-              <TableCell><span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[c.status] ?? 'bg-gray-100 text-gray-600'}`}>{c.status}</span></TableCell>
+              <TableCell><span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[c.status] ?? 'bg-white/10 text-white/60'}`}>{c.status}</span></TableCell>
               <TableCell>{c.advertiser_count}</TableCell>
-              <TableCell className="text-xs text-gray-500">{fmtDate(c.updated_at)}</TableCell>
+              <TableCell className="text-xs text-white/50">{fmtDate(c.updated_at)}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -536,13 +536,13 @@ function FederationTab({ data }: { data: FederationData | null }) {
     <div className="space-y-6">
       {/* Discovered agents */}
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-gray-700">Discovered Agents ({discovered?.length ?? 0})</h3>
+        <h3 className="mb-2 text-sm font-semibold text-white/70">Discovered Agents ({discovered?.length ?? 0})</h3>
         {discovered?.length ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {discovered.map((agent, i) => (
-              <div key={i} className="rounded-xl border border-gray-200 bg-white p-4">
+              <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-4">
                 <p className="font-medium text-sm">{String(agent['name'] ?? agent['url'] ?? 'Unknown')}</p>
-                <p className="text-xs text-gray-500 mt-1">{String(agent['url'] ?? '')}</p>
+                <p className="text-xs text-white/50 mt-1">{String(agent['url'] ?? '')}</p>
                 {Array.isArray(agent['capabilities']) && (
                   <div className="mt-2 flex flex-wrap gap-1">
                     {(agent['capabilities'] as string[]).slice(0, 5).map((cap) => (
@@ -554,14 +554,14 @@ function FederationTab({ data }: { data: FederationData | null }) {
             ))}
           </div>
         ) : (
-          <p className="text-xs text-gray-400">No agents discovered yet. Use Federation to discover remote agents.</p>
+          <p className="text-xs text-white/40">No agents discovered yet. Use Federation to discover remote agents.</p>
         )}
       </div>
 
       {/* A2A timeline */}
       {sortedDays.length > 0 && (
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <h3 className="mb-2 text-sm font-semibold text-gray-700">A2A Calls (30 days)</h3>
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+          <h3 className="mb-2 text-sm font-semibold text-white/70">A2A Calls (30 days)</h3>
           <HighchartsReact highcharts={Highcharts} options={timelineOpts} />
         </div>
       )}
@@ -569,7 +569,7 @@ function FederationTab({ data }: { data: FederationData | null }) {
       {/* Peer summary */}
       {peers?.length > 0 && (
         <div>
-          <h3 className="mb-2 text-sm font-semibold text-gray-700">Peer Summary</h3>
+          <h3 className="mb-2 text-sm font-semibold text-white/70">Peer Summary</h3>
           <Table>
             <TableHeader>
               <TableRow>
@@ -587,9 +587,9 @@ function FederationTab({ data }: { data: FederationData | null }) {
                   <TableCell className="font-mono text-xs">{p.peer_url}</TableCell>
                   <TableCell>{p.peer_name ?? '—'}</TableCell>
                   <TableCell>{p.total}</TableCell>
-                  <TableCell className="text-emerald-600">{p.success}</TableCell>
-                  <TableCell className="text-red-600">{p.failed}</TableCell>
-                  <TableCell className="text-xs text-gray-500">{fmtDate(p.last_call)}</TableCell>
+                  <TableCell className="text-emerald-300">{p.success}</TableCell>
+                  <TableCell className="text-red-400">{p.failed}</TableCell>
+                  <TableCell className="text-xs text-white/50">{fmtDate(p.last_call)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -600,7 +600,7 @@ function FederationTab({ data }: { data: FederationData | null }) {
       {/* Recent log */}
       {log?.length > 0 && (
         <div>
-          <h3 className="mb-2 text-sm font-semibold text-gray-700">Recent Interactions</h3>
+          <h3 className="mb-2 text-sm font-semibold text-white/70">Recent Interactions</h3>
           <Table>
             <TableHeader>
               <TableRow>
@@ -620,9 +620,9 @@ function FederationTab({ data }: { data: FederationData | null }) {
                   <TableCell className="font-mono text-xs">{String(entry['peer_url'] ?? '').slice(0, 30)}</TableCell>
                   <TableCell className="text-xs">{String(entry['engine_id'] ?? '—')}</TableCell>
                   <TableCell className="text-xs">{String(entry['skill_id'] ?? '—')}</TableCell>
-                  <TableCell><span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[String(entry['status'])] ?? 'bg-gray-100 text-gray-600'}`}>{String(entry['status'])}</span></TableCell>
+                  <TableCell><span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[String(entry['status'])] ?? 'bg-white/10 text-white/60'}`}>{String(entry['status'])}</span></TableCell>
                   <TableCell className="text-xs">{entry['duration_ms'] ? fmtDuration(Number(entry['duration_ms'])) : '—'}</TableCell>
-                  <TableCell className="text-xs text-gray-500">{fmtDate(String(entry['created_at'] ?? ''))}</TableCell>
+                  <TableCell className="text-xs text-white/50">{fmtDate(String(entry['created_at'] ?? ''))}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -638,7 +638,7 @@ function FederationTab({ data }: { data: FederationData | null }) {
 function LoadingState() {
   return (
     <div className="flex items-center justify-center py-20">
-      <RefreshCw className="h-6 w-6 animate-spin text-gray-400" />
+      <RefreshCw className="h-6 w-6 animate-spin text-white/40" />
     </div>
   );
 }
@@ -646,7 +646,7 @@ function LoadingState() {
 function EmptyState({ msg }: { msg: string }) {
   return (
     <div className="flex items-center justify-center py-20">
-      <p className="text-sm text-gray-400">{msg}</p>
+      <p className="text-sm text-white/40">{msg}</p>
     </div>
   );
 }
@@ -669,9 +669,9 @@ function QuotasTab({ requests, onRefresh }: { requests: AdminQuotaRequest[]; onR
 
   return (
     <div className="space-y-6">
-      <h3 className="text-sm font-semibold text-gray-700">Pending Quota Requests ({requests.length})</h3>
+      <h3 className="text-sm font-semibold text-white/70">Pending Quota Requests ({requests.length})</h3>
       {requests.length === 0 ? (
-        <p className="text-sm text-gray-400 py-8 text-center">No pending requests</p>
+        <p className="text-sm text-white/40 py-8 text-center">No pending requests</p>
       ) : (
         <Table>
           <TableHeader>
@@ -692,20 +692,20 @@ function QuotasTab({ requests, onRefresh }: { requests: AdminQuotaRequest[]; onR
                 <TableCell className="text-xs">{r.requester_email ?? r.requested_by}</TableCell>
                 <TableCell className="text-xs">{r.month}</TableCell>
                 <TableCell>{r.extra_runs_requested}</TableCell>
-                <TableCell className="text-xs text-gray-500 max-w-48 truncate">{r.reason ?? '—'}</TableCell>
+                <TableCell className="text-xs text-white/50 max-w-48 truncate">{r.reason ?? '—'}</TableCell>
                 <TableCell>
                   <input
                     type="number"
                     min={1}
                     value={grantInput[r.id] ?? r.extra_runs_requested}
                     onChange={(e) => setGrantInput({ ...grantInput, [r.id]: Number(e.target.value) })}
-                    className="w-16 rounded border border-gray-200 px-2 py-1 text-sm text-center"
+                    className="w-16 rounded border border-white/10 px-2 py-1 text-sm text-center"
                   />
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-1">
-                    <button onClick={() => void handleApprove(r.id)} className="rounded bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700">Approve</button>
-                    <button onClick={() => void handleDeny(r.id)} className="rounded bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-200">Deny</button>
+                    <button onClick={() => void handleApprove(r.id)} className="rounded bg-emerald-500/80 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-500/80">Approve</button>
+                    <button onClick={() => void handleDeny(r.id)} className="rounded bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-400 hover:bg-red-200">Deny</button>
                   </div>
                 </TableCell>
               </TableRow>
@@ -721,7 +721,7 @@ function QuotasTab({ requests, onRefresh }: { requests: AdminQuotaRequest[]; onR
 
 function ImpersonateBanner({ agencyId, onExit }: { agencyId: string; onExit: () => void }) {
   return (
-    <div className="flex items-center justify-between bg-red-600 px-4 py-2 text-white text-sm">
+    <div className="flex items-center justify-between bg-red-500/80 px-4 py-2 text-white text-sm">
       <span>Viewing as <strong>{agencyId}</strong> — impersonation mode</span>
       <button onClick={onExit} className="rounded bg-white/20 px-3 py-1 text-xs font-semibold hover:bg-white/30 transition-colors">
         Exit impersonation
@@ -867,17 +867,17 @@ export function SuperAdminDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-zinc-900">Super Admin</h2>
-          <p className="text-sm text-gray-500">System-wide visibility and control</p>
+          <h2 className="text-2xl font-bold text-white/95">Super Admin</h2>
+          <p className="text-sm text-white/50">System-wide visibility and control</p>
         </div>
-        <button onClick={() => void loadData()} className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+        <button onClick={() => void loadData()} className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-white/60 hover:bg-white/5 transition-colors">
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           Refresh
         </button>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200">
+      <div className="flex gap-1 border-b border-white/10">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -885,13 +885,13 @@ export function SuperAdminDashboard() {
             className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
               tab === t.id
                 ? 'border-[#02c98d] text-[#02c98d]'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                : 'border-transparent text-white/50 hover:text-white/70 hover:border-white/15'
             }`}
           >
             <t.Icon className="h-4 w-4" />
             {t.label}
             {t.id === 'quotas' && pendingQuotaCount > 0 && (
-              <span className="ml-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+              <span className="ml-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500/100 px-1.5 text-[10px] font-bold text-white">
                 {pendingQuotaCount}
               </span>
             )}

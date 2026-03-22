@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { Card, MetricCard } from '../components/Card';
+import { useState, useEffect, useRef } from 'react';
 import { SmartUpload } from '../components/SmartUpload';
 import { Spinner } from '../components/Spinner';
 import { ChannelBarChart } from '../components/charts/ChannelBarChart';
@@ -14,6 +13,26 @@ import { ExportButton } from '../components/ExportButton';
 import { useEngine } from '../hooks/useEngine';
 import type { ChannelOptimizerOutput, MMMModelOutput, MMMOptimizeOutput } from '@openagency/types';
 import { toChannelInput, toMMMInput } from '@openagency/core/data/platform-detect';
+import {
+  GlassCard,
+  GlassCardHeader,
+  GlassCardTitle,
+  GlassCardContent,
+  GlassTabs,
+  GlassTabsList,
+  GlassTabsTrigger,
+  GlassTabsContent,
+  GlassButton,
+  GlassTable,
+  GlassTableHeader,
+  GlassTableBody,
+  GlassTableRow,
+  GlassTableHead,
+  GlassTableCell,
+
+  StatCard,
+  StatsGrid,
+} from '../components/ui/glass';
 
 const COLORS = ['#0077e6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -67,7 +86,18 @@ export function MediaArchitectPage() {
   const mmmEngine = useEngine<MMMModelOutput>('media-architect', 'mmm-model');
   const optEngine = useEngine<MMMOptimizeOutput>('media-architect', 'mmm-optimize');
   const [inputData, setInputData] = useState(DEMO_CHANNEL);
-  const [activeTab, setActiveTab] = useState<Tab>('channel');
+  const [activeTab, setActiveTab] = useState<string>('channel');
+
+  // Auto-load demo data on mount
+  const autoLoaded = useRef(false);
+  useEffect(() => {
+    if (!autoLoaded.current) {
+      autoLoaded.current = true;
+      channelEngine.run(DEMO_CHANNEL);
+      mmmEngine.run(DEMO_MMM);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const channelData = channelEngine.result?.data;
   const mmmData = mmmEngine.result?.data;
@@ -100,297 +130,319 @@ export function MediaArchitectPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">Media Architect</h2>
-        <p className="mt-1 text-sm text-gray-500">
+        <h2 className="text-2xl font-bold text-white">Media Architect</h2>
+        <p className="mt-1 text-sm text-white/50">
           Optimize budget allocation, run Marketing Mix Models, and analyze response curves.
         </p>
       </div>
 
       {/* Input */}
-      <Card title="Data Input">
-        <div className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => { channelEngine.run(inputData); setActiveTab('channel'); }}
-              disabled={loading}
-              className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50"
-            >
-              Demo: Channel Optimize
-            </button>
-            <button
-              onClick={() => { mmmEngine.run(DEMO_MMM); setActiveTab('mmm'); }}
-              disabled={loading}
-              className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50"
-            >
-              Demo: MMM Model
-            </button>
-            <button
-              onClick={() => { optEngine.run(DEMO_OPT); setActiveTab('roi'); }}
-              disabled={loading}
-              className="rounded-lg border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50"
-            >
-              Demo: Budget Optimization
-            </button>
+      <GlassCard>
+        <GlassCardHeader>
+          <GlassCardTitle>Data Input</GlassCardTitle>
+        </GlassCardHeader>
+        <GlassCardContent>
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <GlassButton
+                variant="outline"
+                size="sm"
+                onClick={() => { channelEngine.run(inputData); setActiveTab('channel'); }}
+                disabled={loading}
+              >
+                Demo: Channel Optimize
+              </GlassButton>
+              <GlassButton
+                variant="outline"
+                size="sm"
+                onClick={() => { mmmEngine.run(DEMO_MMM); setActiveTab('mmm'); }}
+                disabled={loading}
+              >
+                Demo: MMM Model
+              </GlassButton>
+              <GlassButton
+                variant="primary"
+                size="sm"
+                onClick={() => { optEngine.run(DEMO_OPT); setActiveTab('roi'); }}
+                disabled={loading}
+              >
+                Demo: Budget Optimization
+              </GlassButton>
+            </div>
+            <SmartUpload
+              transformFn={(rows, opts) => {
+                const channelInput = toChannelInput(rows, opts);
+                const mmmInput = toMMMInput(rows, opts);
+                setTimeout(() => mmmEngine.run(mmmInput), 50);
+                return channelInput;
+              }}
+              onAnalyze={(d) => {
+                setInputData(d as typeof DEMO_CHANNEL);
+                channelEngine.run(d);
+                setActiveTab('channel');
+              }}
+              onRawJson={(d) => {
+                setInputData(d as typeof DEMO_CHANNEL);
+                channelEngine.run(d);
+                setActiveTab('channel');
+              }}
+            />
           </div>
-          <SmartUpload
-            transformFn={(rows, opts) => {
-              // Run both channel optimize AND MMM from the same CSV
-              const channelInput = toChannelInput(rows, opts);
-              const mmmInput = toMMMInput(rows, opts);
-              // Return channel input for the primary onAnalyze callback
-              // but also trigger MMM in the background
-              setTimeout(() => mmmEngine.run(mmmInput), 50);
-              return channelInput;
-            }}
-            onAnalyze={(d) => {
-              setInputData(d as typeof DEMO_CHANNEL);
-              channelEngine.run(d);
-              setActiveTab('channel');
-            }}
-            onRawJson={(d) => {
-              setInputData(d as typeof DEMO_CHANNEL);
-              channelEngine.run(d);
-              setActiveTab('channel');
-            }}
-          />
-        </div>
-      </Card>
+        </GlassCardContent>
+      </GlassCard>
 
       {loading && (
         <div className="flex items-center justify-center py-12">
           <Spinner className="h-8 w-8" />
-          <span className="ml-3 text-sm text-gray-500">Running analysis...</span>
+          <span className="ml-3 text-sm text-white/50">Running analysis...</span>
         </div>
       )}
 
       {channelEngine.error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{channelEngine.error}</div>
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">{channelEngine.error}</div>
       )}
       {mmmEngine.error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{mmmEngine.error}</div>
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">{mmmEngine.error}</div>
       )}
 
       {/* Tabs */}
       {(channelData ?? mmmData ?? optData) && !loading && (
-        <>
-          <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
+        <GlassTabs defaultValue="" value={activeTab} onValueChange={setActiveTab}>
+          <GlassTabsList>
             {TABS.map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                  activeTab === tab.key
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
+              <GlassTabsTrigger key={tab.key} value={tab.key}>
                 {tab.label}
-              </button>
+              </GlassTabsTrigger>
             ))}
-          </div>
+          </GlassTabsList>
 
-          {/* ─── Tab: Channel Optimize ─────────────────────────── */}
-          {activeTab === 'channel' && channelData && (
-            <>
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                <MetricCard label="Total Budget" value={fmt(channelData.total_budget)} color="blue" />
-                <MetricCard label="Allocated" value={fmt(channelData.total_allocated)} color="blue" />
-                <MetricCard label="Expected Response" value={channelData.total_expected_response.toFixed(2)} color="green" />
-              </div>
+          {/* Tab: Channel Optimize */}
+          <GlassTabsContent value="channel">
+            {channelData && (
+              <>
+                <StatsGrid columns={3}>
+                </StatsGrid>
 
-              <div className="grid gap-6 lg:grid-cols-3">
-                <Card title="Current vs Optimized" className="lg:col-span-2">
-                  <ChannelBarChart data={barData} />
-                </Card>
-                <Card title="Optimized Mix">
-                  <DonutChart data={donutData} centerLabel="Budget" centerValue={fmt(channelData.total_allocated)} />
-                </Card>
-              </div>
-
-              <Card title="Channel Details">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-200 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                        <th className="pb-3 pr-4">Channel</th>
-                        <th className="pb-3 pr-4 text-right">Spend</th>
-                        <th className="pb-3 pr-4 text-right">% Budget</th>
-                        <th className="pb-3 pr-4 text-right">Response</th>
-                        <th className="pb-3 pr-4 text-right">Marginal ROI</th>
-                        <th className="pb-3 text-right">Saturation</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {channelData.channels.map((ch) => (
-                        <tr key={ch.channel}>
-                          <td className="py-3 pr-4 font-medium text-gray-900">{ch.channel}</td>
-                          <td className="py-3 pr-4 text-right text-gray-700">{fmt(ch.spend)}</td>
-                          <td className="py-3 pr-4 text-right text-gray-700">{ch.spend_pct}%</td>
-                          <td className="py-3 pr-4 text-right text-gray-700">{ch.expected_response.toFixed(2)}</td>
-                          <td className="py-3 pr-4 text-right text-gray-700">{ch.marginal_roi.toFixed(4)}</td>
-                          <td className="py-3 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <div className="h-2 w-20 rounded-full bg-gray-200">
-                                <div
-                                  className={`h-2 rounded-full ${ch.saturation_pct > 80 ? 'bg-red-500' : ch.saturation_pct > 50 ? 'bg-yellow-500' : 'bg-green-500'}`}
-                                  style={{ width: `${Math.min(ch.saturation_pct, 100)}%` }}
-                                />
-                              </div>
-                              <span className="text-xs text-gray-500">{ch.saturation_pct}%</span>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="grid gap-6 lg:grid-cols-3 mt-6">
+                  <GlassCard className="lg:col-span-2">
+                    <GlassCardHeader><GlassCardTitle>Current vs Optimized</GlassCardTitle></GlassCardHeader>
+                    <GlassCardContent><ChannelBarChart data={barData} /></GlassCardContent>
+                  </GlassCard>
+                  <GlassCard>
+                    <GlassCardHeader><GlassCardTitle>Optimized Mix</GlassCardTitle></GlassCardHeader>
+                    <GlassCardContent><DonutChart data={donutData} centerLabel="Budget" centerValue={fmt(channelData.total_allocated)} /></GlassCardContent>
+                  </GlassCard>
                 </div>
-              </Card>
 
-              <div className="flex items-center justify-between">
-                <ExportButton engineId="media-architect" skillId="channel-optimize" result={channelEngine.result ?? null} />
-                {channelEngine.result?.duration_ms != null && (
-                  <p className="text-xs text-gray-400">Completed in {channelEngine.result.duration_ms}ms</p>
-                )}
-              </div>
-            </>
-          )}
+                <GlassCard className="mt-6">
+                  <GlassCardHeader><GlassCardTitle>Channel Details</GlassCardTitle></GlassCardHeader>
+                  <GlassCardContent>
+                    <div className="overflow-x-auto">
+                      <GlassTable>
+                        <GlassTableHeader>
+                          <GlassTableRow>
+                            <GlassTableHead>Channel</GlassTableHead>
+                            <GlassTableHead className="text-right">Spend</GlassTableHead>
+                            <GlassTableHead className="text-right">% Budget</GlassTableHead>
+                            <GlassTableHead className="text-right">Response</GlassTableHead>
+                            <GlassTableHead className="text-right">Marginal ROI</GlassTableHead>
+                            <GlassTableHead className="text-right">Saturation</GlassTableHead>
+                          </GlassTableRow>
+                        </GlassTableHeader>
+                        <GlassTableBody>
+                          {channelData.channels.map((ch) => (
+                            <GlassTableRow key={ch.channel}>
+                              <GlassTableCell className="font-medium text-white/95">{ch.channel}</GlassTableCell>
+                              <GlassTableCell className="text-right text-white/70">{fmt(ch.spend)}</GlassTableCell>
+                              <GlassTableCell className="text-right text-white/70">{ch.spend_pct}%</GlassTableCell>
+                              <GlassTableCell className="text-right text-white/70">{ch.expected_response.toFixed(2)}</GlassTableCell>
+                              <GlassTableCell className="text-right text-white/70">{ch.marginal_roi.toFixed(4)}</GlassTableCell>
+                              <GlassTableCell className="text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <div className="h-2 w-20 rounded-full bg-white/10">
+                                    <div
+                                      className={`h-2 rounded-full ${ch.saturation_pct > 80 ? 'bg-red-500' : ch.saturation_pct > 50 ? 'bg-yellow-500' : 'bg-green-500'}`}
+                                      style={{ width: `${Math.min(ch.saturation_pct, 100)}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-xs text-white/50">{ch.saturation_pct}%</span>
+                                </div>
+                              </GlassTableCell>
+                            </GlassTableRow>
+                          ))}
+                        </GlassTableBody>
+                      </GlassTable>
+                    </div>
+                  </GlassCardContent>
+                </GlassCard>
 
-          {/* ─── Tab: MMM Model ───────────────────────────────── */}
-          {activeTab === 'mmm' && mmmData && (
-            <>
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                <MetricCard label="Total KPI" value={fmt(mmmData.total_kpi)} color="blue" />
-                <MetricCard label="Predicted KPI" value={fmt(mmmData.predicted_kpi)} color="blue" />
-                <MetricCard label="R-squared" value={mmmData.r_squared_estimate.toFixed(3)} color={mmmData.r_squared_estimate >= 0.85 ? 'green' : 'yellow'} />
-                <MetricCard label="Overall ROI" value={`${mmmData.overall_roi.toFixed(2)}x`} color="green" />
-              </div>
+                <div className="flex items-center justify-between mt-4">
+                  <ExportButton engineId="media-architect" skillId="channel-optimize" result={channelEngine.result ?? null} />
+                  {channelEngine.result?.duration_ms != null && (
+                    <p className="text-xs text-white/40">Completed in {channelEngine.result.duration_ms}ms</p>
+                  )}
+                </div>
+              </>
+            )}
+          </GlassTabsContent>
 
+          {/* Tab: MMM Model */}
+          <GlassTabsContent value="mmm">
+            {mmmData && (
+              <>
+                <StatsGrid columns={4}>
+                  <StatCard label="R-squared" value={mmmData.r_squared_estimate.toFixed(3)} />
+                </StatsGrid>
+
+                <div className="grid gap-6 lg:grid-cols-2 mt-6">
+                  <GlassCard>
+                    <GlassCardHeader><GlassCardTitle>Model Fit: Actual vs Predicted</GlassCardTitle></GlassCardHeader>
+                    <GlassCardContent><ModelFitChart fit={mmmData.model_fit} /></GlassCardContent>
+                  </GlassCard>
+                  <GlassCard>
+                    <GlassCardHeader><GlassCardTitle>KPI Decomposition</GlassCardTitle></GlassCardHeader>
+                    <GlassCardContent><ContributionWaterfallChart entries={mmmData.contribution_waterfall} totalKpi={mmmData.predicted_kpi} /></GlassCardContent>
+                  </GlassCard>
+                </div>
+
+                <GlassCard className="mt-6">
+                  <GlassCardHeader><GlassCardTitle>Channel Model Parameters</GlassCardTitle></GlassCardHeader>
+                  <GlassCardContent>
+                    <div className="overflow-x-auto">
+                      <GlassTable>
+                        <GlassTableHeader>
+                          <GlassTableRow>
+                            <GlassTableHead>Channel</GlassTableHead>
+                            <GlassTableHead className="text-right">Spend</GlassTableHead>
+                            <GlassTableHead className="text-right">Contribution</GlassTableHead>
+                            <GlassTableHead className="text-right">Share %</GlassTableHead>
+                            <GlassTableHead className="text-right">ROI</GlassTableHead>
+                            <GlassTableHead className="text-right">mROI</GlassTableHead>
+                            <GlassTableHead className="text-right">Saturation</GlassTableHead>
+                          </GlassTableRow>
+                        </GlassTableHeader>
+                        <GlassTableBody>
+                          {mmmData.channel_models.map((cm) => (
+                            <GlassTableRow key={cm.channel}>
+                              <GlassTableCell className="font-medium text-white/95">{cm.channel}</GlassTableCell>
+                              <GlassTableCell className="text-right text-white/70">{fmt(cm.spend)}</GlassTableCell>
+                              <GlassTableCell className="text-right text-white/70">{fmt(cm.results.estimated_contribution)}</GlassTableCell>
+                              <GlassTableCell className="text-right text-white/70">{pct(cm.results.contribution_share_pct)}</GlassTableCell>
+                              <GlassTableCell className="text-right font-medium text-emerald-400">{cm.results.roi.toFixed(2)}x</GlassTableCell>
+                              <GlassTableCell className="text-right text-white/70">{cm.results.marginal_roi.toFixed(4)}</GlassTableCell>
+                              <GlassTableCell className="text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <div className="h-2 w-20 rounded-full bg-white/10">
+                                    <div
+                                      className={`h-2 rounded-full ${cm.results.saturation_pct > 80 ? 'bg-red-500' : cm.results.saturation_pct > 50 ? 'bg-yellow-500' : 'bg-green-500'}`}
+                                      style={{ width: `${Math.min(cm.results.saturation_pct, 100)}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-xs text-white/50">{cm.results.saturation_pct.toFixed(1)}%</span>
+                                </div>
+                              </GlassTableCell>
+                            </GlassTableRow>
+                          ))}
+                        </GlassTableBody>
+                      </GlassTable>
+                    </div>
+                  </GlassCardContent>
+                </GlassCard>
+
+                <div className="flex items-center justify-between mt-4">
+                  <ExportButton engineId="media-architect" skillId="mmm-model" result={mmmEngine.result ?? null} />
+                  {mmmEngine.result?.duration_ms != null && (
+                    <p className="text-xs text-white/40">Completed in {mmmEngine.result.duration_ms}ms</p>
+                  )}
+                </div>
+              </>
+            )}
+          </GlassTabsContent>
+
+          {/* Tab: Response Curves */}
+          <GlassTabsContent value="curves">
+            {mmmData && (
+              <>
+                <GlassCard>
+                  <GlassCardHeader><GlassCardTitle>Response Curves by Channel</GlassCardTitle></GlassCardHeader>
+                  <GlassCardContent>
+                    <p className="mb-4 text-xs text-white/50">
+                      Dots mark current spend. Curves show diminishing returns — flatten means saturation.
+                    </p>
+                    <ResponseCurveChart curves={mmmData.response_curves} />
+                  </GlassCardContent>
+                </GlassCard>
+
+                <div className="grid gap-6 lg:grid-cols-2 mt-6">
+                  <GlassCard>
+                    <GlassCardHeader><GlassCardTitle>Marginal ROI by Channel</GlassCardTitle></GlassCardHeader>
+                    <GlassCardContent>
+                      <p className="mb-3 text-xs text-white/50">
+                        Where is your next dollar most efficient? Above 1.0x = still generating returns.
+                      </p>
+                      <MarginalRoiChart intervals={mmmData.roi_intervals} />
+                    </GlassCardContent>
+                  </GlassCard>
+                  <GlassCard>
+                    <GlassCardHeader><GlassCardTitle>Channel Contribution Share</GlassCardTitle></GlassCardHeader>
+                    <GlassCardContent>
+                      <DonutChart
+                        data={mmmData.contribution_waterfall
+                          .filter((e) => e.channel !== 'Base (Non-Media)')
+                          .map((e, i) => ({
+                            name: e.channel,
+                            value: e.contribution,
+                            color: COLORS[i % COLORS.length] ?? '#64748b',
+                          }))}
+                        centerLabel="Media"
+                        centerValue={pct(mmmData.media_contribution_pct)}
+                      />
+                    </GlassCardContent>
+                  </GlassCard>
+                </div>
+              </>
+            )}
+          </GlassTabsContent>
+
+          {/* Tab: ROI Analysis */}
+          <GlassTabsContent value="roi">
+            {mmmData && (
               <div className="grid gap-6 lg:grid-cols-2">
-                <Card title="Model Fit: Actual vs Predicted">
-                  <ModelFitChart fit={mmmData.model_fit} />
-                </Card>
-                <Card title="KPI Decomposition">
-                  <ContributionWaterfallChart entries={mmmData.contribution_waterfall} totalKpi={mmmData.predicted_kpi} />
-                </Card>
+                <GlassCard>
+                  <GlassCardHeader><GlassCardTitle>ROI by Channel (with Credible Intervals)</GlassCardTitle></GlassCardHeader>
+                  <GlassCardContent><RoiBarChart intervals={mmmData.roi_intervals} metric="roi" /></GlassCardContent>
+                </GlassCard>
+                <GlassCard>
+                  <GlassCardHeader><GlassCardTitle>Marginal ROI by Channel</GlassCardTitle></GlassCardHeader>
+                  <GlassCardContent><RoiBarChart intervals={mmmData.roi_intervals} metric="mroi" /></GlassCardContent>
+                </GlassCard>
               </div>
+            )}
 
-              <Card title="Channel Model Parameters">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-200 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                        <th className="pb-3 pr-4">Channel</th>
-                        <th className="pb-3 pr-4 text-right">Spend</th>
-                        <th className="pb-3 pr-4 text-right">Contribution</th>
-                        <th className="pb-3 pr-4 text-right">Share %</th>
-                        <th className="pb-3 pr-4 text-right">ROI</th>
-                        <th className="pb-3 pr-4 text-right">mROI</th>
-                        <th className="pb-3 text-right">Saturation</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {mmmData.channel_models.map((cm) => (
-                        <tr key={cm.channel}>
-                          <td className="py-3 pr-4 font-medium text-gray-900">{cm.channel}</td>
-                          <td className="py-3 pr-4 text-right text-gray-700">{fmt(cm.spend)}</td>
-                          <td className="py-3 pr-4 text-right text-gray-700">{fmt(cm.results.estimated_contribution)}</td>
-                          <td className="py-3 pr-4 text-right text-gray-700">{pct(cm.results.contribution_share_pct)}</td>
-                          <td className="py-3 pr-4 text-right font-medium text-green-600">{cm.results.roi.toFixed(2)}x</td>
-                          <td className="py-3 pr-4 text-right text-gray-700">{cm.results.marginal_roi.toFixed(4)}</td>
-                          <td className="py-3 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <div className="h-2 w-20 rounded-full bg-gray-200">
-                                <div
-                                  className={`h-2 rounded-full ${cm.results.saturation_pct > 80 ? 'bg-red-500' : cm.results.saturation_pct > 50 ? 'bg-yellow-500' : 'bg-green-500'}`}
-                                  style={{ width: `${Math.min(cm.results.saturation_pct, 100)}%` }}
-                                />
-                              </div>
-                              <span className="text-xs text-gray-500">{cm.results.saturation_pct.toFixed(1)}%</span>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
-
-              <div className="flex items-center justify-between">
-                <ExportButton engineId="media-architect" skillId="mmm-model" result={mmmEngine.result ?? null} />
-                {mmmEngine.result?.duration_ms != null && (
-                  <p className="text-xs text-gray-400">Completed in {mmmEngine.result.duration_ms}ms</p>
-                )}
-              </div>
-            </>
-          )}
-
-          {/* ─── Tab: Response Curves ─────────────────────────── */}
-          {activeTab === 'curves' && mmmData && (
-            <>
-              <Card title="Response Curves by Channel">
-                <p className="mb-4 text-xs text-gray-500">
-                  Dots mark current spend. Curves show diminishing returns — flatten means saturation.
-                </p>
-                <ResponseCurveChart curves={mmmData.response_curves} />
-              </Card>
-
-              <div className="grid gap-6 lg:grid-cols-2">
-                <Card title="Marginal ROI by Channel">
-                  <p className="mb-3 text-xs text-gray-500">
-                    Where is your next dollar most efficient? Above 1.0x = still generating returns.
-                  </p>
-                  <MarginalRoiChart intervals={mmmData.roi_intervals} />
-                </Card>
-                <Card title="Channel Contribution Share">
-                  <DonutChart
-                    data={mmmData.contribution_waterfall
-                      .filter((e) => e.channel !== 'Base (Non-Media)')
-                      .map((e, i) => ({
-                        name: e.channel,
-                        value: e.contribution,
-                        color: COLORS[i % COLORS.length] ?? '#64748b',
-                      }))}
-                    centerLabel="Media"
-                    centerValue={pct(mmmData.media_contribution_pct)}
-                  />
-                </Card>
-              </div>
-            </>
-          )}
-
-          {/* ─── Tab: ROI Analysis ────────────────────────────── */}
-          {activeTab === 'roi' && (
-            <>
-              {mmmData && (
-                <div className="grid gap-6 lg:grid-cols-2">
-                  <Card title="ROI by Channel (with Credible Intervals)">
-                    <RoiBarChart intervals={mmmData.roi_intervals} metric="roi" />
-                  </Card>
-                  <Card title="Marginal ROI by Channel">
-                    <RoiBarChart intervals={mmmData.roi_intervals} metric="mroi" />
-                  </Card>
-                </div>
-              )}
-
-              {optData && optData.comparison_vs_current && (
-                <Card title="Budget Optimization: Current vs Recommended">
+            {optData && optData.comparison_vs_current && (
+              <GlassCard className="mt-6">
+                <GlassCardHeader><GlassCardTitle>Budget Optimization: Current vs Recommended</GlassCardTitle></GlassCardHeader>
+                <GlassCardContent>
                   <BudgetOptChart
                     reallocation={optData.comparison_vs_current.reallocation}
                     kpiLiftPct={optData.comparison_vs_current.kpi_lift_pct}
                   />
-                </Card>
-              )}
+                </GlassCardContent>
+              </GlassCard>
+            )}
 
-              {optData && optData.recommendations && optData.recommendations.length > 0 && (
-                <Card title="Recommendations">
+            {optData && optData.recommendations && optData.recommendations.length > 0 && (
+              <GlassCard className="mt-6">
+                <GlassCardHeader><GlassCardTitle>Recommendations</GlassCardTitle></GlassCardHeader>
+                <GlassCardContent>
                   <div className="space-y-2">
                     {optData.recommendations.map((rec, i) => (
                       <div
                         key={i}
                         className={`rounded-lg border p-3 text-sm ${
                           rec.priority === 'high'
-                            ? 'border-red-200 bg-red-50 text-red-700'
-                            : 'border-yellow-200 bg-yellow-50 text-yellow-700'
+                            ? 'border-red-500/30 bg-red-500/10 text-red-300'
+                            : 'border-yellow-500/30 bg-yellow-500/10 text-yellow-300'
                         }`}
                       >
                         <div className="flex items-center gap-2">
@@ -401,17 +453,21 @@ export function MediaArchitectPage() {
                       </div>
                     ))}
                   </div>
-                </Card>
-              )}
+                </GlassCardContent>
+              </GlassCard>
+            )}
 
-              {!mmmData && !optData && (
-                <div className="rounded-lg border border-gray-200 bg-white p-8 text-center">
-                  <p className="text-sm text-gray-500">Run the MMM Model or Budget Optimization demo first to see ROI analysis.</p>
-                </div>
-              )}
-            </>
-          )}
-        </>
+            {!mmmData && !optData && (
+              <GlassCard className="mt-6">
+                <GlassCardContent>
+                  <div className="p-8 text-center">
+                    <p className="text-sm text-white/50">Run the MMM Model or Budget Optimization demo first to see ROI analysis.</p>
+                  </div>
+                </GlassCardContent>
+              </GlassCard>
+            )}
+          </GlassTabsContent>
+        </GlassTabs>
       )}
     </div>
   );

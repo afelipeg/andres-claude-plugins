@@ -293,7 +293,7 @@ function ConnectDialog({
       <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-3 mb-1">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-50 border border-gray-100">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/5 border border-white/5">
               <config.Logo className="h-8 w-8" />
             </div>
             <div>
@@ -305,8 +305,8 @@ function ConnectDialog({
           </div>
           {/* Step indicator */}
           <div className="flex gap-2 mt-2">
-            <div className={`h-1 flex-1 rounded-full ${step === 'credentials' ? 'bg-gray-900' : 'bg-green-500'}`} />
-            <div className={`h-1 flex-1 rounded-full ${step === 'advertisers' ? 'bg-gray-900' : 'bg-gray-200'}`} />
+            <div className={`h-1 flex-1 rounded-full ${step === 'credentials' ? 'bg-[#00F5FF]/20' : 'bg-emerald-400'}`} />
+            <div className={`h-1 flex-1 rounded-full ${step === 'advertisers' ? 'bg-[#00F5FF]/20' : 'bg-gray-200'}`} />
           </div>
         </DialogHeader>
 
@@ -316,11 +316,11 @@ function ConnectDialog({
               {/* Connection type selector */}
               {types.length > 1 && (
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Connection Type</label>
+                  <label className="block text-xs font-medium text-white/70 mb-1.5">Connection Type</label>
                   <select
                     value={connectionType}
                     onChange={(e) => { setConnectionType(e.target.value); setFieldValues({}); setFieldErrors([]); }}
-                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white/95 focus:border-[#00F5FF]/50 focus:outline-none focus:ring-1 focus:ring-[#00F5FF]/30"
                   >
                     {types.map((t) => (
                       <option key={t.value} value={t.value}>{t.label}</option>
@@ -332,42 +332,42 @@ function ConnectDialog({
               {/* Credential fields */}
               {fields.map((field) => (
                 <div key={field.key}>
-                  <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                  <label className="block text-xs font-medium text-white/70 mb-1.5">
                     {field.label}
                     {field.required && <span className="text-red-400 ml-0.5">*</span>}
                   </label>
                   {field.type === 'select' && field.options ? (
                     <select value={fieldValues[field.key] ?? ''} onChange={(e) => setField(field.key, e.target.value)}
-                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400">
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white/95 focus:border-[#00F5FF]/50 focus:outline-none focus:ring-1 focus:ring-[#00F5FF]/30">
                       <option value="">Select...</option>
                       {field.options.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
                     </select>
                   ) : field.type === 'textarea' ? (
                     <textarea value={fieldValues[field.key] ?? ''} onChange={(e) => setField(field.key, e.target.value)}
                       placeholder={field.help} rows={4}
-                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400 font-mono text-xs" />
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white/95 placeholder:text-white/40 focus:border-[#00F5FF]/50 focus:outline-none focus:ring-1 focus:ring-[#00F5FF]/30 font-mono text-xs" />
                   ) : (
                     <input type={field.type === 'password' ? 'password' : 'text'} value={fieldValues[field.key] ?? ''}
                       onChange={(e) => setField(field.key, e.target.value)} placeholder={field.help}
-                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400" />
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white/95 placeholder:text-white/40 focus:border-[#00F5FF]/50 focus:outline-none focus:ring-1 focus:ring-[#00F5FF]/30" />
                   )}
                   {field.help && (
-                    <p className="mt-1 text-[10px] text-gray-400">
+                    <p className="mt-1 text-[10px] text-white/40">
                       {field.help}
-                      {field.link && <> <a href={field.link} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Open</a></>}
+                      {field.link && <> <a href={field.link} target="_blank" rel="noopener noreferrer" className="text-[#00F5FF] hover:underline">Open</a></>}
                     </p>
                   )}
                 </div>
               ))}
 
               {fieldErrors.length > 0 && (
-                <div className="rounded-lg bg-red-50 border border-red-100 p-3">
-                  <p className="text-xs text-red-700">Missing: {fieldErrors.join(', ')}</p>
+                <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3">
+                  <p className="text-xs text-red-400">Missing: {fieldErrors.join(', ')}</p>
                 </div>
               )}
 
               <button onClick={() => void handleSaveCredentials()} disabled={saving || !hasRequiredFilled}
-                className="w-full flex items-center justify-center gap-2 rounded-lg bg-gray-900 px-4 py-3 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50 transition-colors">
+                className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#00F5FF]/20 px-4 py-3 text-sm font-medium text-white hover:bg-[#00F5FF]/30 disabled:opacity-50 transition-colors">
                 {saving ? (
                   <><div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> Saving &amp; fetching accounts...</>
                 ) : 'Save & Fetch Accounts'}
@@ -379,39 +379,39 @@ function ConnectDialog({
             <>
               {loadingAccounts ? (
                 <div className="flex items-center justify-center py-8">
-                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-gray-900" />
-                  <span className="ml-2 text-sm text-gray-500">Loading accounts...</span>
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/10 border-t-gray-900" />
+                  <span className="ml-2 text-sm text-white/50">Loading accounts...</span>
                 </div>
               ) : subAccounts.length === 0 ? (
-                <div className="rounded-lg bg-yellow-50 border border-yellow-100 p-4 text-center">
-                  <p className="text-sm text-yellow-700">No sub-accounts found.</p>
-                  <p className="text-xs text-yellow-600 mt-1">Check your credentials or try a different connection type.</p>
-                  <button onClick={() => setStep('credentials')} className="mt-3 text-xs text-blue-600 hover:underline">Back to credentials</button>
+                <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/20 p-4 text-center">
+                  <p className="text-sm text-yellow-300">No sub-accounts found.</p>
+                  <p className="text-xs text-yellow-300 mt-1">Check your credentials or try a different connection type.</p>
+                  <button onClick={() => setStep('credentials')} className="mt-3 text-xs text-[#00F5FF] hover:underline">Back to credentials</button>
                 </div>
               ) : (
                 <>
-                  <p className="text-xs text-gray-500">{subAccounts.length} accounts found. Select the advertisers to monitor:</p>
-                  <div className="max-h-64 overflow-y-auto space-y-1 rounded-lg border border-gray-200 p-2">
+                  <p className="text-xs text-white/50">{subAccounts.length} accounts found. Select the advertisers to monitor:</p>
+                  <div className="max-h-64 overflow-y-auto space-y-1 rounded-lg border border-white/10 p-2">
                     {subAccounts.map((acc) => (
-                      <label key={acc.id} className={`flex items-center gap-3 rounded-lg px-3 py-2 cursor-pointer transition-colors ${selectedIds.has(acc.id) ? 'bg-green-50 border border-green-200' : 'hover:bg-gray-50 border border-transparent'}`}>
+                      <label key={acc.id} className={`flex items-center gap-3 rounded-lg px-3 py-2 cursor-pointer transition-colors ${selectedIds.has(acc.id) ? 'bg-green-50 border border-emerald-500/30' : 'hover:bg-white/5 border border-transparent'}`}>
                         <input type="checkbox" checked={selectedIds.has(acc.id)} onChange={() => toggleAccount(acc.id)}
-                          className="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500" />
+                          className="h-4 w-4 rounded border-white/15 text-emerald-300 focus:ring-green-500" />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{acc.name || acc.id}</p>
-                          <p className="text-[10px] text-gray-400">{acc.id}</p>
+                          <p className="text-sm font-medium text-white/95 truncate">{acc.name || acc.id}</p>
+                          <p className="text-[10px] text-white/40">{acc.id}</p>
                         </div>
                         {acc.status && (
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${acc.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${acc.status === 'active' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-white/10 text-white/50'}`}>
                             {acc.status}
                           </span>
                         )}
                       </label>
                     ))}
                   </div>
-                  <p className="text-[10px] text-gray-400">{selectedIds.size} selected</p>
+                  <p className="text-[10px] text-white/40">{selectedIds.size} selected</p>
 
                   <button onClick={() => void handleSaveAdvertisers()} disabled={saving || selectedIds.size === 0}
-                    className="w-full flex items-center justify-center gap-2 rounded-lg bg-gray-900 px-4 py-3 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50 transition-colors">
+                    className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#00F5FF]/20 px-4 py-3 text-sm font-medium text-white hover:bg-[#00F5FF]/30 disabled:opacity-50 transition-colors">
                     {saving ? 'Saving...' : `Save ${selectedIds.size} Advertiser${selectedIds.size !== 1 ? 's' : ''}`}
                   </button>
                 </>
@@ -420,15 +420,15 @@ function ConnectDialog({
           )}
 
           {/* Security note */}
-          <div className="rounded-lg bg-blue-50 border border-blue-100 p-3">
-            <p className="text-[11px] text-blue-700 leading-relaxed">
+          <div className="rounded-lg bg-[#00F5FF]/10 border border-[#00F5FF]/20 p-3">
+            <p className="text-[11px] text-[#00F5FF] leading-relaxed">
               Credentials are encrypted with AES-256-GCM. Plinth reads campaign data for selected advertisers only.
             </p>
           </div>
 
           {error && (
-            <div className="rounded-lg bg-red-50 border border-red-100 p-3">
-              <p className="text-xs text-red-700">{error}</p>
+            <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3">
+              <p className="text-xs text-red-400">{error}</p>
             </div>
           )}
         </div>
@@ -436,12 +436,12 @@ function ConnectDialog({
         <DialogFooter>
           {step === 'advertisers' && (
             <button onClick={() => setStep('credentials')}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+              className="rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-white/70 hover:bg-white/5 transition-colors">
               Back
             </button>
           )}
           <button onClick={() => onOpenChange(false)}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+            className="rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-white/70 hover:bg-white/5 transition-colors">
             Cancel
           </button>
         </DialogFooter>
@@ -532,27 +532,27 @@ function PlatformCard({ config, apiMode }: { config: PlatformConfig; apiMode: bo
       <div
         className={`group rounded-xl border p-5 transition-all cursor-pointer ${
           isConnected
-            ? 'border-green-200 bg-green-50/40 hover:shadow-md'
+            ? 'border-emerald-500/30 bg-emerald-500/10 hover:shadow-lg hover:shadow-[#00F5FF]/5'
             : hasError
-              ? 'border-red-200 bg-red-50/30'
-              : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'
+              ? 'border-red-200 bg-red-500/10/30'
+              : 'border-white/10 bg-white/5 hover:border-white/15 hover:shadow-lg hover:shadow-[#00F5FF]/5'
         }`}
         onClick={() => !isConnected && setDialogOpen(true)}
       >
         {/* Logo + status */}
         <div className="flex items-start justify-between mb-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gray-50 border border-gray-100 group-hover:border-gray-200 transition-colors">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/5 border border-white/5 group-hover:border-white/10 transition-colors">
             <config.Logo className="h-7 w-7" />
           </div>
           <div className="flex items-center gap-1.5">
             {agencyConn && (
-              <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
+              <span className="inline-flex items-center rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-white/50">
                 {agencyConn.connection_type}
               </span>
             )}
             {isConnected && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700">
-                <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                 {agencyConn?.advertiser_count ? `${agencyConn.advertiser_count} advertiser${agencyConn.advertiser_count !== 1 ? 's' : ''}` : 'Connected'}
               </span>
             )}
@@ -560,14 +560,14 @@ function PlatformCard({ config, apiMode }: { config: PlatformConfig; apiMode: bo
         </div>
 
         {/* Name + description */}
-        <h3 className="text-sm font-semibold text-gray-900 mb-1">{config.name}</h3>
-        <p className="text-xs text-gray-500 leading-relaxed mb-3">{config.description}</p>
+        <h3 className="text-sm font-semibold text-white/95 mb-1">{config.name}</h3>
+        <p className="text-xs text-white/50 leading-relaxed mb-3">{config.description}</p>
 
         {/* Connected state: sync info + actions */}
         {isConnected ? (
           <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
             {platformState?.lastSync && (
-              <p className="text-[10px] text-gray-400">
+              <p className="text-[10px] text-white/40">
                 Last sync: {new Date(platformState.lastSync.synced_at).toLocaleString()}
               </p>
             )}
@@ -576,7 +576,7 @@ function PlatformCard({ config, apiMode }: { config: PlatformConfig; apiMode: bo
               <select
                 value={platformState?.syncInterval ?? '1h'}
                 onChange={(e) => setSyncInterval(config.platform, e.target.value as SyncInterval)}
-                className="flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-[11px] text-gray-600"
+                className="flex-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-[11px] text-white/60"
               >
                 {SYNC_INTERVALS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -585,7 +585,7 @@ function PlatformCard({ config, apiMode }: { config: PlatformConfig; apiMode: bo
               <button
                 onClick={() => void handleSync()}
                 disabled={syncing}
-                className="rounded-lg bg-gray-900 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-gray-800 disabled:opacity-50 transition-colors"
+                className="rounded-lg bg-[#00F5FF]/20 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-[#00F5FF]/30 disabled:opacity-50 transition-colors"
               >
                 {syncing ? 'Syncing...' : 'Sync'}
               </button>
@@ -593,13 +593,13 @@ function PlatformCard({ config, apiMode }: { config: PlatformConfig; apiMode: bo
             <div className="flex gap-2">
               <button
                 onClick={() => setDialogOpen(true)}
-                className="flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-[11px] font-medium text-gray-600 hover:border-gray-300 transition-colors"
+                className="flex-1 rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-white/60 hover:border-white/15 transition-colors"
               >
                 Manage
               </button>
               <button
                 onClick={() => void handleDisconnect()}
-                className="flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-[11px] font-medium text-gray-500 hover:text-red-500 hover:border-red-200 transition-colors"
+                className="flex-1 rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-white/50 hover:text-red-400 hover:border-red-500/30 transition-colors"
               >
                 Disconnect
               </button>
@@ -608,7 +608,7 @@ function PlatformCard({ config, apiMode }: { config: PlatformConfig; apiMode: bo
         ) : (
           <button
             onClick={(e) => { e.stopPropagation(); setDialogOpen(true); }}
-            className="w-full rounded-lg bg-gray-900 px-3 py-2 text-xs font-medium text-white hover:bg-gray-800 transition-colors"
+            className="w-full rounded-lg bg-[#00F5FF]/20 px-3 py-2 text-xs font-medium text-white hover:bg-[#00F5FF]/30 transition-colors"
           >
             Connect
           </button>
@@ -714,50 +714,50 @@ function StorageCard({ config, apiMode }: { config: StorageConfig; apiMode: bool
     <div
       className={`group rounded-xl border p-5 transition-all ${
         isDisabled
-          ? 'border-gray-100 bg-gray-50/50 opacity-60'
+          ? 'border-white/5 bg-white/5/50 opacity-60'
           : connected
-            ? 'border-green-200 bg-green-50/40 hover:shadow-md'
-            : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md cursor-pointer'
+            ? 'border-emerald-500/30 bg-emerald-500/10 hover:shadow-lg hover:shadow-[#00F5FF]/5'
+            : 'border-white/10 bg-white/5 hover:border-white/15 hover:shadow-lg hover:shadow-[#00F5FF]/5 cursor-pointer'
       }`}
       onClick={() => !connected && !isDisabled && handleConnect()}
     >
       <div className="flex items-start justify-between mb-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gray-50 border border-gray-100 group-hover:border-gray-200 transition-colors">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/5 border border-white/5 group-hover:border-white/10 transition-colors">
           <config.Logo className="h-7 w-7" />
         </div>
         {connected && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
             Connected
           </span>
         )}
         {isDisabled && !connected && (
-          <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-400">
+          <span className="inline-flex items-center rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-white/40">
             Coming soon
           </span>
         )}
       </div>
 
-      <h3 className="text-sm font-semibold text-gray-900 mb-1">{config.name}</h3>
-      <p className="text-xs text-gray-500 leading-relaxed mb-1">{config.description}</p>
-      <p className="text-[10px] text-gray-400 mb-3">{config.scopes}</p>
+      <h3 className="text-sm font-semibold text-white/95 mb-1">{config.name}</h3>
+      <p className="text-xs text-white/50 leading-relaxed mb-1">{config.description}</p>
+      <p className="text-[10px] text-white/40 mb-3">{config.scopes}</p>
 
       {connected && (
         <div className="space-y-2">
           {email && (
-            <p className="text-[10px] text-gray-500">
-              <span className="font-medium text-gray-700">{email}</span>
+            <p className="text-[10px] text-white/50">
+              <span className="font-medium text-white/70">{email}</span>
             </p>
           )}
           {connectedAt && (
-            <p className="text-[10px] text-gray-400">
+            <p className="text-[10px] text-white/40">
               Connected {new Date(connectedAt).toLocaleDateString()}
             </p>
           )}
           <button
             onClick={(e) => { e.stopPropagation(); void handleDisconnect(); }}
             disabled={disconnecting}
-            className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-[11px] font-medium text-gray-500 hover:text-red-500 hover:border-red-200 disabled:opacity-50 transition-colors"
+            className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-white/50 hover:text-red-400 hover:border-red-500/30 disabled:opacity-50 transition-colors"
           >
             {disconnecting ? 'Disconnecting...' : 'Disconnect'}
           </button>
@@ -767,7 +767,7 @@ function StorageCard({ config, apiMode }: { config: StorageConfig; apiMode: bool
       {!connected && !isDisabled && (
         <button
           onClick={(e) => { e.stopPropagation(); handleConnect(); }}
-          className="w-full flex items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-xs font-medium text-white hover:bg-gray-800 transition-colors"
+          className="w-full flex items-center justify-center gap-2 rounded-lg bg-[#00F5FF]/20 px-3 py-2 text-xs font-medium text-white hover:bg-[#00F5FF]/30 transition-colors"
         >
           <config.Logo className="h-4 w-4" />
           Connect {config.name}
@@ -775,8 +775,8 @@ function StorageCard({ config, apiMode }: { config: StorageConfig; apiMode: bool
       )}
 
       {error && (
-        <div className="mt-2 rounded-lg bg-red-50 border border-red-100 p-2">
-          <p className="text-[10px] text-red-600">{error}</p>
+        <div className="mt-2 rounded-lg bg-red-500/10 border border-red-500/20 p-2">
+          <p className="text-[10px] text-red-400">{error}</p>
         </div>
       )}
     </div>
@@ -814,8 +814,8 @@ export function IntegrationsPage() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">Apps & MCP</h2>
-        <p className="mt-1 text-sm text-gray-500">
+        <h2 className="text-2xl font-bold text-white">Apps & MCP</h2>
+        <p className="mt-1 text-sm text-white/50">
           Connect your advertising platforms and configure API access for MCP clients.
         </p>
       </div>
@@ -823,9 +823,9 @@ export function IntegrationsPage() {
       {/* Platform Connectors Grid (Perplexity-style) */}
       <div>
         <div className="flex items-center gap-2 mb-4">
-          <h3 className="text-sm font-semibold text-gray-900">Platform Connectors</h3>
+          <h3 className="text-sm font-semibold text-white/95">Platform Connectors</h3>
           {connectedCount > 0 && (
-            <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700">
+            <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
               {connectedCount} connected
             </span>
           )}
@@ -840,12 +840,12 @@ export function IntegrationsPage() {
       {/* Cloud Storage (OAuth redirect — like Claude.ai / Perplexity) */}
       <div>
         <div className="flex items-center gap-2 mb-4">
-          <h3 className="text-sm font-semibold text-gray-900">Cloud Storage</h3>
-          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
+          <h3 className="text-sm font-semibold text-white/95">Cloud Storage</h3>
+          <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-white/50">
             OAuth
           </span>
         </div>
-        <p className="text-xs text-gray-500 mb-4">
+        <p className="text-xs text-white/50 mb-4">
           Connect cloud storage to import files directly into Plinth. One click — no credentials needed.
         </p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
