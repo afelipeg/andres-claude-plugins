@@ -163,14 +163,13 @@ async function checkInfrastructure(db: unknown | null): Promise<StageResult> {
     const requiredTables = [
       'agency_connections',
       'sync_results',
-      'platform_credentials',
       'agent_state',
       'decisions',
       'action_log',
       'outcomes',
       'goals',
-      'memory',
-      'file_repo',
+      'agent_memory',
+      'delivery_files',
       'mcp_connections',
       'users',
     ];
@@ -230,7 +229,7 @@ async function checkConnectorSync(
     try {
       const connRows = await sql.unsafe(
         `SELECT id, agency_id, platform, status, created_at
-         FROM agency_connections WHERE status = 'connected' ORDER BY created_at DESC LIMIT 50`,
+         FROM agency_connections WHERE status = 'connected' ORDER BY connected_at DESC LIMIT 50`,
       );
       const connections = connRows as Array<Record<string, unknown>>;
       results.push({
@@ -302,7 +301,7 @@ async function checkConnectorSync(
         });
       } else {
         const credRows = await sql.unsafe(
-          `SELECT id, platform, encrypted_credentials FROM platform_credentials LIMIT 3`,
+          `SELECT id, platform, credentials FROM agency_connections WHERE status = 'connected' LIMIT 3`,
         );
         if ((credRows as unknown[]).length === 0) {
           results.push({
@@ -316,7 +315,7 @@ async function checkConnectorSync(
           const { decrypt } = await import('@openagency/memory');
           for (const row of credRows as Array<Record<string, unknown>>) {
             try {
-              const encrypted = row['encrypted_credentials'] as string;
+              const encrypted = row['credentials'] as string;
               if (encrypted) {
                 decrypt(encrypted, encKey);
                 decryptOk++;
@@ -450,7 +449,7 @@ const ENGINE_SKILLS: Array<{ engineId: string; skillId: string }> = [
   { engineId: 'media-architect', skillId: 'mmm-optimize' },
   { engineId: 'campaign-ops', skillId: 'optimization-analyze' },
   { engineId: 'executive-bridge', skillId: 'revenue-translate' },
-  { engineId: 'delivery', skillId: 'pdf-report' },
+  { engineId: 'delivery', skillId: 'monthly-report' },
 ];
 
 async function checkEngines(agency: OpenAgency): Promise<StageResult> {

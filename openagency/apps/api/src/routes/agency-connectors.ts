@@ -10,7 +10,11 @@ import type { Context, Next } from 'hono';
 import { ulid } from 'ulid';
 import { authMiddleware } from '@openagency/auth';
 import { encrypt, decrypt } from '@openagency/memory';
-import { getConnector, hasConnector } from '@openagency/connectors';
+import {
+  getConnector, hasConnector, registerConnector,
+  GoogleAdsConnector, MetaConnector, DV360Connector, TikTokAdsConnector,
+} from '@openagency/connectors';
+import type { PlatformConnector } from '@openagency/connectors';
 import type { ConnectorPlatform, OAuthTokens, PlatformAccount, AuthPayload } from '@openagency/types';
 import type { AgencyRepo } from '@openagency/memory';
 import type { ConnectorInfra } from '../connectors/setup.js';
@@ -75,6 +79,47 @@ const REQUIRED_BY_TYPE: Record<string, Record<string, string[]>> = {
 
 function isValidPlatform(p: string): p is ConnectorPlatform {
   return VALID_PLATFORMS.has(p);
+}
+
+/** Get or create a connector for the given platform.
+ *  If not in the global registry, instantiate one on-the-fly from DB credentials. */
+function getOrCreateConnector(platform: ConnectorPlatform, creds: Record<string, string>): PlatformConnector {
+  if (hasConnector(platform)) return getConnector(platform);
+
+  // Create a connector instance from decrypted credentials
+  let connector: PlatformConnector;
+  switch (platform) {
+    case 'google_ads':
+      connector = new GoogleAdsConnector({
+        clientId: creds['client_id'] ?? '',
+        clientSecret: creds['client_secret'] ?? '',
+        developerToken: creds['developer_token'] ?? '',
+      });
+      break;
+    case 'meta_ads':
+      connector = new MetaConnector({
+        appId: creds['app_id'] ?? '',
+        appSecret: creds['app_secret'] ?? '',
+      });
+      break;
+    case 'dv360':
+      connector = new DV360Connector({
+        clientId: creds['client_id'] ?? '',
+        clientSecret: creds['client_secret'] ?? '',
+      });
+      break;
+    case 'tiktok_ads':
+      connector = new TikTokAdsConnector({
+        appId: creds['app_id'] ?? '',
+        secret: creds['app_secret'] ?? creds['secret'] ?? '',
+      });
+      break;
+    default:
+      throw new Error(`No connector implementation for ${platform}`);
+  }
+  // Register for reuse during this server lifecycle
+  registerConnector(connector);
+  return connector;
 }
 
 /** Resolve agency ID: impersonation JWT claim → DB lookup → fallback to auth.sub */
@@ -364,8 +409,11 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra, agency
       return c.json({ error: 'decrypt_failed' }, 500);
     }
 
-    if (!hasConnector(platform)) {
-      return c.json({ error: 'no_connector', message: `No connector for ${platform}` }, 404);
+    let connector: PlatformConnector;
+    try {
+      connector = getOrCreateConnector(platform, creds);
+    } catch (err) {
+      return c.json({ error: 'no_connector', message: err instanceof Error ? err.message : `No connector for ${platform}` }, 404);
     }
 
     const days = body.date_range_days ?? 30;
@@ -391,8 +439,6 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra, agency
     if (advertiserIds.length === 0) {
       return c.json({ error: 'no_advertisers', message: 'No active advertisers to sync. Add advertisers first.' }, 400);
     }
-
-    const connector = getConnector(platform);
     const allRows: import('@openagency/types').NormalizedCampaignRow[] = [];
     const errors: Array<{ advertiser_id: string; error: string }> = [];
 
