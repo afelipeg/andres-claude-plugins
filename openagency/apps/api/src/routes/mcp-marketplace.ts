@@ -203,6 +203,7 @@ export function mcpMarketplaceRoutes(
       catalog_id?: string;
       name?: string;
       url?: string;
+      endpoint_url?: string;
       auth_type?: string;
       auth_fields?: Record<string, string>;
       auth_token?: string;
@@ -215,6 +216,7 @@ export function mcpMarketplaceRoutes(
     let catalogId: string | null = null;
     let authType = body.auth_type ?? 'bearer';
     let pid: number | null = null;
+    let credentialOnly = false;
 
     if (body.catalog_id) {
       // Catalog connection
@@ -229,11 +231,14 @@ export function mcpMarketplaceRoutes(
         // Hosted (e.g., Amazon) — connect directly
         mcpUrl = catalog.endpoint;
       } else if (process.env['SKIP_MCP_SPAWN'] === 'true') {
-        // Railway / hosted environment — self-hosted MCPs not supported
-        return c.json({
-          error: 'self_hosted_not_available',
-          message: `${catalog.name} requires local spawning which is not available on hosted environments. Use a hosted MCP or provide a custom endpoint URL.`,
-        }, 400);
+        if (body.endpoint_url) {
+          // User provided a custom endpoint — use it directly
+          mcpUrl = body.endpoint_url;
+        } else {
+          // Credential-only mode — save credentials without spawning
+          credentialOnly = true;
+          mcpUrl = `pending://${catalogId}`;
+        }
       } else {
         // Self-hosted — Plinth spawns the process
         const envVars = buildEnvFromAuthFields(catalog.id, body.auth_fields ?? {});
@@ -260,7 +265,48 @@ export function mcpMarketplaceRoutes(
       return c.json({ error: 'missing_params', message: 'Provide catalog_id or url' }, 400);
     }
 
-    // Discover tools
+    // Credential-only mode — persist without connecting to an MCP server
+    if (credentialOnly) {
+      const catalog = MCP_CATALOG.find((e) => e.id === catalogId)!;
+      const tools = catalog.tools_preview.map((name) => ({
+        name,
+        description: `${catalog.name} tool`,
+        inputSchema: {} as Record<string, unknown>,
+      }));
+
+      const id = ulid();
+      await connectionRepo.save({
+        id,
+        client_id: clientId,
+        name: mcpName,
+        url: mcpUrl,
+        auth_type: authType,
+        auth_token: encryptionKey && body.auth_fields
+          ? encrypt(JSON.stringify(body.auth_fields), encryptionKey)
+          : null,
+        catalog_id: catalogId,
+        tools,
+        status: 'connected',
+        error: null,
+        allowed_engines: [],
+        process_pid: null,
+        connected_at: new Date().toISOString(),
+        last_health: null,
+      });
+
+      return c.json({
+        id,
+        name: mcpName,
+        url: mcpUrl,
+        catalog_id: catalogId,
+        status: 'connected',
+        credential_only: true,
+        tools_discovered: tools.length,
+        tools: tools.map((t) => ({ name: t.name, description: t.description })),
+      }, 201);
+    }
+
+    // Discover tools via live MCP connection
     let tools: Array<{ name: string; description: string; inputSchema: Record<string, unknown> }> = [];
     try {
       const server = await mcpRegistry.connect(mcpName, mcpUrl, body.auth_token);
@@ -329,6 +375,15 @@ export function mcpMarketplaceRoutes(
   app.post('/v1/mcp/connections/:id/test', async (c) => {
     const conn = await connectionRepo.getById(c.req.param('id'));
     if (!conn) return c.json({ error: 'not_found' }, 404);
+
+    // Credential-only connections cannot be tested (no live server)
+    if (conn.url.startsWith('pending://')) {
+      return c.json({
+        status: 'credential_only',
+        message: 'This connection stores credentials only. Provide an endpoint_url to enable live testing.',
+        tools_count: Array.isArray(conn.tools) ? conn.tools.length : 0,
+      });
+    }
 
     try {
       const server = await mcpRegistry.connect(conn.name, conn.url);

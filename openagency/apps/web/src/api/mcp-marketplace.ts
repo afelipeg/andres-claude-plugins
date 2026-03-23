@@ -77,6 +77,7 @@ export async function createConnection(data: {
   auth_type?: string;
   auth_fields?: Record<string, string>;
   auth_token?: string;
+  endpoint_url?: string;
 }): Promise<{ id: string; name: string; tools_discovered: number; status: string }> {
   return fetchJson('/v1/mcp/connections', {
     method: 'POST',

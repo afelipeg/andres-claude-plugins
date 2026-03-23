@@ -127,6 +127,7 @@ function CatalogConnectDialog({
   onConnected: () => void;
 }) {
   const [fields, setFields] = useState<Record<string, string>>({});
+  const [endpointUrl, setEndpointUrl] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ tools_discovered: number } | null>(null);
@@ -142,6 +143,7 @@ function CatalogConnectDialog({
       const res = await createConnection({
         catalog_id: entry.id,
         auth_fields: fields,
+        ...(endpointUrl.trim() ? { endpoint_url: endpointUrl.trim() } : {}),
       });
       setResult({ tools_discovered: res.tools_discovered });
       onConnected();
@@ -189,11 +191,13 @@ function CatalogConnectDialog({
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Managed badge */}
+            {/* Info banner */}
             {!entry.hosted && (
               <div className="rounded-lg bg-white/5 border border-white/10 p-3 flex items-center gap-2">
                 <Server className="h-4 w-4 text-white/50 shrink-0" />
-                <p className="text-[11px] text-white/60">Plinth manages the server for you. Just enter your credentials.</p>
+                <p className="text-[11px] text-white/60">
+                  Enter your credentials to connect. Optionally provide a custom MCP endpoint URL.
+                </p>
               </div>
             )}
 
@@ -208,6 +212,24 @@ function CatalogConnectDialog({
                 />
               ))}
             </div>
+
+            {/* Custom MCP Endpoint — only for non-hosted entries */}
+            {!entry.hosted && (
+              <div>
+                <label className="block text-xs font-medium text-white/70 mb-1.5">
+                  Custom MCP Endpoint <span className="text-white/40">(optional)</span>
+                </label>
+                <input
+                  value={endpointUrl}
+                  onChange={(e) => setEndpointUrl(e.target.value)}
+                  placeholder="https://your-meta-mcp.example.com/mcp"
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-mono text-white/90 placeholder:text-white/30 focus:border-[#00F5FF]/50 focus:outline-none focus:ring-1 focus:ring-[#00F5FF]/30"
+                />
+                <p className="text-[10px] text-white/40 mt-1">
+                  Leave empty to store credentials only. Provide a URL if you have a hosted MCP server.
+                </p>
+              </div>
+            )}
 
             {/* Tools preview */}
             <div className="rounded-lg bg-white/5 p-3">
