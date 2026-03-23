@@ -13,6 +13,7 @@ import { encrypt, decrypt } from '@openagency/memory';
 import {
   getConnector, hasConnector, registerConnector,
   GoogleAdsConnector, MetaConnector, DV360Connector, TikTokAdsConnector,
+  getServiceAccountToken, parseServiceAccountJson,
 } from '@openagency/connectors';
 import type { PlatformConnector } from '@openagency/connectors';
 import type { ConnectorPlatform, OAuthTokens, PlatformAccount, AuthPayload } from '@openagency/types';
@@ -103,10 +104,16 @@ function getOrCreateConnector(platform: ConnectorPlatform, creds: Record<string,
       });
       break;
     case 'dv360':
-      connector = new DV360Connector({
-        clientId: creds['client_id'] ?? '',
-        clientSecret: creds['client_secret'] ?? '',
-      });
+      if (creds['service_account_json']) {
+        connector = new DV360Connector({
+          serviceAccountJson: creds['service_account_json'],
+        });
+      } else {
+        connector = new DV360Connector({
+          clientId: creds['client_id'] ?? '',
+          clientSecret: creds['client_secret'] ?? '',
+        });
+      }
       break;
     case 'tiktok_ads':
       connector = new TikTokAdsConnector({
@@ -702,9 +709,17 @@ async function fetchSubAccounts(
       const token = creds.access_token ?? '';
       if (!partnerId) throw new Error('partner_id required');
 
-      // Refresh token if needed — direct API call (no connector dependency)
+      // Resolve access token — service account JWT or OAuth2 refresh
       let accessToken = token;
-      if (!accessToken && creds.refresh_token && creds.client_id && creds.client_secret) {
+      if (!accessToken && creds.service_account_json) {
+        // Service account: sign JWT and exchange for access token
+        const sa = parseServiceAccountJson(creds.service_account_json);
+        const saToken = await getServiceAccountToken(sa, [
+          'https://www.googleapis.com/auth/display-video',
+          'https://www.googleapis.com/auth/doubleclickbidmanager',
+        ]);
+        accessToken = saToken.access_token;
+      } else if (!accessToken && creds.refresh_token && creds.client_id && creds.client_secret) {
         const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -867,9 +882,12 @@ function buildPlatformCredentials(
         ...base,
         account_id: advertiserId, // advertiser_id for DV360
         partner_id: creds.partner_id,
+        // Service account creds: connector handles token internally via JWT
+        // OAuth2 creds: pass through for refresh flow
         client_id: creds.client_id,
         client_secret: creds.client_secret,
         refresh_token: creds.refresh_token,
+        service_account_json: creds.service_account_json,
       };
     case 'tiktok_ads':
       return {

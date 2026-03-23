@@ -23,10 +23,17 @@ export {
 // Platform connectors (ad platforms)
 export { MetaConnector } from './platforms/meta/meta-connector.js';
 export { GoogleAdsConnector } from './platforms/google-ads/google-ads-connector.js';
-export { DV360Connector } from './platforms/dv360/dv360-connector.js';
+export { DV360Connector, type DV360ServiceAccountConfig } from './platforms/dv360/dv360-connector.js';
 export { TikTokAdsConnector } from './platforms/tiktok-ads/tiktok-ads-connector.js';
 export { TikTokShopConnector } from './platforms/tiktok-shop/tiktok-shop-connector.js';
 export { AmazonAdsConnector } from './platforms/amazon-ads/amazon-ads-connector.js';
+
+// Google service account auth (used by DV360, potentially other Google APIs)
+export {
+  getServiceAccountToken,
+  parseServiceAccountJson,
+  type GoogleServiceAccountKey,
+} from './platforms/google-shared/google-service-account.js';
 
 // Storage connectors (batch file import)
 export { GoogleDriveConnector, type DriveFile } from './platforms/google-drive/google-drive-connector.js';

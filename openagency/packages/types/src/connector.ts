@@ -45,6 +45,7 @@ export interface PlatformCredentials {
   shop_id?: string;          // TikTok Shop: shop ID
   region?: string;           // Amazon Ads: na | eu | fe
   partner_id?: string;       // DV360: partner ID
+  service_account_json?: string; // DV360: Google Cloud service account JSON (JWT auth)
   connected_at: string; // ISO 8601
   last_sync_at?: string; // ISO 8601
 }

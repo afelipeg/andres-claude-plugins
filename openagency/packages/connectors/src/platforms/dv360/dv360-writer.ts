@@ -2,6 +2,7 @@
 // Extends DV360Connector with write operations via the Display &
 // Video 360 API v3. Uses PATCH lineItems/{id} for budget, entity
 // status, and bid strategy updates.
+// Supports both OAuth2 and service account authentication.
 
 import type {
   PlatformCredentials,
@@ -10,14 +11,26 @@ import type {
   BudgetUpdateParams,
   BidAdjustParams,
 } from '@openagency/types';
-import { DV360Connector, type DV360ConnectorConfig } from './dv360-connector.js';
+import { DV360Connector, type DV360ConnectorConfig, type DV360ServiceAccountConfig } from './dv360-connector.js';
 import { withRetry } from '../../utils/retry.js';
 
 const DV360_URL = 'https://displayvideo.googleapis.com/v3';
 
 export class DV360Writer extends DV360Connector implements WritablePlatformConnector {
-  constructor(config: DV360ConnectorConfig) {
+  constructor(config: DV360ConnectorConfig | DV360ServiceAccountConfig) {
     super(config);
+  }
+
+  /**
+   * Resolve the access token for API calls.
+   * For service accounts, generates a fresh JWT-based token.
+   * For OAuth2, uses the token from PlatformCredentials.
+   */
+  private async resolveToken(credentials: PlatformCredentials): Promise<string> {
+    if (this.isServiceAccount) {
+      return this.getServiceAccountAccessToken();
+    }
+    return credentials.tokens.access_token;
   }
 
   async updateCampaignBudget(
@@ -36,11 +49,13 @@ export class DV360Writer extends DV360Connector implements WritablePlatformConne
       },
     };
 
+    const accessToken = await this.resolveToken(credentials);
+
     const res = await withRetry(() =>
       fetch(url, {
         method: 'PATCH',
         headers: {
-          Authorization: `Bearer ${credentials.tokens.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
@@ -70,11 +85,13 @@ export class DV360Writer extends DV360Connector implements WritablePlatformConne
       entityStatus: 'ENTITY_STATUS_PAUSED',
     };
 
+    const accessToken = await this.resolveToken(credentials);
+
     const res = await withRetry(() =>
       fetch(url, {
         method: 'PATCH',
         headers: {
-          Authorization: `Bearer ${credentials.tokens.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
@@ -104,11 +121,13 @@ export class DV360Writer extends DV360Connector implements WritablePlatformConne
       entityStatus: 'ENTITY_STATUS_ACTIVE',
     };
 
+    const accessToken = await this.resolveToken(credentials);
+
     const res = await withRetry(() =>
       fetch(url, {
         method: 'PATCH',
         headers: {
-          Authorization: `Bearer ${credentials.tokens.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
@@ -142,11 +161,13 @@ export class DV360Writer extends DV360Connector implements WritablePlatformConne
       },
     };
 
+    const accessToken = await this.resolveToken(credentials);
+
     const res = await withRetry(() =>
       fetch(url, {
         method: 'PATCH',
         headers: {
-          Authorization: `Bearer ${credentials.tokens.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),

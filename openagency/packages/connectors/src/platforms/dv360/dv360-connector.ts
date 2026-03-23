@@ -2,6 +2,7 @@
 // Display & Video 360 Reporting API v3. Async report generation.
 // Supports insertion order + line item granularity.
 // Extended metrics: CTR, CPC, viewable impressions, active views.
+// Supports both OAuth2 and service account authentication.
 
 import type {
   PlatformConnector,
@@ -13,6 +14,11 @@ import type {
   DataLevel,
 } from '@openagency/types';
 import { createGoogleOAuth, googleTokensToOAuth } from '../google-shared/google-oauth.js';
+import {
+  parseServiceAccountJson,
+  getServiceAccountToken,
+  type GoogleServiceAccountKey,
+} from '../google-shared/google-service-account.js';
 import { RateLimiter, PLATFORM_RATE_LIMITS } from '../../utils/rate-limiter.js';
 import { withRetry } from '../../utils/retry.js';
 
@@ -61,30 +67,91 @@ const GROUP_BYS: Record<DataLevel, string[]> = {
   ],
 };
 
+/** OAuth2 configuration (client_id + client_secret flow) */
 export interface DV360ConnectorConfig {
   clientId: string;
   clientSecret: string;
 }
 
+/** Service account configuration (JWT assertion flow) */
+export interface DV360ServiceAccountConfig {
+  serviceAccountJson: string;
+}
+
+/** Type guard: is this a service account config? */
+function isServiceAccountConfig(
+  config: DV360ConnectorConfig | DV360ServiceAccountConfig,
+): config is DV360ServiceAccountConfig {
+  return 'serviceAccountJson' in config && !!config.serviceAccountJson;
+}
+
 export class DV360Connector implements PlatformConnector {
   readonly platform = 'dv360' as const;
-  private oauth;
+  private oauth: ReturnType<typeof createGoogleOAuth> | null = null;
+  private serviceAccount: GoogleServiceAccountKey | null = null;
   private limiter = new RateLimiter(PLATFORM_RATE_LIMITS.dv360);
 
-  constructor(private config: DV360ConnectorConfig) {
-    this.oauth = createGoogleOAuth(config.clientId, config.clientSecret, SCOPES);
+  // Cached service account token to avoid re-signing on every call
+  private saTokenCache: { access_token: string; expires_at: number } | null = null;
+
+  constructor(private config: DV360ConnectorConfig | DV360ServiceAccountConfig) {
+    if (isServiceAccountConfig(config)) {
+      this.serviceAccount = parseServiceAccountJson(config.serviceAccountJson);
+    } else {
+      this.oauth = createGoogleOAuth(config.clientId, config.clientSecret, SCOPES);
+    }
+  }
+
+  /**
+   * Get a valid access token for service account auth.
+   * Caches the token and refreshes 5 minutes before expiry.
+   */
+  async getServiceAccountAccessToken(): Promise<string> {
+    if (!this.serviceAccount) {
+      throw new Error('DV360 connector not configured with service account');
+    }
+
+    // Return cached token if still valid (5 min buffer)
+    if (this.saTokenCache && this.saTokenCache.expires_at > Date.now() + 300_000) {
+      return this.saTokenCache.access_token;
+    }
+
+    const result = await getServiceAccountToken(this.serviceAccount, SCOPES);
+    this.saTokenCache = {
+      access_token: result.access_token,
+      expires_at: Date.now() + result.expires_in * 1000,
+    };
+    return result.access_token;
+  }
+
+  /** Returns true if this connector uses service account auth */
+  get isServiceAccount(): boolean {
+    return this.serviceAccount !== null;
   }
 
   getAuthUrl(redirectUri: string, state?: string): string {
+    if (!this.oauth) throw new Error('getAuthUrl not available for service account auth');
     return this.oauth.getAuthUrl(redirectUri, state);
   }
 
   async exchangeCode(code: string, redirectUri: string): Promise<OAuthTokens> {
+    if (!this.oauth) throw new Error('exchangeCode not available for service account auth');
     const tokens = await this.oauth.exchangeCode(code, redirectUri);
     return googleTokensToOAuth(tokens);
   }
 
   async refreshTokens(tokens: OAuthTokens): Promise<OAuthTokens> {
+    // Service account: generate a fresh token via JWT assertion
+    if (this.serviceAccount) {
+      const accessToken = await this.getServiceAccountAccessToken();
+      return {
+        access_token: accessToken,
+        token_type: 'Bearer',
+        expires_at: this.saTokenCache!.expires_at,
+      };
+    }
+
+    if (!this.oauth) throw new Error('No OAuth client configured');
     if (!tokens.refresh_token) throw new Error('No refresh token available');
     const refreshed = await this.oauth.refreshToken(tokens.refresh_token);
     return {
@@ -97,12 +164,26 @@ export class DV360Connector implements PlatformConnector {
     return tokens.expires_at > Date.now() + 300_000;
   }
 
+  /**
+   * Resolve a valid access token from OAuthTokens.
+   * For service accounts, ignores the tokens param and generates a fresh one.
+   * For OAuth2, returns the token from the tokens param.
+   */
+  private async resolveAccessToken(tokens: OAuthTokens): Promise<string> {
+    if (this.serviceAccount) {
+      return this.getServiceAccountAccessToken();
+    }
+    return tokens.access_token;
+  }
+
   async listAccounts(tokens: OAuthTokens): Promise<PlatformAccount[]> {
     await this.limiter.acquire();
 
+    const accessToken = await this.resolveAccessToken(tokens);
+
     const res = await withRetry(() =>
       fetch(`${DV360_URL}/partners`, {
-        headers: { Authorization: `Bearer ${tokens.access_token}` },
+        headers: { Authorization: `Bearer ${accessToken}` },
       }),
     );
 
@@ -150,6 +231,8 @@ export class DV360Connector implements PlatformConnector {
   ): Promise<string> {
     await this.limiter.acquire();
 
+    const accessToken = await this.resolveAccessToken(tokens);
+
     const [startYear, startMonth, startDay] = dateRange.start.split('-').map(Number);
     const [endYear, endMonth, endDay] = dateRange.end.split('-').map(Number);
 
@@ -175,7 +258,7 @@ export class DV360Connector implements PlatformConnector {
       fetch(`${DBM_URL}/queries`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${tokens.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
@@ -194,11 +277,13 @@ export class DV360Connector implements PlatformConnector {
   private async runQuery(tokens: OAuthTokens, queryId: string): Promise<void> {
     await this.limiter.acquire();
 
+    const accessToken = await this.resolveAccessToken(tokens);
+
     const res = await withRetry(() =>
       fetch(`${DBM_URL}/queries/${queryId}:run`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${tokens.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
       }),
@@ -217,8 +302,10 @@ export class DV360Connector implements PlatformConnector {
     for (let i = 0; i < maxAttempts; i++) {
       await this.limiter.acquire();
 
+      const accessToken = await this.resolveAccessToken(tokens);
+
       const res = await fetch(`${DBM_URL}/queries/${queryId}/reports`, {
-        headers: { Authorization: `Bearer ${tokens.access_token}` },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
 
       if (!res.ok) {
@@ -252,9 +339,11 @@ export class DV360Connector implements PlatformConnector {
     tokens: OAuthTokens,
     level: DataLevel,
   ): Promise<NormalizedCampaignRow[]> {
+    const accessToken = await this.resolveAccessToken(tokens);
+
     const res = await withRetry(() =>
       fetch(reportUrl, {
-        headers: { Authorization: `Bearer ${tokens.access_token}` },
+        headers: { Authorization: `Bearer ${accessToken}` },
       }),
     );
 
