@@ -1,6 +1,9 @@
 // ─── Agency Connector Routes (Multi-Advertiser Model) ───────────────
 // Level 1: agency_connections — master credentials per platform
 // Level 2: advertiser_scopes — per-client advertiser selection
+//
+// FIX (2026-03-22): Added unified sync-all endpoint, health check,
+// persistent sync results (survive redeploys), and updated_at touch.
 
 import { Hono } from 'hono';
 import type { Context, Next } from 'hono';
@@ -11,6 +14,9 @@ import { getConnector, hasConnector } from '@openagency/connectors';
 import type { ConnectorPlatform, OAuthTokens, PlatformAccount, AuthPayload } from '@openagency/types';
 import type { AgencyRepo } from '@openagency/memory';
 import type { ConnectorInfra } from '../connectors/setup.js';
+import { createLogger } from '@openagency/core';
+
+const log = createLogger('agency-connectors');
 
 type Db = { unsafe: (q: string, params?: unknown[]) => Promise<unknown[]> };
 
@@ -143,11 +149,13 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra, agency
     if (!agencyId) return c.json({ error: 'no_agency', message: 'User is not assigned to an agency' }, 404);
     const rows = await sql.unsafe(
       `SELECT ac.id, ac.platform, ac.connection_type, ac.status, ac.connected_at, ac.updated_at,
-              COUNT(s.id)::int AS advertiser_count
+              COUNT(s.id)::int AS advertiser_count,
+              sr.synced_at AS last_sync, sr.status AS sync_status, sr.row_count AS sync_row_count
        FROM agency_connections ac
        LEFT JOIN advertiser_scopes s ON s.agency_connection_id = ac.id AND s.status = 'active'
+       LEFT JOIN sync_results sr ON sr.agency_id = ac.agency_id AND sr.platform = ac.platform
        WHERE ac.agency_id = $1
-       GROUP BY ac.id`,
+       GROUP BY ac.id, sr.synced_at, sr.status, sr.row_count`,
       [agencyId],
     );
     return c.json({ connections: rows });
@@ -173,7 +181,18 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra, agency
       [conn.id],
     );
 
-    return c.json({ connection: rows[0], advertisers: scopes });
+    // Get latest sync result
+    const syncRows = await sql.unsafe(
+      `SELECT synced_at, status, row_count, error FROM sync_results
+       WHERE agency_id = $1 AND platform = $2 ORDER BY synced_at DESC LIMIT 1`,
+      [agencyId, platform],
+    );
+
+    return c.json({
+      connection: rows[0],
+      advertisers: scopes,
+      last_sync: syncRows.length > 0 ? syncRows[0] : null,
+    });
   });
 
   // ─── DELETE /v1/agency/connections/:platform — Disconnect ──────
@@ -186,6 +205,15 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra, agency
       `DELETE FROM agency_connections WHERE agency_id = $1 AND platform = $2`,
       [agencyId, platform],
     );
+
+    // Clean up sync results
+    await sql.unsafe(
+      `DELETE FROM sync_results WHERE agency_id = $1 AND platform = $2`,
+      [agencyId, platform],
+    ).catch(() => {});
+
+    // Remove from in-memory cache
+    infra.syncResultCache.delete(`${agencyId}:${platform}`);
 
     return c.json({ disconnected: true, platform });
   });
@@ -218,6 +246,13 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra, agency
 
     try {
       const accounts = await fetchSubAccounts(platform, row.connection_type, creds, infra);
+
+      // Touch updated_at on successful API call — proves credentials are valid
+      await sql.unsafe(
+        `UPDATE agency_connections SET updated_at = NOW() WHERE agency_id = $1 AND platform = $2`,
+        [agencyId, platform],
+      ).catch(() => {});
+
       return c.json({ platform, accounts });
     } catch (err) {
       return c.json({
@@ -304,10 +339,15 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra, agency
     const agencyId = await resolveAgencyId(c, agencyRepo);
     if (!agencyId) return c.json({ error: 'no_agency', message: 'User is not assigned to an agency' }, 404);
     const platform = c.req.param('platform');
-    const body = await c.req.json<{ advertiser_id: string; date_range_days?: number }>();
+
+    let body: { advertiser_id?: string; date_range_days?: number } = {};
+    try {
+      body = await c.req.json();
+    } catch {
+      // Empty body is OK for sync-all mode
+    }
 
     if (!isValidPlatform(platform)) return c.json({ error: 'invalid_platform' }, 400);
-    if (!body.advertiser_id) return c.json({ error: 'missing_advertiser_id' }, 400);
 
     // Load agency credentials
     const connRows = await sql.unsafe(
@@ -328,43 +368,176 @@ export function agencyConnectorRoutes(db: unknown, infra: ConnectorInfra, agency
       return c.json({ error: 'no_connector', message: `No connector for ${platform}` }, 404);
     }
 
-    // Build PlatformCredentials with advertiser-scoped ID
-    const platformCreds = buildPlatformCredentials(platform, row.connection_type, creds, body.advertiser_id);
-
-    const connector = getConnector(platform);
     const days = body.date_range_days ?? 30;
     const end = new Date();
     const start = new Date(end.getTime() - days * 86_400_000);
+    const dateRange = { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
+
+    // If advertiser_id is provided, sync just that one.
+    // If not, sync ALL active advertisers for this platform.
+    let advertiserIds: string[] = [];
+    if (body.advertiser_id) {
+      advertiserIds = [body.advertiser_id];
+    } else {
+      const advRows = await sql.unsafe(
+        `SELECT s.advertiser_id FROM advertiser_scopes s
+         JOIN agency_connections ac ON ac.id = s.agency_connection_id
+         WHERE ac.agency_id = $1 AND ac.platform = $2 AND s.status = 'active'`,
+        [agencyId, platform],
+      );
+      advertiserIds = (advRows as Array<{ advertiser_id: string }>).map((r) => r.advertiser_id);
+    }
+
+    if (advertiserIds.length === 0) {
+      return c.json({ error: 'no_advertisers', message: 'No active advertisers to sync. Add advertisers first.' }, 400);
+    }
+
+    const connector = getConnector(platform);
+    const allRows: import('@openagency/types').NormalizedCampaignRow[] = [];
+    const errors: Array<{ advertiser_id: string; error: string }> = [];
+
+    for (const advId of advertiserIds) {
+      const platformCreds = buildPlatformCredentials(platform, row.connection_type, creds, advId);
+      try {
+        const fetchedRows = await connector.fetchCampaigns(platformCreds, dateRange);
+        allRows.push(...fetchedRows);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.warn({ platform, advertiser_id: advId, error: msg }, 'Sync failed for advertiser');
+        errors.push({ advertiser_id: advId, error: msg });
+      }
+    }
+
+    const syncStatus = errors.length === advertiserIds.length ? 'error'
+      : errors.length > 0 ? 'partial'
+      : 'success';
+
+    // Cache the sync result in memory for context assembly
+    const syncResult = {
+      platform,
+      status: syncStatus as 'success' | 'error',
+      rows: allRows,
+      row_count: allRows.length,
+      date_range: dateRange,
+      synced_at: new Date().toISOString(),
+      error: errors.length > 0 ? errors.map((e) => `${e.advertiser_id}: ${e.error}`).join('; ') : undefined,
+    };
+    infra.syncResultCache.set(`${agencyId}:${platform}`, syncResult);
+
+    // Persist sync result to DB (survives redeploys)
+    try {
+      await sql.unsafe(
+        `INSERT INTO sync_results (id, agency_id, platform, status, row_count, date_range_start, date_range_end, synced_at, error, rows_json)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8, $9)
+         ON CONFLICT (agency_id, platform, advertiser_id)
+         DO UPDATE SET status = $4, row_count = $5, date_range_start = $6, date_range_end = $7,
+                       synced_at = NOW(), error = $8, rows_json = $9`,
+        [
+          ulid(), agencyId, platform, syncStatus, allRows.length,
+          dateRange.start, dateRange.end,
+          errors.length > 0 ? errors.map((e) => `${e.advertiser_id}: ${e.error}`).join('; ') : null,
+          allRows.length <= 500 ? JSON.stringify(allRows) : JSON.stringify(allRows.slice(0, 500)),
+        ],
+      );
+    } catch (err) {
+      log.warn({ err }, 'Failed to persist sync result to DB');
+    }
+
+    // Touch updated_at on the agency_connections row so stale detection works
+    await sql.unsafe(
+      `UPDATE agency_connections SET updated_at = NOW(), status = 'connected' WHERE agency_id = $1 AND platform = $2`,
+      [agencyId, platform],
+    ).catch(() => {});
+
+    return c.json({
+      platform,
+      status: syncStatus,
+      row_count: allRows.length,
+      advertisers_synced: advertiserIds.length - errors.length,
+      advertisers_failed: errors.length,
+      errors: errors.length > 0 ? errors : undefined,
+      synced_at: new Date().toISOString(),
+    });
+  });
+
+  // ─── POST /v1/agency/connections/:platform/health ──────────────
+  // Validates that stored credentials can actually authenticate with the platform API.
+  // Does NOT sync data — just checks connectivity.
+  app.post('/v1/agency/connections/:platform/health', async (c) => {
+    const agencyId = await resolveAgencyId(c, agencyRepo);
+    if (!agencyId) return c.json({ error: 'no_agency' }, 404);
+    const platform = c.req.param('platform');
+
+    if (!isValidPlatform(platform)) return c.json({ error: 'invalid_platform' }, 400);
+
+    const connRows = await sql.unsafe(
+      `SELECT credentials, connection_type FROM agency_connections WHERE agency_id = $1 AND platform = $2`,
+      [agencyId, platform],
+    );
+    if (connRows.length === 0) return c.json({ error: 'not_connected' }, 404);
+
+    const row = connRows[0] as { credentials: string; connection_type: string };
+    let creds: Record<string, string>;
+    try {
+      creds = JSON.parse(decrypt(row.credentials, encKey)) as Record<string, string>;
+    } catch {
+      return c.json({ healthy: false, error: 'decrypt_failed', message: 'Credentials could not be decrypted' });
+    }
 
     try {
-      const rows = await connector.fetchCampaigns(platformCreds, {
-        start: start.toISOString().slice(0, 10),
-        end: end.toISOString().slice(0, 10),
-      });
+      // Try fetching sub-accounts as a health check (lightest possible API call)
+      await fetchSubAccounts(platform, row.connection_type, creds, infra);
 
-      // Cache the sync result for context assembly (scoped by agency)
-      infra.syncResultCache.set(`${agencyId}:${platform}`, {
-        platform,
-        status: 'success',
-        rows,
-        row_count: rows.length,
-        date_range: { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) },
-        synced_at: new Date().toISOString(),
-      });
+      // Touch updated_at
+      await sql.unsafe(
+        `UPDATE agency_connections SET updated_at = NOW(), status = 'connected' WHERE agency_id = $1 AND platform = $2`,
+        [agencyId, platform],
+      ).catch(() => {});
 
-      return c.json({
-        platform,
-        advertiser_id: body.advertiser_id,
-        status: 'success',
-        row_count: rows.length,
-        synced_at: new Date().toISOString(),
-      });
+      return c.json({ healthy: true, platform, checked_at: new Date().toISOString() });
     } catch (err) {
-      return c.json({
-        error: 'sync_failed',
-        message: err instanceof Error ? err.message : String(err),
-      }, 500);
+      const msg = err instanceof Error ? err.message : String(err);
+
+      // Mark as error status
+      await sql.unsafe(
+        `UPDATE agency_connections SET status = 'error', updated_at = NOW() WHERE agency_id = $1 AND platform = $2`,
+        [agencyId, platform],
+      ).catch(() => {});
+
+      return c.json({ healthy: false, platform, error: msg, checked_at: new Date().toISOString() });
     }
+  });
+
+  // ─── GET /v1/agency/connections/:platform/sync/status ──────────
+  // Returns the latest sync result from DB (persisted across redeploys)
+  app.get('/v1/agency/connections/:platform/sync/status', async (c) => {
+    const agencyId = await resolveAgencyId(c, agencyRepo);
+    if (!agencyId) return c.json({ error: 'no_agency' }, 404);
+    const platform = c.req.param('platform');
+
+    const rows = await sql.unsafe(
+      `SELECT status, row_count, date_range_start, date_range_end, synced_at, error
+       FROM sync_results WHERE agency_id = $1 AND platform = $2
+       ORDER BY synced_at DESC LIMIT 1`,
+      [agencyId, platform],
+    );
+
+    if (rows.length === 0) {
+      return c.json({ platform, has_synced: false, last_sync: null });
+    }
+
+    const r = rows[0] as Record<string, unknown>;
+    return c.json({
+      platform,
+      has_synced: true,
+      last_sync: {
+        status: r.status,
+        row_count: r.row_count,
+        date_range: { start: r.date_range_start, end: r.date_range_end },
+        synced_at: r.synced_at,
+        error: r.error,
+      },
+    });
   });
 
   return app;

@@ -149,6 +149,41 @@ export async function createApp() {
     kbDocumentRepo = new KBDocumentRepo(db);
     kbChunkRepo = new KBChunkRepo(db);
     await seedAdminUser(userRepo);
+
+    // ─── Hydrate sync result cache from PostgreSQL ──────────────
+    // This ensures sync data survives Railway redeploys.
+    try {
+      const sqlDb = db as { unsafe: (q: string, params?: unknown[]) => Promise<unknown[]> };
+      const syncRows = await sqlDb.unsafe(
+        `SELECT agency_id, platform, status, row_count, date_range_start, date_range_end, synced_at, error, rows_json
+         FROM sync_results ORDER BY synced_at DESC`,
+      );
+      let hydrated = 0;
+      for (const row of syncRows as Array<Record<string, unknown>>) {
+        const agencyId = row['agency_id'] as string;
+        const platform = row['platform'] as import('@openagency/types').ConnectorPlatform;
+        const parsedRows = row['rows_json'] ? JSON.parse(row['rows_json'] as string) : [];
+        const syncResult = {
+          platform,
+          status: (row['status'] as 'success' | 'partial' | 'error') ?? 'error',
+          rows: parsedRows,
+          row_count: Number(row['row_count'] ?? 0),
+          date_range: {
+            start: (row['date_range_start'] as string) ?? '',
+            end: (row['date_range_end'] as string) ?? '',
+          },
+          synced_at: row['synced_at'] ? new Date(row['synced_at'] as string).toISOString() : new Date().toISOString(),
+          error: (row['error'] as string) ?? undefined,
+        };
+        connectorInfra.syncResultCache.set(`${agencyId}:${platform}`, syncResult);
+        hydrated++;
+      }
+      if (hydrated > 0) {
+        log.info({ count: hydrated }, 'Sync result cache hydrated from PostgreSQL');
+      }
+    } catch (err) {
+      log.warn({ err }, 'Failed to hydrate sync result cache from DB (table may not exist yet)');
+    }
   } else {
     log.warn('No DATABASE_URL — running without persistence');
   }
@@ -206,10 +241,10 @@ export async function createApp() {
   const schedulerContextBuilder = async (clientId: string): Promise<Record<string, unknown>> => {
     let ctx: Record<string, unknown> = {};
 
-    // Platform sync data
+    // Platform sync data (with DB fallback for cold-start)
     if (connectorInfra) {
-      const { assembleContextFromSync } = await import('./connectors/context-assembler.js');
-      ctx = assembleContextFromSync(connectorInfra.syncResultCache);
+      const { assembleContextFromSyncWithDbFallback } = await import('./connectors/context-assembler.js');
+      ctx = await assembleContextFromSyncWithDbFallback(connectorInfra.syncResultCache, db, undefined, undefined);
     }
 
     // Client batch data
@@ -308,6 +343,18 @@ export async function createApp() {
 
   const scheduler = new PipelineScheduler(mesh, eventBus, scheduleRepo, schedulerContextBuilder);
   await scheduler.start();
+
+  // ─── Platform Sync Scheduler (weekly auto-sync for connected platforms) ──
+  if (db) {
+    const { PlatformSyncScheduler } = await import('./connectors/sync-scheduler.js');
+    const syncScheduler = new PlatformSyncScheduler({
+      db,
+      connectorInfra,
+      encryptionKey: process.env['ENCRYPTION_KEY'] ?? '',
+    });
+    syncScheduler.start();
+    log.info('Platform sync scheduler active (weekly auto-sync for connected agencies)');
+  }
 
   // ─── Human Feedback Loop (agent-to-human escalation) ────────────
   const hflCoordinator = new HFLCoordinator(eventBus, {
@@ -566,7 +613,7 @@ export async function createApp() {
   app.route('/', goalRoutes({ goalRepo, decomposer: goalDecomposer, tracker: goalTracker }));
 
   // ─── Mesh routes (with HFL + Scheduler) ────────────────────────
-  app.route('/', meshRoutes(mesh, hflCoordinator, scheduler, connectorInfra, clientDataRepo ?? undefined, mcpClientRegistry, scorecardDbRepo ?? undefined, agencyRepo ?? undefined, quotaRepo ?? undefined));
+  app.route('/', meshRoutes(mesh, hflCoordinator, scheduler, connectorInfra, clientDataRepo ?? undefined, mcpClientRegistry, scorecardDbRepo ?? undefined, agencyRepo ?? undefined, quotaRepo ?? undefined, db));
 
   // ─── Connector routes ──────────────────────────────────────────
   app.route('/', connectorRoutes(connectorInfra, eventBus));

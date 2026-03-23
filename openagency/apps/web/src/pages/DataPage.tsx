@@ -1,8 +1,8 @@
 // ─── Data Upload Page ────────────────────────────────────────────────
-// Drag-and-drop file upload, upload history, and preview
+// Drag-and-drop file upload, upload history, preview, and connected source sync status
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Upload, FileText, Trash2, Eye, X } from 'lucide-react';
+import { Upload, FileText, Trash2, Eye, X, RefreshCw, Database, Clock, Plug } from 'lucide-react';
 import {
   uploadFile,
   listUploads,
@@ -12,6 +12,14 @@ import {
   type UploadRecord,
   type UploadDetail,
 } from '../api/uploads';
+import {
+  getSyncStatus,
+  syncPlatform,
+  type SyncStatusResponse,
+} from '../api/connectors';
+import { useConnectorStore } from '../stores/connector-store';
+import { PLATFORMS } from '../components/platform-logos';
+import { isApiMode } from '../api/agency';
 import {
   Dialog,
   DialogContent,
@@ -31,6 +39,201 @@ const DATA_TYPES = [
   { value: 'budget_plan', label: 'Budget Plan' },
   { value: 'other', label: 'Other' },
 ];
+
+/** Human-readable time-ago */
+function timeAgo(dateStr: string | null | undefined): string {
+  if (!dateStr) return 'Never';
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diffMs = now - then;
+  if (diffMs < 0) return 'Just now';
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
+
+// ─── Connected Sources Panel ────────────────────────────────────────
+
+interface SourceSyncInfo {
+  platform: string;
+  name: string;
+  connected: boolean;
+  syncStatus: SyncStatusResponse | null;
+  syncing: boolean;
+  error: string | null;
+}
+
+function ConnectedSourcesPanel() {
+  const apiMode = isApiMode();
+  const [sources, setSources] = useState<SourceSyncInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const connectedPlatforms = useConnectorStore((s) => s.getConnectedPlatforms());
+
+  useEffect(() => {
+    if (!apiMode || connectedPlatforms.length === 0) {
+      setLoading(false);
+      return;
+    }
+
+    const loadAll = async () => {
+      setLoading(true);
+      const results: SourceSyncInfo[] = [];
+      for (const ps of connectedPlatforms) {
+        const cfg = PLATFORMS.find((p) => p.platform === ps.platform);
+        let syncStatus: SyncStatusResponse | null = null;
+        try {
+          syncStatus = await getSyncStatus(ps.platform);
+        } catch {
+          // No sync data
+        }
+        results.push({
+          platform: ps.platform,
+          name: cfg?.name ?? ps.platform.replace(/_/g, ' '),
+          connected: true,
+          syncStatus,
+          syncing: false,
+          error: null,
+        });
+      }
+      setSources(results);
+      setLoading(false);
+    };
+    void loadAll();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiMode, connectedPlatforms.length]);
+
+  const handleSyncSource = async (platform: string) => {
+    setSources((prev) =>
+      prev.map((s) => (s.platform === platform ? { ...s, syncing: true, error: null } : s)),
+    );
+    try {
+      const result = await syncPlatform(platform);
+      if (result.error) {
+        setSources((prev) =>
+          prev.map((s) => (s.platform === platform ? { ...s, syncing: false, error: result.error ?? 'Sync failed' } : s)),
+        );
+      } else {
+        setSources((prev) =>
+          prev.map((s) =>
+            s.platform === platform
+              ? {
+                  ...s,
+                  syncing: false,
+                  error: null,
+                  syncStatus: {
+                    platform,
+                    has_synced: true,
+                    last_sync: result,
+                    row_count: result.row_count ?? 0,
+                    synced_at: result.synced_at ?? new Date().toISOString(),
+                  },
+                }
+              : s,
+          ),
+        );
+      }
+    } catch (err) {
+      setSources((prev) =>
+        prev.map((s) =>
+          s.platform === platform
+            ? { ...s, syncing: false, error: err instanceof Error ? err.message : 'Sync failed' }
+            : s,
+        ),
+      );
+    }
+  };
+
+  if (!apiMode || connectedPlatforms.length === 0) return null;
+
+  const totalRows = sources.reduce((sum, s) => sum + (s.syncStatus?.row_count ?? 0), 0);
+  const syncedCount = sources.filter((s) => s.syncStatus?.has_synced).length;
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/5 shadow-sm shadow-black/20 overflow-hidden">
+      <div className="border-b border-white/5 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <Plug className="h-4 w-4 text-[#00F5FF]" />
+              <h3 className="text-sm font-semibold text-white/95">Connected Sources</h3>
+            </div>
+            <p className="text-xs text-white/50 mt-0.5">
+              {syncedCount} of {sources.length} synced
+              {totalRows > 0 && <> -- {totalRows.toLocaleString()} total rows</>}
+            </p>
+          </div>
+          {totalRows > 0 && (
+            <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-1 text-[10px] font-medium text-emerald-300">
+              <Database className="h-3 w-3" />
+              {totalRows.toLocaleString()}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/10 border-t-white/60" />
+          <span className="ml-2 text-xs text-white/50">Loading sync status...</span>
+        </div>
+      ) : (
+        <div className="divide-y divide-white/5">
+          {sources.map((src) => {
+            const cfg = PLATFORMS.find((p) => p.platform === src.platform);
+            return (
+              <div key={src.platform} className="flex items-center gap-4 px-6 py-3 hover:bg-white/5 transition-colors">
+                {/* Platform logo */}
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5 border border-white/5 shrink-0">
+                  {cfg && <cfg.Logo className="h-5 w-5" />}
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white/90 truncate">{src.name}</p>
+                  <div className="flex items-center gap-3 mt-0.5">
+                    <span className="flex items-center gap-1 text-[10px] text-white/40">
+                      <Clock className="h-2.5 w-2.5" />
+                      {timeAgo(src.syncStatus?.synced_at)}
+                    </span>
+                    {(src.syncStatus?.row_count ?? 0) > 0 && (
+                      <span className="flex items-center gap-1 text-[10px] text-white/40">
+                        <Database className="h-2.5 w-2.5" />
+                        {(src.syncStatus?.row_count ?? 0).toLocaleString()} rows
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Error */}
+                {src.error && (
+                  <span className="text-[10px] text-amber-400 max-w-[120px] truncate" title={src.error}>
+                    {src.error}
+                  </span>
+                )}
+
+                {/* Sync button */}
+                <button
+                  onClick={() => void handleSyncSource(src.platform)}
+                  disabled={src.syncing}
+                  className="flex items-center gap-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 px-2.5 py-1.5 text-[11px] font-medium text-white/70 disabled:opacity-50 transition-colors shrink-0"
+                >
+                  <RefreshCw className={`h-3 w-3 ${src.syncing ? 'animate-spin' : ''}`} />
+                  {src.syncing ? 'Syncing' : 'Sync'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Upload Zone ─────────────────────────────────────────────────────
 
@@ -471,6 +674,9 @@ export function DataPage() {
           Uploaded data is automatically merged into subsequent analysis cycles.
         </p>
       </div>
+
+      {/* Connected Sources — sync status for connected platforms */}
+      <ConnectedSourcesPanel />
 
       {/* Upload zone */}
       <UploadZone onUpload={(f, dt) => void handleUpload(f, dt)} uploading={uploading} />

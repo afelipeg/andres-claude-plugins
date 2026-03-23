@@ -66,13 +66,37 @@ function fmtNum(n: number): string {
 }
 
 function fmtDate(s: string | null): string {
-  if (!s) return '—';
+  if (!s) return '\u2014';
   return new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function fmtDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
+}
+
+/** Human-readable time-ago */
+function timeAgo(dateStr: string | null | undefined): string {
+  if (!dateStr) return 'Never';
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  if (diffMs < 0) return 'Just now';
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
+
+/** Whether a connector is stale */
+function isConnectorStale(status: string, updatedAt: string | null): boolean {
+  if (status === 'stale' || status === 'expired' || status === 'error') return true;
+  if (status === 'connected' && updatedAt) {
+    return (Date.now() - new Date(updatedAt).getTime()) > 86_400_000; // 24h
+  }
+  return false;
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -92,6 +116,11 @@ const STATUS_COLORS: Record<string, string> = {
   failed: 'bg-red-100 text-red-400',
   success: 'bg-emerald-500/100/20 text-emerald-300',
   timeout: 'bg-amber-500/100/20 text-amber-300',
+  connected: 'bg-emerald-500/100/20 text-emerald-300',
+  stale: 'bg-amber-500/100/20 text-amber-300',
+  expired: 'bg-amber-500/100/20 text-amber-300',
+  error: 'bg-red-500/20 text-red-300',
+  disconnected: 'bg-white/10 text-white/50',
 };
 
 // ─── Tab definitions ─────────────────────────────────────────────────
@@ -247,11 +276,11 @@ function UsersTab({ users, onDeactivate, onReactivate }: {
         <TableBody>
           {filtered.map((u) => (
             <TableRow key={u.id}>
-              <TableCell className="font-medium">{u.name || '—'}</TableCell>
+              <TableCell className="font-medium">{u.email.split('@')[0]}</TableCell>
               <TableCell className="text-xs">{u.email}</TableCell>
               <TableCell><Badge variant="outline" className="text-xs">{ROLE_LABELS[u.role] ?? u.role}</Badge></TableCell>
               <TableCell><span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[u.status] ?? 'bg-white/10 text-white/60'}`}>{u.status}</span></TableCell>
-              <TableCell className="text-xs text-white/50">{fmtDate(u.last_login_at)}</TableCell>
+              <TableCell className="text-xs text-white/50">{fmtDate(u.last_login)}</TableCell>
               <TableCell className="text-xs text-white/50">{fmtDate(u.created_at)}</TableCell>
               <TableCell>
                 {u.status === 'active' ? (
@@ -341,10 +370,10 @@ function RunsTab({ runs }: { runs: AdminRun[] }) {
             <TableRow key={r.id}>
               <TableCell className="font-mono text-xs">{r.id.slice(0, 12)}...</TableCell>
               <TableCell className="text-xs">{r.pipeline_id}</TableCell>
-              <TableCell className="text-xs">{r.client_id ?? '—'}</TableCell>
+              <TableCell className="text-xs">{r.agency_id ?? '\u2014'}</TableCell>
               <TableCell><span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[r.status] ?? 'bg-white/10 text-white/60'}`}>{r.status}</span></TableCell>
               <TableCell className="text-xs text-white/50">{fmtDate(r.started_at)}</TableCell>
-              <TableCell className="text-xs">{fmtDuration(r.total_duration_ms)}</TableCell>
+              <TableCell className="text-xs">{fmtDuration(r.duration_ms)}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -455,32 +484,80 @@ function TokensTab({ data }: { data: TokenData | null }) {
   );
 }
 
-// ─── Connectors Tab ──────────────────────────────────────────────────
+// ─── Connectors Tab (enhanced with diagnostics) ─────────────────────
 
 function ConnectorsTab({ connectors }: { connectors: AdminConnector[] }) {
   if (!connectors.length) return <EmptyState msg="No connectors configured" />;
 
   // Status donut
   const statusCounts: Record<string, number> = {};
+  const staleCount = connectors.filter((c) => isConnectorStale(c.status, c.updated_at)).length;
   for (const c of connectors) {
-    const s = c.status ?? 'unknown';
-    statusCounts[s] = (statusCounts[s] ?? 0) + 1;
+    // Compute effective status (connected but >24h = stale)
+    const effective = isConnectorStale(c.status, c.updated_at) && c.status === 'connected' ? 'stale' : (c.status ?? 'unknown');
+    statusCounts[effective] = (statusCounts[effective] ?? 0) + 1;
   }
+
+  const STATUS_DONUT_COLORS: Record<string, string> = {
+    connected: '#22c55e',
+    stale: '#f59e0b',
+    expired: '#f59e0b',
+    error: '#ef4444',
+    unknown: '#94a3b8',
+    disconnected: '#94a3b8',
+  };
+
+  const donutData = Object.entries(statusCounts).map(([name, y]) => ({
+    name: name.charAt(0).toUpperCase() + name.slice(1),
+    y,
+    color: STATUS_DONUT_COLORS[name] ?? '#94a3b8',
+  }));
 
   const donutOpts: Highcharts.Options = {
     chart: { type: 'pie', height: 220 },
     title: { text: undefined },
     plotOptions: { pie: { innerSize: '55%', dataLabels: { format: '{point.name}: {point.y}' } } },
-    colors: ['#22c55e', '#ef4444', '#f59e0b', '#94a3b8'],
-    series: [{ name: 'Count', data: Object.entries(statusCounts).map(([name, y]) => ({ name, y })), type: 'pie' }],
+    series: [{ name: 'Count', data: donutData, type: 'pie' }],
     credits: { enabled: false },
   };
 
   return (
     <div className="space-y-4">
+      {/* Summary cards */}
+      <div className="grid grid-cols-3 gap-4 max-w-lg">
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-center">
+          <p className="text-2xl font-bold text-white/95">{connectors.length}</p>
+          <p className="text-[10px] text-white/50 uppercase tracking-wider mt-1">Total</p>
+        </div>
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-center">
+          <p className="text-2xl font-bold text-emerald-300">{connectors.filter((c) => c.status === 'connected' && !isConnectorStale(c.status, c.updated_at)).length}</p>
+          <p className="text-[10px] text-emerald-400/70 uppercase tracking-wider mt-1">Healthy</p>
+        </div>
+        <div className={`rounded-xl border p-4 text-center ${staleCount > 0 ? 'border-amber-500/20 bg-amber-500/5' : 'border-white/10 bg-white/5'}`}>
+          <p className={`text-2xl font-bold ${staleCount > 0 ? 'text-amber-300' : 'text-white/50'}`}>{staleCount}</p>
+          <p className={`text-[10px] uppercase tracking-wider mt-1 ${staleCount > 0 ? 'text-amber-400/70' : 'text-white/40'}`}>Stale / Error</p>
+        </div>
+      </div>
+
       <div className="max-w-xs rounded-xl border border-white/10 bg-white/5 p-4">
         <HighchartsReact highcharts={Highcharts} options={donutOpts} />
       </div>
+
+      {/* Stale connectors warning */}
+      {staleCount > 0 && (
+        <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
+          <div>
+            <p className="text-xs font-medium text-amber-300">
+              {staleCount} connector{staleCount !== 1 ? 's' : ''} need{staleCount === 1 ? 's' : ''} attention
+            </p>
+            <p className="text-[10px] text-white/40 mt-0.5">
+              Connectors marked as stale have not been updated in over 24 hours, have expired credentials, or returned API errors. Affected agencies should re-sync or reconnect.
+            </p>
+          </div>
+        </div>
+      )}
+
       <Table>
         <TableHeader>
           <TableRow>
@@ -489,20 +566,37 @@ function ConnectorsTab({ connectors }: { connectors: AdminConnector[] }) {
             <TableHead>Type</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Advertisers</TableHead>
+            <TableHead>Connected</TableHead>
             <TableHead>Last Updated</TableHead>
+            <TableHead>Freshness</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {connectors.map((c) => (
-            <TableRow key={c.id}>
-              <TableCell className="text-xs">{c.agency_id}</TableCell>
-              <TableCell className="font-medium">{c.platform}</TableCell>
-              <TableCell className="text-xs">{c.connection_type}</TableCell>
-              <TableCell><span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[c.status] ?? 'bg-white/10 text-white/60'}`}>{c.status}</span></TableCell>
-              <TableCell>{c.advertiser_count}</TableCell>
-              <TableCell className="text-xs text-white/50">{fmtDate(c.updated_at)}</TableCell>
-            </TableRow>
-          ))}
+          {connectors.map((c) => {
+            const stale = isConnectorStale(c.status, c.updated_at);
+            const effectiveStatus = stale && c.status === 'connected' ? 'stale' : c.status;
+            return (
+              <TableRow key={c.id} className={stale ? 'bg-amber-500/5' : ''}>
+                <TableCell className="text-xs">{c.agency_id}</TableCell>
+                <TableCell className="font-medium">{c.platform}</TableCell>
+                <TableCell className="text-xs">{c.connection_type}</TableCell>
+                <TableCell>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[effectiveStatus] ?? 'bg-white/10 text-white/60'}`}>
+                    {stale && <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />}
+                    {effectiveStatus}
+                  </span>
+                </TableCell>
+                <TableCell>{c.advertiser_count}</TableCell>
+                <TableCell className="text-xs text-white/50">{fmtDate(c.connected_at)}</TableCell>
+                <TableCell className="text-xs text-white/50">{fmtDate(c.updated_at)}</TableCell>
+                <TableCell>
+                  <span className={`text-[10px] font-medium ${stale ? 'text-amber-300' : 'text-emerald-300'}`}>
+                    {timeAgo(c.updated_at)}
+                  </span>
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>
@@ -584,12 +678,12 @@ function FederationTab({ data }: { data: FederationData | null }) {
             <TableBody>
               {peers.map((p, i) => (
                 <TableRow key={i}>
-                  <TableCell className="font-mono text-xs">{p.peer_url}</TableCell>
-                  <TableCell>{p.peer_name ?? '—'}</TableCell>
-                  <TableCell>{p.total}</TableCell>
-                  <TableCell className="text-emerald-300">{p.success}</TableCell>
-                  <TableCell className="text-red-400">{p.failed}</TableCell>
-                  <TableCell className="text-xs text-white/50">{fmtDate(p.last_call)}</TableCell>
+                  <TableCell className="font-mono text-xs">{String(p['peer_url'] ?? '')}</TableCell>
+                  <TableCell>{String(p['peer_name'] ?? '\u2014')}</TableCell>
+                  <TableCell>{String(p['total'] ?? 0)}</TableCell>
+                  <TableCell className="text-emerald-300">{String(p['success'] ?? 0)}</TableCell>
+                  <TableCell className="text-red-400">{String(p['failed'] ?? 0)}</TableCell>
+                  <TableCell className="text-xs text-white/50">{fmtDate(String(p['last_call'] ?? ''))}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -618,10 +712,10 @@ function FederationTab({ data }: { data: FederationData | null }) {
                 <TableRow key={i}>
                   <TableCell><Badge variant="outline" className="text-[10px]">{String(entry['direction'])}</Badge></TableCell>
                   <TableCell className="font-mono text-xs">{String(entry['peer_url'] ?? '').slice(0, 30)}</TableCell>
-                  <TableCell className="text-xs">{String(entry['engine_id'] ?? '—')}</TableCell>
-                  <TableCell className="text-xs">{String(entry['skill_id'] ?? '—')}</TableCell>
+                  <TableCell className="text-xs">{String(entry['engine_id'] ?? '\u2014')}</TableCell>
+                  <TableCell className="text-xs">{String(entry['skill_id'] ?? '\u2014')}</TableCell>
                   <TableCell><span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${STATUS_COLORS[String(entry['status'])] ?? 'bg-white/10 text-white/60'}`}>{String(entry['status'])}</span></TableCell>
-                  <TableCell className="text-xs">{entry['duration_ms'] ? fmtDuration(Number(entry['duration_ms'])) : '—'}</TableCell>
+                  <TableCell className="text-xs">{entry['duration_ms'] ? fmtDuration(Number(entry['duration_ms'])) : '\u2014'}</TableCell>
                   <TableCell className="text-xs text-white/50">{fmtDate(String(entry['created_at'] ?? ''))}</TableCell>
                 </TableRow>
               ))}
@@ -657,13 +751,13 @@ function QuotasTab({ requests, onRefresh }: { requests: AdminQuotaRequest[]; onR
   const [grantInput, setGrantInput] = useState<Record<string, number>>({});
 
   const handleApprove = async (id: string) => {
-    const amount = grantInput[id] ?? (requests.find((r) => r.id === id)?.extra_runs_requested ?? 8);
+    const amount = grantInput[id] ?? (requests.find((r) => r.id === id)?.requested_brand_count ?? 8);
     await approveQuotaRequest(id, amount);
     onRefresh();
   };
 
   const handleDeny = async (id: string) => {
-    await denyQuotaRequest(id);
+    await denyQuotaRequest(id, 'Denied by admin');
     onRefresh();
   };
 
@@ -677,8 +771,7 @@ function QuotasTab({ requests, onRefresh }: { requests: AdminQuotaRequest[]; onR
           <TableHeader>
             <TableRow>
               <TableHead>Agency</TableHead>
-              <TableHead>Requester</TableHead>
-              <TableHead>Month</TableHead>
+              <TableHead>Current</TableHead>
               <TableHead>Requested</TableHead>
               <TableHead>Reason</TableHead>
               <TableHead>Grant</TableHead>
@@ -688,16 +781,15 @@ function QuotasTab({ requests, onRefresh }: { requests: AdminQuotaRequest[]; onR
           <TableBody>
             {requests.map((r) => (
               <TableRow key={r.id}>
-                <TableCell className="font-medium">{r.agency_name ?? r.agency_id}</TableCell>
-                <TableCell className="text-xs">{r.requester_email ?? r.requested_by}</TableCell>
-                <TableCell className="text-xs">{r.month}</TableCell>
-                <TableCell>{r.extra_runs_requested}</TableCell>
-                <TableCell className="text-xs text-white/50 max-w-48 truncate">{r.reason ?? '—'}</TableCell>
+                <TableCell className="font-medium">{r.agency_id}</TableCell>
+                <TableCell className="text-xs">{r.current_brand_count}</TableCell>
+                <TableCell>{r.requested_brand_count}</TableCell>
+                <TableCell className="text-xs text-white/50 max-w-48 truncate">{r.reason ?? '\u2014'}</TableCell>
                 <TableCell>
                   <input
                     type="number"
                     min={1}
-                    value={grantInput[r.id] ?? r.extra_runs_requested}
+                    value={grantInput[r.id] ?? r.requested_brand_count}
                     onChange={(e) => setGrantInput({ ...grantInput, [r.id]: Number(e.target.value) })}
                     className="w-16 rounded border border-white/10 px-2 py-1 text-sm text-center"
                   />
@@ -722,7 +814,7 @@ function QuotasTab({ requests, onRefresh }: { requests: AdminQuotaRequest[]; onR
 function ImpersonateBanner({ agencyId, onExit }: { agencyId: string; onExit: () => void }) {
   return (
     <div className="flex items-center justify-between bg-red-500/80 px-4 py-2 text-white text-sm">
-      <span>Viewing as <strong>{agencyId}</strong> — impersonation mode</span>
+      <span>Viewing as <strong>{agencyId}</strong> -- impersonation mode</span>
       <button onClick={onExit} className="rounded bg-white/20 px-3 py-1 text-xs font-semibold hover:bg-white/30 transition-colors">
         Exit impersonation
       </button>
@@ -750,7 +842,7 @@ export function SuperAdminDashboard() {
   useEffect(() => {
     const adminToken = sessionStorage.getItem('plinth_admin_token');
     if (adminToken) {
-      // We're impersonating — show the agency id from storage
+      // We're impersonating -- show the agency id from storage
       setImpersonating(sessionStorage.getItem('plinth_impersonate_agency') ?? 'unknown');
     }
   }, []);
@@ -771,12 +863,12 @@ export function SuperAdminDashboard() {
           break;
         }
         case 'users': {
-          const data = await getUsers({ limit: 200 });
+          const data = await getUsers();
           setUsers(data.users as AdminUser[]);
           break;
         }
         case 'runs': {
-          const data = await getRuns({ limit: 100 });
+          const data = await getRuns(100);
           setRuns(data.runs);
           break;
         }
@@ -798,7 +890,7 @@ export function SuperAdminDashboard() {
         case 'quotas': {
           const data = await getAdminQuotaRequests();
           setQuotaRequests(data.requests);
-          setPendingQuotaCount(data.pending_count);
+          setPendingQuotaCount(data.requests.filter((r) => r.status === 'pending').length);
           break;
         }
       }

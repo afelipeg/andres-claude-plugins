@@ -1,4 +1,6 @@
 // ─── Connector API Client ──────────────────────────────────────────
+// Updated 2026-03-22: syncPlatform now uses the agency connector
+// endpoint which reads credentials from PostgreSQL (not file-based).
 
 const API_URL = import.meta.env.VITE_API_URL ?? '';
 const API_KEY = import.meta.env.VITE_API_KEY ?? '';
@@ -30,9 +32,21 @@ export interface SyncResultResponse {
   platform: string;
   status: string;
   row_count: number;
-  date_range: { start: string; end: string };
+  advertisers_synced?: number;
+  advertisers_failed?: number;
+  date_range?: { start: string; end: string };
   synced_at: string;
   error?: string;
+  errors?: Array<{ advertiser_id: string; error: string }>;
+}
+
+/** Sync status with scheduling metadata */
+export interface SyncStatusResponse {
+  platform: string;
+  has_synced: boolean;
+  last_sync: SyncResultResponse | null;
+  row_count: number;
+  synced_at: string | null;
 }
 
 // ─── API Functions ──────────────────────────────────────────────────
@@ -57,15 +71,92 @@ export async function disconnectPlatform(platform: string): Promise<{ status: st
   return fetchJson(`/v1/connectors/${platform}`, { method: 'DELETE' });
 }
 
+/**
+ * Sync platform data.
+ * Uses the agency connector endpoint which reads encrypted credentials
+ * from PostgreSQL and syncs ALL active advertisers for the platform.
+ * Falls back to the legacy connector endpoint if agency route returns 404.
+ */
 export async function syncPlatform(platform: string, dateRangeDays?: number): Promise<SyncResultResponse> {
-  return fetchJson(`/v1/connectors/${platform}/sync`, {
-    method: 'POST',
-    body: JSON.stringify({ date_range_days: dateRangeDays }),
-  });
+  try {
+    // Try agency connector sync first (multi-advertiser, DB-persisted credentials)
+    return await fetchJson<SyncResultResponse>(`/v1/agency/connections/${platform}/sync`, {
+      method: 'POST',
+      body: JSON.stringify({ date_range_days: dateRangeDays }),
+    });
+  } catch (err) {
+    // If agency route fails (no connection saved), fall back to legacy connector
+    const msg = err instanceof Error ? err.message : '';
+    if (msg.includes('404') || msg.includes('not_connected') || msg.includes('no_agency')) {
+      return fetchJson<SyncResultResponse>(`/v1/connectors/${platform}/sync`, {
+        method: 'POST',
+        body: JSON.stringify({ date_range_days: dateRangeDays }),
+      });
+    }
+    throw err;
+  }
 }
 
+/**
+ * Get sync results. Tries agency endpoint first, then legacy.
+ */
 export async function getSyncResults(platform: string): Promise<SyncResultResponse> {
+  try {
+    const res = await fetchJson<{ platform: string; has_synced: boolean; last_sync: SyncResultResponse | null }>(
+      `/v1/agency/connections/${platform}/sync/status`,
+    );
+    if (res.has_synced && res.last_sync) {
+      return res.last_sync;
+    }
+  } catch {
+    // Fall back to legacy
+  }
   return fetchJson(`/v1/connectors/${platform}/sync/results`);
+}
+
+/**
+ * Get sync status for a platform (lightweight — no data payload).
+ * Returns has_synced, last_sync metadata, and row_count.
+ * Gracefully returns defaults if no sync has occurred.
+ */
+export async function getSyncStatus(platform: string): Promise<SyncStatusResponse> {
+  try {
+    const res = await fetchJson<{
+      platform: string;
+      has_synced: boolean;
+      last_sync: SyncResultResponse | null;
+    }>(`/v1/agency/connections/${platform}/sync/status`);
+    return {
+      platform: res.platform ?? platform,
+      has_synced: res.has_synced ?? false,
+      last_sync: res.last_sync ?? null,
+      row_count: res.last_sync?.row_count ?? 0,
+      synced_at: res.last_sync?.synced_at ?? null,
+    };
+  } catch {
+    // No sync status available — return defaults
+    return {
+      platform,
+      has_synced: false,
+      last_sync: null,
+      row_count: 0,
+      synced_at: null,
+    };
+  }
+}
+
+/**
+ * Health check for a platform connection.
+ * Validates that stored credentials can authenticate with the platform API.
+ */
+export async function checkPlatformHealth(platform: string): Promise<{
+  healthy: boolean;
+  error?: string;
+  checked_at: string;
+}> {
+  return fetchJson(`/v1/agency/connections/${platform}/health`, {
+    method: 'POST',
+  });
 }
 
 // ─── OAuth Flow ────────────────────────────────────────────────────

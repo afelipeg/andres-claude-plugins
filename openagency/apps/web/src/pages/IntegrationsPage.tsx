@@ -3,6 +3,7 @@
 // 3-column grid of platform connectors + MCP/API credentials below
 
 import { useState, useCallback, useEffect } from 'react';
+import { RefreshCw, Database, Clock, Calendar } from 'lucide-react';
 import type { ConnectorPlatform, SyncInterval } from '@openagency/types';
 import { useConnectorStore } from '../stores/connector-store';
 import { isApiMode } from '../api/agency';
@@ -11,10 +12,12 @@ import {
   connectPlatform,
   disconnectPlatform,
   syncPlatform,
+  getSyncStatus,
   getAuthUrl,
   exchangeOAuthCode,
   openOAuthPopup,
 } from '../api/connectors';
+import type { SyncStatusResponse } from '../api/connectors';
 import {
   Dialog,
   DialogContent,
@@ -38,6 +41,96 @@ const SYNC_INTERVALS: { value: SyncInterval; label: string }[] = [
   { value: '24h', label: 'Daily' },
   { value: 'manual', label: 'Manual only' },
 ];
+
+// ─── Helpers ─────────────────────────────────────────────────────────
+
+/** Human-readable time-ago string */
+function timeAgo(dateStr: string | null | undefined): string {
+  if (!dateStr) return 'Never';
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diffMs = now - then;
+  if (diffMs < 0) return 'Just now';
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
+
+/** Human-readable time-until string for next sync */
+function timeUntil(dateStr: string | null | undefined): string {
+  if (!dateStr) return 'Not scheduled';
+  const now = Date.now();
+  const target = new Date(dateStr).getTime();
+  const diffMs = target - now;
+  if (diffMs <= 0) return 'Due now';
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 60) return `in ${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `in ${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `in ${days}d`;
+}
+
+/** Calculate next weekly sync from last sync date */
+function getNextWeeklySync(lastSyncAt: string | null | undefined): string | null {
+  if (!lastSyncAt) return null;
+  const last = new Date(lastSyncAt);
+  const next = new Date(last.getTime() + 7 * 24 * 60 * 60 * 1000);
+  return next.toISOString();
+}
+
+/** Format sync interval to human-readable schedule label */
+function scheduleLabel(interval: SyncInterval | undefined): string {
+  switch (interval) {
+    case '15m': return 'Every 15 min';
+    case '1h': return 'Hourly';
+    case '6h': return 'Every 6 hours';
+    case '24h': return 'Daily';
+    case 'manual': return 'Manual';
+    default: return 'Weekly';
+  }
+}
+
+/** Determine if a connection is stale (updated >24h ago or backend says so) */
+function isStaleStatus(status: string | undefined, updatedAt: string | null | undefined): boolean {
+  if (!status) return false;
+  if (status === 'stale' || status === 'expired' || status === 'error') return true;
+  if (status === 'connected' && updatedAt) {
+    const hoursSince = (Date.now() - new Date(updatedAt).getTime()) / 3_600_000;
+    return hoursSince > 24;
+  }
+  return false;
+}
+
+/** Status badge config */
+function getStatusBadge(status: string | undefined, updatedAt: string | null | undefined): {
+  label: string;
+  dotColor: string;
+  bgColor: string;
+  textColor: string;
+} {
+  if (!status || status === 'disconnected') {
+    return { label: 'Not connected', dotColor: 'bg-white/30', bgColor: 'bg-white/10', textColor: 'text-white/50' };
+  }
+  if (status === 'error') {
+    return { label: 'Error', dotColor: 'bg-red-400', bgColor: 'bg-red-500/20', textColor: 'text-red-300' };
+  }
+  if (status === 'stale' || status === 'expired') {
+    return { label: 'Stale', dotColor: 'bg-amber-400', bgColor: 'bg-amber-500/20', textColor: 'text-amber-300' };
+  }
+  if (status === 'connected' && updatedAt) {
+    const hoursSince = (Date.now() - new Date(updatedAt).getTime()) / 3_600_000;
+    if (hoursSince > 24) {
+      return { label: 'Stale', dotColor: 'bg-amber-400', bgColor: 'bg-amber-500/20', textColor: 'text-amber-300' };
+    }
+  }
+  return { label: 'Connected', dotColor: 'bg-emerald-400', bgColor: 'bg-emerald-500/20', textColor: 'text-emerald-300' };
+}
 
 // ─── Agency Multi-Advertiser Auth Fields ─────────────────────────────
 
@@ -162,7 +255,7 @@ for (const [platform, cfg] of Object.entries(AGENCY_AUTH_CONFIG)) {
   PLATFORM_AUTH_FIELDS[platform] = cfg.types[0]?.fields ?? [];
 }
 
-// ─── Agency Connection Dialog (2-step: credentials → advertiser selection) ─
+// ─── Agency Connection Dialog (2-step: credentials -> advertiser selection) ─
 
 function ConnectDialog({
   config,
@@ -452,6 +545,14 @@ function ConnectDialog({
 
 // ─── Platform Card (Perplexity grid style) ───────────────────────────
 
+interface AgencyConnState {
+  connection_type: string;
+  advertiser_count: number;
+  status: string;
+  updated_at: string | null;
+  connected_at: string | null;
+}
+
 function PlatformCard({ config, apiMode }: { config: PlatformConfig; apiMode: boolean }) {
   const platformState = useConnectorStore((s) => s.getPlatform(config.platform));
   const connect = useConnectorStore((s) => s.connect);
@@ -461,14 +562,23 @@ function PlatformCard({ config, apiMode }: { config: PlatformConfig; apiMode: bo
   const [syncError, setSyncError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  // Agency connection state
-  const [agencyConn, setAgencyConn] = useState<{ connection_type: string; advertiser_count: number } | null>(null);
+  // Agency connection state — now includes status, timestamps
+  const [agencyConn, setAgencyConn] = useState<AgencyConnState | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Sync status state — row count, last sync timestamp
+  const [syncStatus, setSyncStatusState] = useState<SyncStatusResponse | null>(null);
 
   const isConnected = platformState?.status === 'connected' || (agencyConn && agencyConn.advertiser_count > 0);
-  const hasError = platformState?.status === 'error';
+  const hasError = platformState?.status === 'error' || agencyConn?.status === 'error';
+  const stale = isStaleStatus(agencyConn?.status, agencyConn?.updated_at);
+  const badge = getStatusBadge(
+    agencyConn?.status ?? (platformState?.status === 'connected' ? 'connected' : undefined),
+    agencyConn?.updated_at,
+  );
 
   // Load agency connection on mount
-  useEffect(() => {
+  const loadAgencyConn = useCallback(async () => {
     if (!apiMode) return;
     const h: Record<string, string> = { 'Content-Type': 'application/json' };
     const token = localStorage.getItem('plinth_token');
@@ -476,29 +586,67 @@ function PlatformCard({ config, apiMode }: { config: PlatformConfig; apiMode: bo
     const apiKey = import.meta.env.VITE_API_KEY as string | undefined;
     if (apiKey) h['X-API-Key'] = apiKey;
 
-    void fetch(`${API_URL}/v1/agency/connections`, { headers: h })
-      .then((r) => r.ok ? r.json() : null)
-      .then((data: { connections: Array<{ platform: string; connection_type: string; advertiser_count: number }> } | null) => {
-        const conn = data?.connections?.find((c) => c.platform === config.platform);
-        if (conn) {
-          setAgencyConn({ connection_type: conn.connection_type, advertiser_count: conn.advertiser_count });
-          if (conn.advertiser_count > 0) connect(config.platform);
-        }
-      })
-      .catch(() => {});
+    try {
+      const r = await fetch(`${API_URL}/v1/agency/connections`, { headers: h });
+      if (!r.ok) {
+        if (r.status >= 500) setLoadError(`Server error (${r.status})`);
+        return;
+      }
+      const data = (await r.json()) as {
+        connections: Array<{
+          platform: string;
+          connection_type: string;
+          advertiser_count: number;
+          status: string;
+          updated_at: string;
+          connected_at: string;
+        }>;
+      };
+      const conn = data?.connections?.find((c) => c.platform === config.platform);
+      if (conn) {
+        setAgencyConn({
+          connection_type: conn.connection_type,
+          advertiser_count: conn.advertiser_count,
+          status: conn.status ?? 'connected',
+          updated_at: conn.updated_at ?? null,
+          connected_at: conn.connected_at ?? null,
+        });
+        if (conn.advertiser_count > 0) connect(config.platform);
+        setLoadError(null);
+      }
+    } catch {
+      setLoadError('Failed to load connection status');
+    }
+  }, [config.platform, apiMode, connect]);
+
+  // Load sync status on mount (for connected platforms)
+  const loadSyncStatus = useCallback(async () => {
+    if (!apiMode) return;
+    try {
+      const status = await getSyncStatus(config.platform);
+      setSyncStatusState(status);
+    } catch {
+      // Sync status not available — that is fine
+    }
+  }, [config.platform, apiMode]);
+
+  useEffect(() => {
+    void loadAgencyConn();
+    void loadSyncStatus();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.platform, apiMode]);
 
   const handleConnected = () => {
     connect(config.platform);
-    // Refresh agency state
-    setAgencyConn((prev) => prev ? { ...prev, advertiser_count: (prev.advertiser_count || 0) + 1 } : { connection_type: '', advertiser_count: 1 });
+    setAgencyConn((prev) => prev
+      ? { ...prev, advertiser_count: (prev.advertiser_count || 0) + 1, status: 'connected', updated_at: new Date().toISOString() }
+      : { connection_type: '', advertiser_count: 1, status: 'connected', updated_at: new Date().toISOString(), connected_at: new Date().toISOString() },
+    );
   };
 
   const handleDisconnect = useCallback(async () => {
     try {
       if (apiMode) {
-        // Disconnect agency connection
         const h: Record<string, string> = { 'Content-Type': 'application/json' };
         const token = localStorage.getItem('plinth_token');
         if (token) h['Authorization'] = `Bearer ${token}`;
@@ -506,9 +654,11 @@ function PlatformCard({ config, apiMode }: { config: PlatformConfig; apiMode: bo
       }
       disconnect(config.platform);
       setAgencyConn(null);
+      setSyncStatusState(null);
     } catch {
       disconnect(config.platform);
       setAgencyConn(null);
+      setSyncStatusState(null);
     }
   }, [config.platform, disconnect, apiMode]);
 
@@ -518,7 +668,24 @@ function PlatformCard({ config, apiMode }: { config: PlatformConfig; apiMode: bo
     try {
       if (apiMode) {
         const result = await syncPlatform(config.platform);
-        if (result.error) setSyncError(result.error);
+        if (result.error) {
+          setSyncError(result.error);
+        } else {
+          // Update local state to reflect successful sync
+          const now = new Date().toISOString();
+          setAgencyConn((prev) => prev
+            ? { ...prev, status: 'connected', updated_at: now }
+            : prev,
+          );
+          // Update sync status with new data
+          setSyncStatusState({
+            platform: config.platform,
+            has_synced: true,
+            last_sync: result,
+            row_count: result.row_count ?? 0,
+            synced_at: result.synced_at ?? now,
+          });
+        }
       }
     } catch (err) {
       setSyncError(err instanceof Error ? err.message : 'Sync failed');
@@ -527,19 +694,58 @@ function PlatformCard({ config, apiMode }: { config: PlatformConfig; apiMode: bo
     }
   }, [config.platform, apiMode]);
 
+  const handleRetry = useCallback(async () => {
+    setSyncing(true);
+    setSyncError(null);
+    try {
+      // Re-check credentials by re-loading, then trigger sync
+      await loadAgencyConn();
+      if (apiMode) {
+        const result = await syncPlatform(config.platform);
+        if (result.error) {
+          setSyncError(result.error);
+        } else {
+          const now = new Date().toISOString();
+          setAgencyConn((prev) => prev
+            ? { ...prev, status: 'connected', updated_at: now }
+            : prev,
+          );
+          setSyncStatusState({
+            platform: config.platform,
+            has_synced: true,
+            last_sync: result,
+            row_count: result.row_count ?? 0,
+            synced_at: result.synced_at ?? now,
+          });
+        }
+      }
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : 'Retry failed');
+    } finally {
+      setSyncing(false);
+    }
+  }, [config.platform, apiMode, loadAgencyConn]);
+
+  // Derived sync info
+  const lastSyncAt = syncStatus?.synced_at ?? platformState?.lastSync?.synced_at ?? agencyConn?.updated_at ?? null;
+  const nextSyncAt = getNextWeeklySync(lastSyncAt);
+  const rowCount = syncStatus?.row_count ?? 0;
+  const currentInterval = platformState?.syncInterval;
+
+  // Card border/bg color based on state
+  const cardClasses = stale || hasError
+    ? 'border-amber-500/30 bg-amber-500/5 hover:shadow-lg hover:shadow-amber-500/5'
+    : isConnected
+      ? 'border-emerald-500/30 bg-emerald-500/10 hover:shadow-lg hover:shadow-[#00F5FF]/5'
+      : 'border-white/10 bg-white/5 hover:border-white/15 hover:shadow-lg hover:shadow-[#00F5FF]/5';
+
   return (
     <>
       <div
-        className={`group rounded-xl border p-5 transition-all cursor-pointer ${
-          isConnected
-            ? 'border-emerald-500/30 bg-emerald-500/10 hover:shadow-lg hover:shadow-[#00F5FF]/5'
-            : hasError
-              ? 'border-red-200 bg-red-500/10/30'
-              : 'border-white/10 bg-white/5 hover:border-white/15 hover:shadow-lg hover:shadow-[#00F5FF]/5'
-        }`}
-        onClick={() => !isConnected && setDialogOpen(true)}
+        className={`group rounded-xl border p-5 transition-all cursor-pointer ${cardClasses}`}
+        onClick={() => !isConnected && !stale && setDialogOpen(true)}
       >
-        {/* Logo + status */}
+        {/* Logo + status badge */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/5 border border-white/5 group-hover:border-white/10 transition-colors">
             <config.Logo className="h-7 w-7" />
@@ -550,10 +756,13 @@ function PlatformCard({ config, apiMode }: { config: PlatformConfig; apiMode: bo
                 {agencyConn.connection_type}
               </span>
             )}
-            {isConnected && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                {agencyConn?.advertiser_count ? `${agencyConn.advertiser_count} advertiser${agencyConn.advertiser_count !== 1 ? 's' : ''}` : 'Connected'}
+            {(isConnected || stale || hasError) && (
+              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${badge.bgColor} ${badge.textColor}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${badge.dotColor} ${stale ? 'animate-pulse' : ''}`} />
+                {badge.label}
+                {agencyConn?.advertiser_count && badge.label === 'Connected'
+                  ? ` (${agencyConn.advertiser_count})`
+                  : ''}
               </span>
             )}
           </div>
@@ -563,15 +772,160 @@ function PlatformCard({ config, apiMode }: { config: PlatformConfig; apiMode: bo
         <h3 className="text-sm font-semibold text-white/95 mb-1">{config.name}</h3>
         <p className="text-xs text-white/50 leading-relaxed mb-3">{config.description}</p>
 
-        {/* Connected state: sync info + actions */}
-        {isConnected ? (
+        {/* Stale/Error state: warning banner + retry */}
+        {(stale || hasError) && isConnected ? (
           <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+            {/* Warning banner */}
+            <div className={`rounded-lg p-2.5 ${hasError ? 'bg-red-500/10 border border-red-500/20' : 'bg-amber-500/10 border border-amber-500/20'}`}>
+              <div className="flex items-start gap-2">
+                <svg className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${hasError ? 'text-red-400' : 'text-amber-400'}`} viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.345 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                </svg>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-[11px] font-medium ${hasError ? 'text-red-300' : 'text-amber-300'}`}>
+                    {hasError ? 'Connection Error' : 'Data is Stale'}
+                  </p>
+                  <p className="text-[10px] text-white/40 mt-0.5">
+                    {syncError
+                      ? syncError
+                      : loadError
+                        ? loadError
+                        : agencyConn?.status === 'expired'
+                          ? 'Credentials have expired. Please reconnect or refresh tokens.'
+                          : agencyConn?.status === 'error'
+                            ? 'The platform API returned an error. Try re-syncing.'
+                            : `Last updated ${timeAgo(agencyConn?.updated_at)}. Data may be outdated.`
+                    }
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Sync scheduling & freshness panel */}
+            <div className="bg-white/5 rounded-lg p-3 space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex items-center gap-1.5">
+                  <Clock className="h-3 w-3 text-white/30 shrink-0" />
+                  <div>
+                    <p className="text-[9px] text-white/40 uppercase tracking-wider">Last sync</p>
+                    <p className="text-[11px] text-white/70 font-medium">{timeAgo(lastSyncAt)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Calendar className="h-3 w-3 text-white/30 shrink-0" />
+                  <div>
+                    <p className="text-[9px] text-white/40 uppercase tracking-wider">Next sync</p>
+                    <p className="text-[11px] text-white/70 font-medium">{timeUntil(nextSyncAt)}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center rounded-full bg-[#00F5FF]/10 px-1.5 py-0.5 text-[9px] font-medium text-[#00F5FF]">
+                    {scheduleLabel(currentInterval)}
+                  </span>
+                  {rowCount > 0 && (
+                    <span className="flex items-center gap-1 text-[10px] text-white/50">
+                      <Database className="h-2.5 w-2.5" />
+                      {rowCount.toLocaleString()} rows
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Timestamps */}
+            <div className="flex items-center gap-3 text-[10px] text-white/40">
+              {agencyConn?.connected_at && (
+                <span>Connected {timeAgo(agencyConn.connected_at)}</span>
+              )}
+              {agencyConn?.updated_at && (
+                <span>Updated {timeAgo(agencyConn.updated_at)}</span>
+              )}
+            </div>
+
             {platformState?.lastSync && (
               <p className="text-[10px] text-white/40">
                 Last sync: {new Date(platformState.lastSync.synced_at).toLocaleString()}
               </p>
             )}
-            {syncError && <p className="text-[10px] text-red-500">{syncError}</p>}
+
+            {/* Action buttons for stale state */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => void handleRetry()}
+                disabled={syncing}
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-[#00F5FF]/20 px-3 py-2 text-[11px] font-medium text-white hover:bg-[#00F5FF]/30 disabled:opacity-50 transition-colors"
+              >
+                {syncing ? (
+                  <><div className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" /> Re-syncing...</>
+                ) : (
+                  <><svg className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M15.312 11.424a5.5 5.5 0 01-9.442 2.007l-1.564 1.564a.75.75 0 01-1.06-1.06l2.5-2.5a.75.75 0 011.06 0l2.5 2.5a.75.75 0 11-1.06 1.06l-1.09-1.09a4 4 0 006.85-1.461.75.75 0 011.306.72zM4.688 8.576a5.5 5.5 0 019.442-2.007l1.564-1.564a.75.75 0 011.06 1.06l-2.5 2.5a.75.75 0 01-1.06 0l-2.5-2.5a.75.75 0 011.06-1.06l1.09 1.09a4 4 0 00-6.85 1.461.75.75 0 01-1.306-.72z" clipRule="evenodd" /></svg> Re-sync</>
+                )}
+              </button>
+              <button
+                onClick={() => setDialogOpen(true)}
+                className="rounded-lg border border-white/10 px-3 py-2 text-[11px] font-medium text-white/60 hover:border-white/15 transition-colors"
+              >
+                Reconnect
+              </button>
+            </div>
+            <button
+              onClick={() => void handleDisconnect()}
+              className="w-full rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-white/40 hover:text-red-400 hover:border-red-500/30 transition-colors"
+            >
+              Disconnect
+            </button>
+          </div>
+        ) : isConnected ? (
+          /* Connected healthy state: sync info + actions */
+          <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+
+            {/* ── Sync scheduling & data freshness panel ── */}
+            <div className="bg-white/5 rounded-lg p-3 space-y-2.5">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex items-center gap-1.5">
+                  <Clock className="h-3 w-3 text-white/30 shrink-0" />
+                  <div>
+                    <p className="text-[9px] text-white/40 uppercase tracking-wider">Last sync</p>
+                    <p className="text-[11px] text-white/70 font-medium">{timeAgo(lastSyncAt)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Calendar className="h-3 w-3 text-white/30 shrink-0" />
+                  <div>
+                    <p className="text-[9px] text-white/40 uppercase tracking-wider">Next sync</p>
+                    <p className="text-[11px] text-white/70 font-medium">{timeUntil(nextSyncAt)}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center rounded-full bg-[#00F5FF]/10 px-1.5 py-0.5 text-[9px] font-medium text-[#00F5FF]">
+                    {scheduleLabel(currentInterval)}
+                  </span>
+                  {rowCount > 0 && (
+                    <span className="flex items-center gap-1 text-[10px] text-white/50">
+                      <Database className="h-2.5 w-2.5" />
+                      {rowCount.toLocaleString()} rows
+                    </span>
+                  )}
+                </div>
+                {agencyConn?.advertiser_count ? (
+                  <span className="text-[10px] text-white/40">
+                    {agencyConn.advertiser_count} advertiser{agencyConn.advertiser_count !== 1 ? 's' : ''}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+
+            {syncError && (
+              <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-2">
+                <p className="text-[10px] text-amber-400">{syncError}</p>
+              </div>
+            )}
+
+            {/* Sync interval selector + Sync Now button */}
             <div className="flex items-center gap-2">
               <select
                 value={platformState?.syncInterval ?? '1h'}
@@ -585,9 +939,10 @@ function PlatformCard({ config, apiMode }: { config: PlatformConfig; apiMode: bo
               <button
                 onClick={() => void handleSync()}
                 disabled={syncing}
-                className="rounded-lg bg-[#00F5FF]/20 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-[#00F5FF]/30 disabled:opacity-50 transition-colors"
+                className="flex items-center gap-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-1.5 text-[11px] font-medium text-white/80 disabled:opacity-50 transition-colors"
               >
-                {syncing ? 'Syncing...' : 'Sync'}
+                <RefreshCw className={`h-3 w-3 ${syncing ? 'animate-spin' : ''}`} />
+                {syncing ? 'Syncing...' : 'Sync Now'}
               </button>
             </div>
             <div className="flex gap-2">
@@ -627,7 +982,7 @@ function PlatformCard({ config, apiMode }: { config: PlatformConfig; apiMode: bo
 }
 
 
-// ─── Storage Card (OAuth redirect — no manual fields) ─────────────────
+// ─── Storage Card (OAuth redirect -- no manual fields) ─────────────────
 
 function StorageCard({ config, apiMode }: { config: StorageConfig; apiMode: boolean }) {
   const [connected, setConnected] = useState(false);
@@ -682,7 +1037,7 @@ function StorageCard({ config, apiMode }: { config: StorageConfig; apiMode: bool
     if (!apiMode) return;
     const token = localStorage.getItem('plinth_token');
     if (!token) {
-      setError('Not authenticated — please log in first');
+      setError('Not authenticated -- please log in first');
       return;
     }
     // Direct redirect to backend OAuth init (passes token as query param)
@@ -707,7 +1062,7 @@ function StorageCard({ config, apiMode }: { config: StorageConfig; apiMode: bool
     }
   };
 
-  // OneDrive placeholder — disabled for now
+  // OneDrive placeholder -- disabled for now
   const isDisabled = config.id === 'onedrive';
 
   return (
@@ -837,7 +1192,7 @@ export function IntegrationsPage() {
         </div>
       </div>
 
-      {/* Cloud Storage (OAuth redirect — like Claude.ai / Perplexity) */}
+      {/* Cloud Storage (OAuth redirect -- like Claude.ai / Perplexity) */}
       <div>
         <div className="flex items-center gap-2 mb-4">
           <h3 className="text-sm font-semibold text-white/95">Cloud Storage</h3>
@@ -846,7 +1201,7 @@ export function IntegrationsPage() {
           </span>
         </div>
         <p className="text-xs text-white/50 mb-4">
-          Connect cloud storage to import files directly into Plinth. One click — no credentials needed.
+          Connect cloud storage to import files directly into Plinth. One click -- no credentials needed.
         </p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {STORAGE_PROVIDERS.map((config) => (

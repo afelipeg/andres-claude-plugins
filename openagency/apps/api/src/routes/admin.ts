@@ -46,8 +46,10 @@ export function adminRoutes(deps: AdminRouteDeps) {
     const [usersRows, agencyRows, connRows, runsToday, mtd] = await Promise.all([
       sql.unsafe('SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE status = \'active\')::int AS active FROM users', []),
       sql.unsafe('SELECT COUNT(DISTINCT agency_id)::int AS total FROM agency_connections WHERE agency_id IS NOT NULL', []),
+      // FIX: accept both 'connected' and 'active' as valid statuses
+      // Previously only checked for 'active' but credentials are stored with status='connected'
       sql.unsafe(`SELECT COUNT(*)::int AS total,
-                         COUNT(*) FILTER (WHERE status != 'active' OR updated_at < now() - interval '7 days')::int AS stale
+                         COUNT(*) FILTER (WHERE status NOT IN ('connected','active') OR updated_at < now() - interval '7 days')::int AS stale
                   FROM agency_connections`, []),
       dailyMetricsRepo?.todayRuns() ?? { started: 0, completed: 0, failed: 0 },
       dailyMetricsRepo?.mtdTotals() ?? { llm_cost_usd: 0, outcome_fees_usd: 0, runs_completed: 0, a2a_calls: 0, tokens_prompt: 0, tokens_completion: 0 },
@@ -259,8 +261,10 @@ export function adminRoutes(deps: AdminRouteDeps) {
       const rows = await sql.unsafe(
         `SELECT ac.id, ac.agency_id, ac.platform, ac.connection_type, ac.status,
                 ac.connected_at, ac.updated_at,
-                (SELECT COUNT(*)::int FROM advertiser_scopes ads WHERE ads.agency_connection_id = ac.id) AS advertiser_count
+                (SELECT COUNT(*)::int FROM advertiser_scopes ads WHERE ads.agency_connection_id = ac.id) AS advertiser_count,
+                sr.synced_at AS last_sync, sr.status AS sync_status, sr.row_count AS sync_row_count
          FROM agency_connections ac
+         LEFT JOIN sync_results sr ON sr.agency_id = ac.agency_id AND sr.platform = ac.platform
          ORDER BY ac.updated_at DESC`,
         [],
       );

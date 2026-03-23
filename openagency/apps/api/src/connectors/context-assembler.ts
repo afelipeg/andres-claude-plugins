@@ -13,6 +13,11 @@ import { createLogger } from '@openagency/core';
 
 const log = createLogger('context-assembler');
 
+// Known platform names for iteration when filtering by agencyId
+const KNOWN_PLATFORMS: ConnectorPlatform[] = [
+  'google_ads', 'meta_ads', 'dv360', 'tiktok_ads', 'tiktok_shop', 'amazon_ads',
+];
+
 interface ChannelSummary {
   name: string;
   spend: number;
@@ -38,13 +43,75 @@ interface CampaignSummary {
 }
 
 /**
+ * Resolve sync results for a given platform from the cache.
+ * Supports composite keys (`${agencyId}:${platform}`) with fallback to bare platform.
+ */
+function resolveSyncResult(
+  cache: Map<string, SyncResult>,
+  platform: string,
+  agencyId?: string,
+): SyncResult | undefined {
+  if (agencyId) {
+    const compositeKey = `${agencyId}:${platform}`;
+    const result = cache.get(compositeKey);
+    if (result) return result;
+  }
+  // Fallback to bare platform key (backward compatible)
+  return cache.get(platform);
+}
+
+/**
+ * Collect all sync results relevant to a given agencyId (or all if none provided).
+ * Returns [platform_key, SyncResult] pairs with deduplication.
+ */
+function collectSyncResults(
+  cache: Map<string, SyncResult>,
+  agencyId?: string,
+): Array<[string, SyncResult]> {
+  if (!agencyId) {
+    // No agency filter — return all entries (backward compatible)
+    return Array.from(cache.entries());
+  }
+
+  // With agencyId: collect only entries scoped to this agency
+  const results: Array<[string, SyncResult]> = [];
+  const seen = new Set<string>();
+
+  for (const platform of KNOWN_PLATFORMS) {
+    const result = resolveSyncResult(cache, platform, agencyId);
+    if (result && !seen.has(platform)) {
+      seen.add(platform);
+      results.push([platform, result]);
+    }
+  }
+
+  // Also scan for any non-standard keys that match the agency prefix
+  for (const [key, result] of cache) {
+    if (key.startsWith(`${agencyId}:`)) {
+      const platform = key.slice(agencyId.length + 1);
+      if (!seen.has(platform)) {
+        seen.add(platform);
+        results.push([platform, result]);
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
  * Build a unified skillContext from the sync result cache.
  * Merges data across all connected platforms into a single context
  * that every engine skill can consume.
+ *
+ * @param syncResultCache - In-memory cache of sync results
+ * @param explicitContext - Optional explicit context from POST body (overrides)
+ * @param agencyId - Optional agency ID for tenant-isolated cache lookup
  */
 export function assembleContextFromSync(
   syncResultCache: Map<string, SyncResult>,
   explicitContext?: Record<string, unknown>,
+  agencyId?: string,
 ): Record<string, unknown> {
   // If the user provided an explicit context, use it as base — platform data fills gaps
   const ctx: Record<string, unknown> = {};
@@ -53,7 +120,9 @@ export function assembleContextFromSync(
   const allRows: NormalizedCampaignRow[] = [];
   const platformMeta: Array<{ platform: string; row_count: number; synced_at: string }> = [];
 
-  for (const [platform, result] of syncResultCache) {
+  const entries = collectSyncResults(syncResultCache, agencyId);
+
+  for (const [platform, result] of entries) {
     if (result.status === 'error' || !result.rows.length) continue;
     allRows.push(...result.rows);
     platformMeta.push({
@@ -174,6 +243,7 @@ export function assembleContextFromSync(
   // Sync metadata
   ctx._sync_sources = platformMeta;
   ctx._assembled_at = new Date().toISOString();
+  if (agencyId) ctx._agency_id = agencyId;
 
   // ─── Merge explicit context (overrides platform data) ────────────
   if (explicitContext) {
@@ -185,6 +255,66 @@ export function assembleContextFromSync(
   }
 
   return ctx;
+}
+
+/**
+ * Async version of assembleContextFromSync that falls back to PostgreSQL
+ * when the in-memory cache has no data for the given agency.
+ * This handles cold-start scenarios (e.g., after Railway redeploy before
+ * the full hydration completes, or if hydration skipped some rows).
+ */
+export async function assembleContextFromSyncWithDbFallback(
+  syncResultCache: Map<string, SyncResult>,
+  db: unknown | null,
+  explicitContext?: Record<string, unknown>,
+  agencyId?: string,
+): Promise<Record<string, unknown>> {
+  // Try in-memory first
+  const entries = collectSyncResults(syncResultCache, agencyId);
+  const hasData = entries.some(([, r]) => r.status !== 'error' && r.rows.length > 0);
+
+  if (hasData) {
+    return assembleContextFromSync(syncResultCache, explicitContext, agencyId);
+  }
+
+  // Cache miss — try PostgreSQL fallback
+  if (db && agencyId) {
+    try {
+      const sql = db as { unsafe: (q: string, params?: unknown[]) => Promise<unknown[]> };
+      const query = `SELECT platform, status, row_count, date_range_start, date_range_end, synced_at, error, rows_json
+                     FROM sync_results WHERE agency_id = $1 ORDER BY synced_at DESC`;
+      const rows = await sql.unsafe(query, [agencyId]);
+
+      if (rows.length > 0) {
+        log.info({ agency_id: agencyId, count: rows.length }, 'Cache miss — hydrated from sync_results DB');
+        for (const row of rows as Array<Record<string, unknown>>) {
+          const platform = row['platform'] as ConnectorPlatform;
+          const parsedRows = row['rows_json'] ? JSON.parse(row['rows_json'] as string) : [];
+          const syncResult: SyncResult = {
+            platform,
+            status: (row['status'] as 'success' | 'partial' | 'error') ?? 'error',
+            rows: parsedRows,
+            row_count: Number(row['row_count'] ?? 0),
+            date_range: {
+              start: (row['date_range_start'] as string) ?? '',
+              end: (row['date_range_end'] as string) ?? '',
+            },
+            synced_at: row['synced_at'] ? new Date(row['synced_at'] as string).toISOString() : new Date().toISOString(),
+            error: (row['error'] as string) ?? undefined,
+          };
+          // Populate cache for future requests
+          syncResultCache.set(`${agencyId}:${platform}`, syncResult);
+        }
+        // Now re-run assembly with populated cache
+        return assembleContextFromSync(syncResultCache, explicitContext, agencyId);
+      }
+    } catch (err) {
+      log.warn({ err, agency_id: agencyId }, 'DB fallback for sync_results failed');
+    }
+  }
+
+  // No DB or no agencyId — use whatever the cache has
+  return assembleContextFromSync(syncResultCache, explicitContext, agencyId);
 }
 
 /**
