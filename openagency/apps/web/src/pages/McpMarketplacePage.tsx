@@ -1,8 +1,8 @@
 // ─── MCP Marketplace Page ────────────────────────────────────────────
 // Catalog grid + custom MCP connection + connected list
 
-import { useState, useEffect, useCallback } from 'react';
-import { RefreshCw, Trash2, Plus, ExternalLink, Server, Zap } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { RefreshCw, Trash2, Plus, ExternalLink, Server, Zap, Cable, Info } from 'lucide-react';
 import {
   getCatalog,
   listConnections,
@@ -62,6 +62,89 @@ function Badge({ text, variant }: { text: string; variant: 'official' | 'tools' 
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${styles[variant]}`}>
       {text}
     </span>
+  );
+}
+
+// ─── Airbyte Agent Connectors Banner ─────────────────────────────────
+
+const AIRBYTE_PLATFORMS = [
+  'Google Ads',
+  'Meta',
+  'TikTok',
+  'Amazon',
+  'LinkedIn',
+  'Snapchat',
+  'Pinterest',
+];
+
+function AirbyteBanner({ connections }: { connections: McpConnection[] }) {
+  const airbyteConn = useMemo(
+    () => connections.find((c) => c.name.toLowerCase().includes('airbyte')),
+    [connections],
+  );
+
+  const isConnected = airbyteConn && airbyteConn.status === 'connected';
+  const toolCount = airbyteConn?.tools.length ?? 0;
+
+  if (isConnected) {
+    return (
+      <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+        <div className="flex items-start gap-3">
+          {/* Icon */}
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 border border-emerald-500/20">
+            <Cable className="h-5 w-5 text-emerald-400" />
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <h4 className="text-sm font-semibold text-white/95">Airbyte Agent Connectors</h4>
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Connected
+              </span>
+            </div>
+            <p className="text-xs text-white/60 mb-2.5">
+              {toolCount} tool{toolCount !== 1 ? 's' : ''} available via Airbyte sidecar
+            </p>
+
+            {/* Platform badges */}
+            <div className="flex flex-wrap gap-1.5">
+              {AIRBYTE_PLATFORMS.map((platform) => (
+                <span
+                  key={platform}
+                  className="inline-flex items-center rounded-md bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-300/80"
+                >
+                  {platform}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="mt-3 pt-2.5 border-t border-emerald-500/10">
+          <p className="text-[10px] text-white/40">Powered by Airbyte</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Not connected state
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/5 border border-white/10">
+          <Info className="h-5 w-5 text-white/40" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h4 className="text-sm font-medium text-white/70">Airbyte Agent Connectors available</h4>
+          <p className="text-xs text-white/40 mt-0.5">
+            Multi-platform data ingestion via Airbyte MCP sidecar — contact admin to enable
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -485,6 +568,9 @@ export function McpMarketplacePage() {
           Connect advertising platforms via MCP. Plinth manages the servers — you just provide your credentials.
         </p>
       </div>
+
+      {/* Airbyte Agent Connectors Banner */}
+      {!loading && <AirbyteBanner connections={connections} />}
 
       {/* Catalog Grid */}
       <div>

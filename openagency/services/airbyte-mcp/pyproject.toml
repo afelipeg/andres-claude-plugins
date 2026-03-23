@@ -1,0 +1,14 @@
+[project]
+name = "plinth-airbyte-mcp"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "airbyte-agent-mcp>=0.1.0",
+    "airbyte-agent-google-ads>=0.1.0",
+    "airbyte-agent-facebook-marketing>=0.1.0",
+    "airbyte-agent-tiktok-marketing>=0.1.0",
+    "airbyte-agent-amazon-ads>=0.1.0",
+    "airbyte-agent-linkedin-ads>=0.1.0",
+    "airbyte-agent-snapchat-marketing>=0.1.0",
+    "airbyte-agent-pinterest>=0.1.0",
+]

@@ -540,6 +540,23 @@ export async function createApp() {
     }
   }
 
+  // ─── Airbyte MCP Sidecar (ad platform data via Airbyte Agent) ──
+  // Connects to an external Airbyte MCP service running as a Railway sidecar.
+  // Set AIRBYTE_MCP_URL to enable (e.g. http://airbyte-mcp.railway.internal:8080/mcp)
+  const airbyteMcpUrl = process.env['AIRBYTE_MCP_URL'];
+  if (airbyteMcpUrl) {
+    mcpClientRegistry.connect('airbyte', airbyteMcpUrl)
+      .then((server) => {
+        log.info(
+          { name: 'airbyte', url: airbyteMcpUrl, tools: server.tools.length },
+          'Airbyte MCP sidecar connected',
+        );
+      })
+      .catch((err) => {
+        log.warn({ err, url: airbyteMcpUrl }, 'Failed to connect to Airbyte MCP sidecar — will retry via health monitor');
+      });
+  }
+
   // ─── Skill Marketplace (dynamic skill registration) ──────────
   const dynamicSkillRegistry = new DynamicSkillRegistry();
 
