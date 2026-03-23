@@ -101,6 +101,30 @@ export interface AdminQuotaRequest {
   reviewed_at: string | null;
 }
 
+// ─── Pipeline Health Types ──────────────────────────────────────────
+
+export interface PipelineHealthCheck {
+  status: 'healthy' | 'degraded' | 'critical';
+  timestamp: string;
+  stages: Array<{
+    name: string;
+    status: 'pass' | 'warn' | 'fail';
+    duration_ms: number;
+    checks: Array<{
+      name: string;
+      status: 'pass' | 'warn' | 'fail';
+      message: string;
+      details?: unknown;
+    }>;
+  }>;
+  summary: {
+    total_checks: number;
+    passed: number;
+    warnings: number;
+    failures: number;
+  };
+}
+
 // ─── API Functions ──────────────────────────────────────────────────
 
 export async function getOverview(): Promise<AdminOverview> {
@@ -163,4 +187,8 @@ export async function denyQuotaRequest(requestId: string, reason: string): Promi
     method: 'POST',
     body: JSON.stringify({ reason }),
   });
+}
+
+export async function getPipelineHealth(): Promise<PipelineHealthCheck> {
+  return fetchJson('/v1/health/pipeline');
 }

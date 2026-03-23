@@ -1,6 +1,6 @@
 // ─── Super Admin Dashboard ─────────────────────────────────────────
-// 7-tab dashboard for super_admin (dedalo@polanyi.tech).
-// Overview · Agencies · Users · Pipeline Runs · Token & Cost · Connectors · Federation
+// 9-tab dashboard for super_admin (dedalo@polanyi.tech).
+// Overview · Agencies · Users · Pipeline Runs · Token & Cost · Connectors · Federation · Quotas · Pipeline Health
 
 import { useState, useEffect, useCallback } from 'react';
 import Highcharts from 'highcharts';
@@ -20,6 +20,12 @@ import {
   Eye,
   RefreshCw,
   Gauge,
+  HeartPulse,
+  CheckCircle2,
+  XCircle,
+  ChevronDown,
+  ChevronRight,
+  Clock,
 } from 'lucide-react';
 import {
   Table,
@@ -45,6 +51,7 @@ import {
   getQuotaRequests as getAdminQuotaRequests,
   approveQuotaRequest,
   denyQuotaRequest,
+  getPipelineHealth,
   type AdminOverview,
   type AgencySummary,
   type AdminUser,
@@ -53,6 +60,7 @@ import {
   type AdminConnector,
   type FederationData,
   type AdminQuotaRequest,
+  type PipelineHealthCheck,
 } from '../api/admin';
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -134,6 +142,7 @@ const TABS = [
   { id: 'connectors', label: 'Connectors', Icon: Plug },
   { id: 'federation', label: 'Federation', Icon: Globe },
   { id: 'quotas', label: 'Quotas', Icon: Gauge },
+  { id: 'pipeline', label: 'Pipeline', Icon: HeartPulse },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -809,6 +818,221 @@ function QuotasTab({ requests, onRefresh }: { requests: AdminQuotaRequest[]; onR
   );
 }
 
+// ─── Pipeline Health Tab ─────────────────────────────────────────────
+
+function StageStatusIcon({ status }: { status: 'pass' | 'warn' | 'fail' }) {
+  if (status === 'pass') return <CheckCircle2 className="h-5 w-5 text-emerald-400" />;
+  if (status === 'warn') return <AlertTriangle className="h-5 w-5 text-amber-400" />;
+  return <XCircle className="h-5 w-5 text-red-400" />;
+}
+
+function stageColorClasses(status: 'pass' | 'warn' | 'fail') {
+  if (status === 'pass') return 'bg-emerald-500/10 border-emerald-500/30';
+  if (status === 'warn') return 'bg-amber-500/10 border-amber-500/30';
+  return 'bg-red-500/10 border-red-500/30';
+}
+
+function overallStatusBadge(status: 'healthy' | 'degraded' | 'critical') {
+  if (status === 'healthy') return { text: 'Healthy', classes: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' };
+  if (status === 'degraded') return { text: 'Degraded', classes: 'bg-amber-500/20 text-amber-300 border-amber-500/30' };
+  return { text: 'Critical', classes: 'bg-red-500/20 text-red-300 border-red-500/30' };
+}
+
+function PipelineHealthTab({ data, onRefresh, refreshing }: {
+  data: PipelineHealthCheck | null;
+  onRefresh: () => void;
+  refreshing: boolean;
+}) {
+  const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
+
+  const toggleStage = (name: string) => {
+    setExpandedStages((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  if (!data) return <LoadingState />;
+
+  const badge = overallStatusBadge(data.status);
+  const allPass = data.stages.every((s) => s.status === 'pass');
+
+  return (
+    <div className="space-y-6">
+      {/* Summary Banner */}
+      <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold ${badge.classes}`}>
+              {data.status === 'healthy' && <CheckCircle2 className="h-4 w-4" />}
+              {data.status === 'degraded' && <AlertTriangle className="h-4 w-4" />}
+              {data.status === 'critical' && <XCircle className="h-4 w-4" />}
+              {badge.text}
+            </div>
+            <div className="flex items-center gap-4 text-xs text-white/50">
+              <span className="flex items-center gap-1">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                {data.summary.passed} passed
+              </span>
+              <span className="flex items-center gap-1">
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
+                {data.summary.warnings} warnings
+              </span>
+              <span className="flex items-center gap-1">
+                <XCircle className="h-3.5 w-3.5 text-red-400" />
+                {data.summary.failures} failures
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1 text-xs text-white/40">
+              <Clock className="h-3.5 w-3.5" />
+              {fmtDate(data.timestamp)}
+            </span>
+            <button
+              onClick={onRefresh}
+              disabled={refreshing}
+              className="flex items-center gap-1.5 rounded-lg border border-[#00F5FF]/30 bg-[#00F5FF]/10 px-3 py-1.5 text-sm font-medium text-[#00F5FF] hover:bg-[#00F5FF]/20 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+              Run Health Check
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Pipeline Stages Visualization - horizontal flow */}
+      <div className="rounded-xl border border-white/10 bg-white/5 p-6">
+        <h3 className="mb-5 text-sm font-semibold text-white/70">Pipeline Stages</h3>
+        <div className="flex items-center gap-0 overflow-x-auto pb-2">
+          {data.stages.map((stage, idx) => (
+            <div key={stage.name} className="flex items-center shrink-0">
+              {/* Stage node */}
+              <button
+                onClick={() => toggleStage(stage.name)}
+                className={`relative flex flex-col items-center justify-center rounded-xl border px-4 py-4 w-[140px] transition-all hover:scale-[1.03] cursor-pointer ${stageColorClasses(stage.status)}`}
+              >
+                <StageStatusIcon status={stage.status} />
+                <span className="mt-2 text-xs font-semibold text-white/90 text-center leading-tight">{stage.name}</span>
+                <span className="mt-1 text-[10px] text-white/40 font-mono">{fmtDuration(stage.duration_ms)}</span>
+                <span className="mt-1.5 text-[10px] text-white/30">
+                  {stage.checks.length} check{stage.checks.length !== 1 ? 's' : ''}
+                </span>
+                {/* Expand indicator */}
+                <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2">
+                  {expandedStages.has(stage.name) ? (
+                    <ChevronDown className="h-3 w-3 text-white/40" />
+                  ) : (
+                    <ChevronRight className="h-3 w-3 text-white/30" />
+                  )}
+                </div>
+              </button>
+
+              {/* Connecting line */}
+              {idx < data.stages.length - 1 && (
+                <div className={`h-px w-8 shrink-0 ${allPass ? 'bg-emerald-500/40' : 'bg-white/20'}`} />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Expanded stage details */}
+      {data.stages.map((stage) => {
+        if (!expandedStages.has(stage.name)) return null;
+        return (
+          <StageDetail key={stage.name} stage={stage} />
+        );
+      })}
+    </div>
+  );
+}
+
+function StageDetail({ stage }: {
+  stage: PipelineHealthCheck['stages'][number];
+}) {
+  const [expandedChecks, setExpandedChecks] = useState<Set<string>>(new Set());
+
+  const toggleCheck = (name: string) => {
+    setExpandedChecks((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  return (
+    <div className={`rounded-xl border p-4 ${stageColorClasses(stage.status)}`}>
+      <div className="flex items-center gap-2 mb-3">
+        <StageStatusIcon status={stage.status} />
+        <h4 className="text-sm font-semibold text-white/90">{stage.name}</h4>
+        <span className="text-[10px] text-white/40 font-mono ml-auto">{fmtDuration(stage.duration_ms)}</span>
+      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-8"></TableHead>
+            <TableHead>Check</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Message</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {stage.checks.map((check) => {
+            const hasDetails = check.details !== undefined && check.details !== null;
+            const isExpanded = expandedChecks.has(check.name);
+            return (
+              <>
+                <TableRow
+                  key={check.name}
+                  className={hasDetails ? 'cursor-pointer hover:bg-white/5' : ''}
+                  onClick={() => hasDetails && toggleCheck(check.name)}
+                >
+                  <TableCell className="w-8 px-2">
+                    {hasDetails && (
+                      isExpanded
+                        ? <ChevronDown className="h-3.5 w-3.5 text-white/40" />
+                        : <ChevronRight className="h-3.5 w-3.5 text-white/30" />
+                    )}
+                  </TableCell>
+                  <TableCell className="font-medium text-xs">{check.name}</TableCell>
+                  <TableCell>
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                      check.status === 'pass'
+                        ? 'bg-emerald-500/20 text-emerald-300'
+                        : check.status === 'warn'
+                        ? 'bg-amber-500/20 text-amber-300'
+                        : 'bg-red-500/20 text-red-300'
+                    }`}>
+                      {check.status === 'pass' && <CheckCircle2 className="h-3 w-3" />}
+                      {check.status === 'warn' && <AlertTriangle className="h-3 w-3" />}
+                      {check.status === 'fail' && <XCircle className="h-3 w-3" />}
+                      {check.status}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-xs text-white/60">{check.message}</TableCell>
+                </TableRow>
+                {hasDetails && isExpanded && (
+                  <TableRow key={`${check.name}-details`}>
+                    <TableCell colSpan={4} className="px-4 py-3">
+                      <pre className="rounded-lg bg-black/40 border border-white/5 p-3 text-[11px] text-white/60 overflow-x-auto max-h-60 font-mono">
+                        {JSON.stringify(check.details, null, 2)}
+                      </pre>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
 // ─── Impersonate Banner ──────────────────────────────────────────────
 
 function ImpersonateBanner({ agencyId, onExit }: { agencyId: string; onExit: () => void }) {
@@ -835,6 +1059,7 @@ export function SuperAdminDashboard() {
   const [quotaRequests, setQuotaRequests] = useState<AdminQuotaRequest[]>([]);
   const [pendingQuotaCount, setPendingQuotaCount] = useState(0);
   const [federation, setFederation] = useState<FederationData | null>(null);
+  const [pipelineHealth, setPipelineHealth] = useState<PipelineHealthCheck | null>(null);
   const [impersonating, setImpersonating] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -891,6 +1116,11 @@ export function SuperAdminDashboard() {
           const data = await getAdminQuotaRequests();
           setQuotaRequests(data.requests);
           setPendingQuotaCount(data.requests.filter((r) => r.status === 'pending').length);
+          break;
+        }
+        case 'pipeline': {
+          const data = await getPipelineHealth();
+          setPipelineHealth(data);
           break;
         }
       }
@@ -969,12 +1199,12 @@ export function SuperAdminDashboard() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-white/10">
+      <div className="flex gap-1 border-b border-white/10 overflow-x-auto">
         {TABS.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px whitespace-nowrap ${
               tab === t.id
                 ? 'border-[#02c98d] text-[#02c98d]'
                 : 'border-transparent text-white/50 hover:text-white/70 hover:border-white/15'
@@ -1001,6 +1231,7 @@ export function SuperAdminDashboard() {
         {tab === 'connectors' && (loading ? <LoadingState /> : <ConnectorsTab connectors={connectors} />)}
         {tab === 'federation' && <FederationTab data={federation} />}
         {tab === 'quotas' && <QuotasTab requests={quotaRequests} onRefresh={() => void loadData()} />}
+        {tab === 'pipeline' && <PipelineHealthTab data={pipelineHealth} onRefresh={() => void loadData()} refreshing={loading} />}
       </div>
     </div>
   );

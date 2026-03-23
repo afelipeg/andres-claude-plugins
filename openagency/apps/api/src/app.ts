@@ -77,6 +77,7 @@ import { adminRoutes } from './routes/admin.js';
 import { quotaRoutes } from './routes/quota.js';
 import { agencyDashboardRoutes } from './routes/agency-dashboard.js';
 import { kbRoutes } from './routes/kb.js';
+import { healthPipelineRoutes } from './routes/health-pipeline.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { requestLogger } from './middleware/logger.js';
 import { rateLimiter } from './middleware/rate-limiter.js';
@@ -658,6 +659,9 @@ export async function createApp() {
 
   // ─── Super Admin Dashboard ──────────────────────────────────
   app.route('/', adminRoutes({ db, dailyMetricsRepo, federationLogRepo, a2aClient }));
+
+  // ─── Pipeline Health Check (admin-only, cached 5 min) ──────────
+  app.route('/', healthPipelineRoutes({ db, agency, eventBus, connectorInfra, hfl: hflCoordinator }));
 
   // ─── Quota routes ─────────────────────────────────────────────
   app.route('/', quotaRoutes({ agencyRepo, quotaRepo }));
