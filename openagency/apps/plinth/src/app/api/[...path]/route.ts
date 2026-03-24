@@ -2,7 +2,7 @@
 // All /api/v1/* routes work instantly without rewriting 32 route files
 // In dev without DATABASE_URL, returns a helpful error instead of crashing
 
-let appPromise: Promise<{ fetch: (req: Request) => Promise<Response> }> | null = null;
+let appPromise: Promise<{ fetch: (req: Request) => Response | Promise<Response> }> | null = null;
 let bridgeError: string | null = null;
 
 function getApp() {
