@@ -4,15 +4,29 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { ChevronDown, Search, Check, Building2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+interface BrandPlatform {
+  platform: string;
+  advertiser_id: string;
+  advertiser_name: string;
+}
+
 interface Brand {
   id: string;
   name: string;
   platforms?: string[];
+  /** Full platform data for engine context */
+  _rawPlatforms?: BrandPlatform[];
+}
+
+interface FullBrand {
+  id: string;
+  name: string;
+  platforms?: BrandPlatform[];
 }
 
 interface BrandSelectorProps {
   currentBrand?: { id: string; name: string };
-  onSelect: (brand: { id: string; name: string }) => void;
+  onSelect: (brand: FullBrand) => void;
 }
 
 const PLATFORM_COLORS: Record<string, string> = {
@@ -59,7 +73,13 @@ export function BrandSelector({ currentBrand, onSelect }: BrandSelectorProps) {
       });
       if (!res.ok) throw new Error('Failed to fetch brands');
       const data = await res.json();
-      const brandList: Brand[] = Array.isArray(data) ? data : data.brands ?? data.data ?? [];
+      const raw = Array.isArray(data) ? data : data.brands ?? data.data ?? [];
+      const brandList: Brand[] = raw.map((b: { id: string; name: string; platforms?: BrandPlatform[] }) => ({
+        id: b.id,
+        name: b.name,
+        platforms: b.platforms?.map((p) => p.platform),
+        _rawPlatforms: b.platforms,
+      }));
       setBrands(brandList);
     } catch {
       // Fallback: empty list
@@ -99,7 +119,7 @@ export function BrandSelector({ currentBrand, onSelect }: BrandSelectorProps) {
   }, [brands, search]);
 
   const handleSelect = (brand: Brand) => {
-    onSelect({ id: brand.id, name: brand.name });
+    onSelect({ id: brand.id, name: brand.name, platforms: brand._rawPlatforms });
     setOpen(false);
     setSearch('');
   };

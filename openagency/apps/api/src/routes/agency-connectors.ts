@@ -12,7 +12,7 @@ import { authMiddleware } from '@openagency/auth';
 import { encrypt, decrypt } from '@openagency/memory';
 import {
   getConnector, hasConnector, registerConnector,
-  GoogleAdsConnector, MetaConnector, DV360Connector, TikTokAdsConnector,
+  GoogleAdsConnector, MetaConnector, DV360Connector, TikTokAdsConnector, TikTokShopConnector, AmazonAdsConnector,
   getServiceAccountToken, parseServiceAccountJson,
 } from '@openagency/connectors';
 import type { PlatformConnector } from '@openagency/connectors';
@@ -119,6 +119,19 @@ function getOrCreateConnector(platform: ConnectorPlatform, creds: Record<string,
       connector = new TikTokAdsConnector({
         appId: creds['app_id'] ?? '',
         secret: creds['app_secret'] ?? creds['secret'] ?? '',
+      });
+      break;
+    case 'tiktok_shop':
+      connector = new TikTokShopConnector({
+        appKey: creds['app_key'] ?? '',
+        appSecret: creds['app_secret'] ?? '',
+        region: creds['region'],
+      });
+      break;
+    case 'amazon_ads':
+      connector = new AmazonAdsConnector({
+        clientId: creds['client_id'] ?? '',
+        clientSecret: creds['client_secret'] ?? '',
       });
       break;
     default:
@@ -825,8 +838,9 @@ async function fetchSubAccounts(
         headers: { 'x-tts-access-token': shopToken },
       });
       if (!shopRes.ok) throw new Error(`TikTok Shop API error (${shopRes.status})`);
-      const shopData = (await shopRes.json()) as { data?: { shop_list?: Array<{ shop_id: string; shop_name: string }> } };
-      return (shopData.data?.shop_list ?? []).map((s) => ({
+      const shopData = (await shopRes.json()) as { data?: { shop_list?: Array<{ shop_id: string; shop_name: string }>; shops?: Array<{ shop_id: string; shop_name: string }> } };
+      const shops = shopData.data?.shop_list ?? shopData.data?.shops ?? [];
+      return shops.map((s) => ({
         id: s.shop_id,
         name: s.shop_name,
         status: 'active' as const,
@@ -892,6 +906,7 @@ function buildPlatformCredentials(
     case 'tiktok_ads':
       return {
         ...base,
+        account_id: advertiserId,  // connector reads account_id
         advertiser_id: advertiserId,
         app_id: creds.app_id,
         app_secret: creds.app_secret,
@@ -899,6 +914,7 @@ function buildPlatformCredentials(
     case 'tiktok_shop':
       return {
         ...base,
+        account_id: advertiserId,  // connector reads account_id
         shop_id: advertiserId,
         app_key: creds.app_key,
         app_secret: creds.app_secret,

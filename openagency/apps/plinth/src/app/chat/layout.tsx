@@ -7,11 +7,12 @@ import { cn } from '@/lib/utils';
 import { ConvoList } from '@/components/sidebar/ConvoList';
 import { BrandSelector } from '@/components/sidebar/BrandSelector';
 import { ConnectionsPanel } from '@/components/sidebar/ConnectionsPanel';
+import { BrandProvider, type FullBrand } from '@/contexts/BrandContext';
 
 export default function ChatLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [currentBrand, setCurrentBrand] = useState<{ id: string; name: string } | undefined>();
+  const [currentBrand, setCurrentBrand] = useState<FullBrand | undefined>();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -32,9 +33,8 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
   }, [router]);
 
   const handleBrandSelect = useCallback(
-    (brand: { id: string; name: string }) => {
+    (brand: FullBrand) => {
       setCurrentBrand(brand);
-      // Brand context will be passed through to useChat via page components
     },
     []
   );
@@ -145,7 +145,11 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
         </div>
 
         {/* Chat content */}
-        <div className="flex-1 min-h-0 overflow-hidden">{children}</div>
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <BrandProvider currentBrand={currentBrand} setCurrentBrand={setCurrentBrand}>
+            {children}
+          </BrandProvider>
+        </div>
       </div>
     </div>
   );

@@ -6,37 +6,43 @@ import { useChat } from '@/hooks/useChat';
 import { ChatMessages } from '@/components/chat/ChatMessages';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { FileUploadZone } from '@/components/chat/FileUploadZone';
+import { useBrandContext, serializeBrandContext } from '@/contexts/BrandContext';
 
 export default function NewChatPage() {
   const router = useRouter();
   const { messages, sendMessage, isStreaming, conversationId, error } = useChat();
+  const { currentBrand } = useBrandContext();
 
   // Redirect to conversation page once we have an ID and streaming is done
   if (conversationId && messages.length > 0 && !isStreaming) {
     router.replace(`/chat/${conversationId}`);
   }
 
+  const brandCtxStr = currentBrand ? serializeBrandContext(currentBrand) : undefined;
+
   const handleSend = useCallback(
     (text: string) => {
-      sendMessage(text);
+      sendMessage(text, undefined, brandCtxStr);
     },
-    [sendMessage]
+    [sendMessage, brandCtxStr]
   );
 
   const handleSuggestionClick = useCallback(
     (text: string) => {
-      sendMessage(text);
+      sendMessage(text, undefined, brandCtxStr);
     },
-    [sendMessage]
+    [sendMessage, brandCtxStr]
   );
 
   const handleFileUpload = useCallback(
     (filename: string, contentBase64: string) => {
       sendMessage(
-        `Uploaded file: ${filename}\n\n[File data attached: ${filename}, ${Math.round((contentBase64.length * 3) / 4 / 1024)}KB]`
+        `Uploaded file: ${filename}\n\n[File data attached: ${filename}, ${Math.round((contentBase64.length * 3) / 4 / 1024)}KB]`,
+        undefined,
+        brandCtxStr
       );
     },
-    [sendMessage]
+    [sendMessage, brandCtxStr]
   );
 
   return (

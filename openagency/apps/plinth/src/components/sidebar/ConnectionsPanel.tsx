@@ -76,12 +76,18 @@ export function ConnectionsPanel({ compact = false }: ConnectionsPanelProps) {
     }
 
     try {
-      const res = await fetch('/api/v1/connectors/status', {
+      const res = await fetch('/api/v1/agency/connections', {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('Failed to fetch connector status');
       const data = await res.json();
-      const statuses: ConnectionStatus[] = Array.isArray(data) ? data : data.connectors ?? data.platforms ?? data.data ?? [];
+      const connections = data.connections ?? [];
+      const statuses: ConnectionStatus[] = connections.map((c: { platform: string; status: string; last_sync?: string }) => ({
+        platform: c.platform,
+        status: c.status === 'connected' ? 'connected' : 'disconnected',
+        connected: c.status === 'connected',
+        last_sync: c.last_sync,
+      }));
       if (statuses.length > 0) {
         setConnections(statuses);
       }

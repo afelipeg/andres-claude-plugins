@@ -27,6 +27,10 @@ interface SyncSchedulerDeps {
 const DEFAULT_SYNC_CRON = '0 3 * * 1';
 const SYNC_INTERVAL_MS = 60_000; // Check every minute
 
+// Configurable date range and row cap via env vars
+const SYNC_DATE_RANGE_DAYS = parseInt(process.env['SYNC_DATE_RANGE_DAYS'] ?? '30', 10);
+const MAX_PERSISTED_ROWS = 5000; // Was 500 — too low for daily data (50 campaigns x 30 days = 1500 rows)
+
 /**
  * Simple cron matcher for 5-field cron expressions.
  * Copied from PipelineScheduler to avoid circular dependency.
@@ -234,7 +238,7 @@ export class PlatformSyncScheduler {
       }
 
       // Sync data
-      const days = 30;
+      const days = SYNC_DATE_RANGE_DAYS;
       const end = new Date();
       const start = new Date(end.getTime() - days * 86_400_000);
       const dateRange = { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
@@ -246,7 +250,7 @@ export class PlatformSyncScheduler {
       for (const advId of advertiserIds) {
         const platformCreds = buildPlatformCredentials(platform, connectionType, creds, advId);
         try {
-          const fetchedRows = await connector.fetchCampaigns(platformCreds as any, dateRange);
+          const fetchedRows = await connector.fetchCampaigns(platformCreds as any, dateRange, { level: 'campaign' });
           allRows.push(...fetchedRows);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
@@ -283,7 +287,7 @@ export class PlatformSyncScheduler {
             ulid(), agencyId, platform, syncStatus, allRows.length,
             dateRange.start, dateRange.end,
             syncErrors.length > 0 ? syncErrors.join('; ') : null,
-            allRows.length <= 500 ? JSON.stringify(allRows) : JSON.stringify(allRows.slice(0, 500)),
+            allRows.length <= MAX_PERSISTED_ROWS ? JSON.stringify(allRows) : JSON.stringify(allRows.slice(0, MAX_PERSISTED_ROWS)),
           ],
         );
       } catch (err) {

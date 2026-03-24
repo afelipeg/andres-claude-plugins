@@ -85,6 +85,29 @@ function isServiceAccountConfig(
   return 'serviceAccountJson' in config && !!config.serviceAccountJson;
 }
 
+/**
+ * Parse a CSV line correctly, handling quoted fields that may contain commas.
+ * Replaces naive line.split(',') which breaks on values like campaign names.
+ */
+function parseCsvLine(line: string): string[] {
+  const fields: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+    } else if (ch === ',' && !inQuotes) {
+      fields.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  fields.push(current.trim());
+  return fields;
+}
+
 export class DV360Connector implements PlatformConnector {
   readonly platform = 'dv360' as const;
   private oauth: ReturnType<typeof createGoogleOAuth> | null = null;
@@ -212,12 +235,14 @@ export class DV360Connector implements PlatformConnector {
     dateRange: { start: string; end: string },
     options?: FetchOptions,
   ): Promise<NormalizedCampaignRow[]> {
-    const partnerId = credentials.account_id;
-    if (!partnerId) throw new Error('DV360 partner_id required');
+    // account_id = advertiser ID, partner_id = partner ID
+    const advertiserId = credentials.account_id;
+    const partnerId = credentials.partner_id;
+    if (!advertiserId && !partnerId) throw new Error('DV360 requires account_id (advertiser) or partner_id');
 
     const level = options?.level ?? 'campaign';
 
-    const queryId = await this.createQuery(credentials.tokens, partnerId, dateRange, level);
+    const queryId = await this.createQuery(credentials.tokens, advertiserId, partnerId, dateRange, level);
     await this.runQuery(credentials.tokens, queryId);
     const reportUrl = await this.pollForReport(credentials.tokens, queryId);
     return this.downloadAndParse(reportUrl, credentials.tokens, level);
@@ -225,7 +250,8 @@ export class DV360Connector implements PlatformConnector {
 
   private async createQuery(
     tokens: OAuthTokens,
-    partnerId: string,
+    advertiserId: string | undefined,
+    partnerId: string | undefined,
     dateRange: { start: string; end: string },
     level: DataLevel,
   ): Promise<string> {
@@ -235,6 +261,15 @@ export class DV360Connector implements PlatformConnector {
 
     const [startYear, startMonth, startDay] = dateRange.start.split('-').map(Number);
     const [endYear, endMonth, endDay] = dateRange.end.split('-').map(Number);
+
+    // Use FILTER_ADVERTISER for the specific brand, FILTER_PARTNER for the agency
+    const filters: Array<{ type: string; value: string }> = [];
+    if (advertiserId) {
+      filters.push({ type: 'FILTER_ADVERTISER', value: advertiserId });
+    }
+    if (partnerId) {
+      filters.push({ type: 'FILTER_PARTNER', value: partnerId });
+    }
 
     const body = {
       metadata: {
@@ -250,7 +285,7 @@ export class DV360Connector implements PlatformConnector {
         type: 'STANDARD',
         metrics: FULL_METRICS,
         groupBys: GROUP_BYS[level],
-        filters: [{ type: 'FILTER_PARTNER', value: partnerId }],
+        filters,
       },
     };
 
@@ -361,14 +396,14 @@ function parseDV360Csv(csv: string, level: DataLevel): NormalizedCampaignRow[] {
   const lines = csv.trim().split('\n');
   if (lines.length < 2) return [];
 
-  const headers = lines[0].split(',').map((h) => h.trim());
+  const headers = parseCsvLine(lines[0]);
   const rows: NormalizedCampaignRow[] = [];
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
 
-    const values = line.split(',');
+    const values = parseCsvLine(line);
     const r: Record<string, string> = {};
     headers.forEach((h, idx) => {
       r[h] = values[idx]?.trim() ?? '';

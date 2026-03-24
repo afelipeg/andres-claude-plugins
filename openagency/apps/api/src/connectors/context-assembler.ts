@@ -162,34 +162,82 @@ export function assembleContextFromSync(
 
   const channels = Array.from(channelMap.values());
 
-  // ─── Aggregate campaigns ─────────────────────────────────────────
-  const campaignMap = new Map<string, CampaignSummary>();
+  // ─── Aggregate campaigns (with weighted ROAS and CTR) ───────────
+  const campaignAgg = new Map<string, {
+    name: string;
+    channel: string;
+    totalSpend: number;
+    totalRevenue: number;
+    totalImpressions: number;
+    totalClicks: number;
+    firstCpa: number;
+    firstRoas: number;
+  }>();
 
   for (const row of allRows) {
     const key = `${row.platform}:${row.campaign_id}`;
-    const existing = campaignMap.get(key);
+    const existing = campaignAgg.get(key);
     if (existing) {
-      existing.spend += row.spend;
+      existing.totalSpend += row.spend;
+      existing.totalRevenue += row.revenue;
+      existing.totalImpressions += row.impressions;
+      existing.totalClicks += row.clicks;
     } else {
-      campaignMap.set(key, {
+      campaignAgg.set(key, {
         name: row.campaign_name,
         channel: row.platform,
-        spend: row.spend,
-        budget: row.spend * 1.1, // estimate budget at 10% above actual spend
-        days_elapsed: 30, // default window
-        cpa_target: row.cpa > 0 ? row.cpa * 0.9 : 100, // target 10% better than actual
-        roas_target: row.roas > 0 ? row.roas * 1.1 : 2.0,
-        roas: row.roas,
-        historical_ctr: row.ctr,
+        totalSpend: row.spend,
+        totalRevenue: row.revenue,
+        totalImpressions: row.impressions,
+        totalClicks: row.clicks,
+        firstCpa: row.cpa,
+        firstRoas: row.roas,
       });
     }
   }
 
-  const campaigns = Array.from(campaignMap.values());
+  const campaigns: CampaignSummary[] = [];
+  for (const agg of campaignAgg.values()) {
+    // Weighted ROAS = total revenue / total spend across all rows for this campaign
+    const roas = agg.totalSpend > 0 ? agg.totalRevenue / agg.totalSpend : 0;
+    // Weighted CTR = total clicks / total impressions across all rows
+    const historicalCtr = agg.totalImpressions > 0 ? agg.totalClicks / agg.totalImpressions : 0;
+
+    campaigns.push({
+      name: agg.name,
+      channel: agg.channel,
+      spend: agg.totalSpend,
+      budget: agg.totalSpend * 1.1, // estimate budget at 10% above actual spend
+      days_elapsed: 30, // default window
+      cpa_target: agg.firstCpa > 0 ? agg.firstCpa * 0.9 : 100, // target 10% better than actual
+      roas_target: agg.firstRoas > 0 ? agg.firstRoas * 1.1 : 2.0,
+      roas,
+      historical_ctr: historicalCtr,
+    });
+  }
 
   // Compute ROAS as weighted average
   const totalRevenue = channels.reduce((s, c) => s + c.revenue, 0);
   const avgRoas = grossSpend > 0 ? totalRevenue / grossSpend : 0;
+
+  // ─── Build daily time series per channel (for MMM and anomaly detection) ──
+  const timeSeries: Record<string, { date: string; spend: number; impressions: number; clicks: number; conversions: number; revenue: number }[]> = {};
+  for (const row of allRows) {
+    const key = row.platform;
+    if (!timeSeries[key]) timeSeries[key] = [];
+    timeSeries[key].push({
+      date: row.date,
+      spend: row.spend ?? 0,
+      impressions: row.impressions ?? 0,
+      clicks: row.clicks ?? 0,
+      conversions: row.conversions ?? 0,
+      revenue: row.revenue ?? 0,
+    });
+  }
+  // Sort each channel's time series by date
+  for (const key of Object.keys(timeSeries)) {
+    timeSeries[key].sort((a, b) => a.date.localeCompare(b.date));
+  }
 
   // ─── Build base context ──────────────────────────────────────────
   ctx.gross_spend = grossSpend;
@@ -197,6 +245,7 @@ export function assembleContextFromSync(
   ctx.roas = Math.round(avgRoas * 100) / 100;
   ctx.channels = channels;
   ctx.campaigns = campaigns;
+  ctx.time_series = timeSeries;
 
   // Anomaly detect: provide spend values as time series
   ctx.metric = 'spend_by_channel';
@@ -243,6 +292,7 @@ export function assembleContextFromSync(
   // Sync metadata
   ctx._sync_sources = platformMeta;
   ctx._assembled_at = new Date().toISOString();
+  ctx._daily_rows = allRows.length;
   if (agencyId) ctx._agency_id = agencyId;
 
   // ─── Merge explicit context (overrides platform data) ────────────

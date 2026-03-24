@@ -20,8 +20,21 @@ import { withRetry } from '../../utils/retry.js';
 
 const AUTH_URL = 'https://www.amazon.com/ap/oa';
 const TOKEN_URL = 'https://api.amazon.com/auth/o2/token';
-const ADS_API_URL = 'https://advertising-api.amazon.com/v3';
 const SCOPES = ['advertising::campaign_management'];
+
+/**
+ * Returns the correct Amazon Ads API base URL for the given region.
+ * NA (default): advertising-api.amazon.com
+ * EU:           advertising-api-eu.amazon.com
+ * FE:           advertising-api-fe.amazon.com
+ */
+function getAmazonApiUrl(region?: string): string {
+  switch (region) {
+    case 'eu': return 'https://advertising-api-eu.amazon.com';
+    case 'fe': return 'https://advertising-api-fe.amazon.com';
+    default:   return 'https://advertising-api.amazon.com';
+  }
+}
 
 // Report type IDs per ad product and level
 const REPORT_CONFIG: Record<AmazonAdProduct, Record<DataLevel, { reportTypeId: string; groupBy: string[] }>> = {
@@ -125,8 +138,9 @@ export class AmazonAdsConnector implements PlatformConnector {
   async listAccounts(tokens: OAuthTokens): Promise<PlatformAccount[]> {
     await this.limiter.acquire();
 
+    const baseUrl = getAmazonApiUrl((tokens as any).region);
     const res = await withRetry(() =>
-      fetch(`${ADS_API_URL}/profiles`, {
+      fetch(`${baseUrl}/v3/profiles`, {
         headers: this.buildHeaders(tokens),
       }),
     );
@@ -156,11 +170,12 @@ export class AmazonAdsConnector implements PlatformConnector {
 
     const level = options?.level ?? 'campaign';
     const adProducts = options?.adProducts ?? ALL_AD_PRODUCTS;
+    const region = credentials.region as string | undefined;
 
     // Fetch reports for each ad product in parallel
     const results = await Promise.all(
       adProducts.map((adProduct) =>
-        this.fetchAdProductReport(credentials.tokens, profileId, dateRange, level, adProduct),
+        this.fetchAdProductReport(credentials.tokens, profileId, dateRange, level, adProduct, region),
       ),
     );
 
@@ -173,10 +188,11 @@ export class AmazonAdsConnector implements PlatformConnector {
     dateRange: { start: string; end: string },
     level: DataLevel,
     adProduct: AmazonAdProduct,
+    region?: string,
   ): Promise<NormalizedCampaignRow[]> {
     try {
-      const reportId = await this.createReport(tokens, profileId, dateRange, level, adProduct);
-      const downloadUrl = await this.pollReport(tokens, profileId, reportId);
+      const reportId = await this.createReport(tokens, profileId, dateRange, level, adProduct, region);
+      const downloadUrl = await this.pollReport(tokens, profileId, reportId, region);
       return this.downloadReport(tokens, profileId, downloadUrl, adProduct, level);
     } catch (err) {
       // Some ad products may not be enabled — return empty rather than failing
@@ -209,6 +225,7 @@ export class AmazonAdsConnector implements PlatformConnector {
     dateRange: { start: string; end: string },
     level: DataLevel,
     adProduct: AmazonAdProduct,
+    region?: string,
   ): Promise<string> {
     await this.limiter.acquire();
 
@@ -233,8 +250,9 @@ export class AmazonAdsConnector implements PlatformConnector {
       endDate: dateRange.end,
     };
 
+    const baseUrl = getAmazonApiUrl(region);
     const res = await withRetry(() =>
-      fetch(`${ADS_API_URL}/reporting/reports`, {
+      fetch(`${baseUrl}/v3/reporting/reports`, {
         method: 'POST',
         headers: this.buildHeaders(tokens, profileId),
         body: JSON.stringify(body),
@@ -254,14 +272,17 @@ export class AmazonAdsConnector implements PlatformConnector {
     tokens: OAuthTokens,
     profileId: string,
     reportId: string,
+    region?: string,
   ): Promise<string> {
     const maxAttempts = 30;
     const pollInterval = 10_000;
 
+    const baseUrl = getAmazonApiUrl(region);
+
     for (let i = 0; i < maxAttempts; i++) {
       await this.limiter.acquire();
 
-      const res = await fetch(`${ADS_API_URL}/reporting/reports/${reportId}`, {
+      const res = await fetch(`${baseUrl}/v3/reporting/reports/${reportId}`, {
         headers: this.buildHeaders(tokens, profileId),
       });
 

@@ -17,7 +17,10 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
+  Building2,
 } from 'lucide-react';
+import { BrandDiscoveryModal } from '@/components/connections/BrandDiscoveryModal';
+import { ConnectDialog } from '@/components/connections/ConnectDialog';
 
 interface ConnectorStatus {
   platform: string;
@@ -34,7 +37,6 @@ interface PlatformConfig {
   description: string;
   icon: React.ComponentType<{ className?: string }>;
   color: string;
-  oauthPath: string;
 }
 
 const PLATFORMS: PlatformConfig[] = [
@@ -44,7 +46,6 @@ const PLATFORMS: PlatformConfig[] = [
     description: 'Search, Display, YouTube, Performance Max campaigns',
     icon: Search,
     color: 'bg-blue-500/15 text-blue-400',
-    oauthPath: '/api/v1/connectors/google_ads/oauth',
   },
   {
     id: 'meta_ads',
@@ -52,7 +53,6 @@ const PLATFORMS: PlatformConfig[] = [
     description: 'Facebook & Instagram advertising campaigns',
     icon: Megaphone,
     color: 'bg-indigo-500/15 text-indigo-400',
-    oauthPath: '/api/v1/connectors/meta_ads/oauth',
   },
   {
     id: 'dv360',
@@ -60,7 +60,6 @@ const PLATFORMS: PlatformConfig[] = [
     description: 'Programmatic display, video and connected TV',
     icon: Tv2,
     color: 'bg-green-500/15 text-green-400',
-    oauthPath: '/api/v1/connectors/dv360/oauth',
   },
   {
     id: 'tiktok_ads',
@@ -68,7 +67,6 @@ const PLATFORMS: PlatformConfig[] = [
     description: 'TikTok For Business advertising platform',
     icon: Target,
     color: 'bg-pink-500/15 text-pink-400',
-    oauthPath: '/api/v1/connectors/tiktok_ads/oauth',
   },
   {
     id: 'amazon_ads',
@@ -76,7 +74,6 @@ const PLATFORMS: PlatformConfig[] = [
     description: 'Sponsored Products, Brands, Display and DSP',
     icon: ShoppingBag,
     color: 'bg-orange-500/15 text-orange-400',
-    oauthPath: '/api/v1/connectors/amazon_ads/oauth',
   },
 ];
 
@@ -125,6 +122,8 @@ function ConnectorCard({
   onConnect,
   onDisconnect,
   onSync,
+  onManageBrands,
+  advertiserCount,
   actionLoading,
 }: {
   platform: PlatformConfig;
@@ -132,6 +131,8 @@ function ConnectorCard({
   onConnect: (p: PlatformConfig) => void;
   onDisconnect: (p: PlatformConfig) => void;
   onSync: (p: PlatformConfig) => void;
+  onManageBrands: (p: PlatformConfig) => void;
+  advertiserCount?: number;
   actionLoading: string | null;
 }) {
   const Icon = platform.icon;
@@ -178,10 +179,13 @@ function ConnectorCard({
             <Clock className="h-3 w-3" />
             <span>Last sync: {formatTime(status?.last_sync)}</span>
           </div>
-          <div className="flex items-center gap-1.5 text-muted-foreground">
+          <button
+            onClick={() => onManageBrands(platform)}
+            className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+          >
             <BarChart3 className="h-3 w-3" />
-            <span>{status?.accounts_count ?? 0} account{(status?.accounts_count ?? 0) !== 1 ? 's' : ''}</span>
-          </div>
+            <span>{advertiserCount ?? 0} brand{(advertiserCount ?? 0) !== 1 ? 's' : ''}</span>
+          </button>
         </div>
       )}
 
@@ -207,6 +211,13 @@ function ConnectorCard({
                 <RefreshCw className="h-3.5 w-3.5" />
               )}
               Sync Now
+            </button>
+            <button
+              onClick={() => onManageBrands(platform)}
+              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-emerald-500/30 px-3 py-2 text-sm text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+            >
+              <Building2 className="h-3.5 w-3.5" />
+              Brands
             </button>
             <button
               onClick={() => onDisconnect(platform)}
@@ -256,6 +267,8 @@ export default function ConnectionsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [discoveryPlatform, setDiscoveryPlatform] = useState<PlatformConfig | null>(null);
+  const [connectPlatform, setConnectPlatform] = useState<PlatformConfig | null>(null);
 
   const getToken = useCallback(() => {
     if (typeof window !== 'undefined') {
@@ -266,19 +279,21 @@ export default function ConnectionsPage() {
 
   const fetchStatuses = useCallback(async () => {
     try {
-      const res = await fetch('/api/v1/connectors/status', {
+      const res = await fetch('/api/v1/agency/connections', {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
       if (!res.ok) throw new Error('Failed to load connector statuses');
       const json = await res.json();
-      // API may return array or object
+      const connections = json.connections ?? json.data ?? (Array.isArray(json) ? json : []);
       const statusMap: Record<string, ConnectorStatus> = {};
-      if (Array.isArray(json)) {
-        for (const s of json) {
-          statusMap[s.platform] = s;
-        }
-      } else if (json && typeof json === 'object') {
-        Object.assign(statusMap, json);
+      for (const conn of connections) {
+        statusMap[conn.platform] = {
+          platform: conn.platform,
+          connected: conn.status === 'connected',
+          last_sync: conn.last_sync,
+          accounts_count: conn.advertiser_count,
+          status: conn.sync_status === 'syncing' ? 'syncing' : conn.status === 'connected' ? 'connected' : 'disconnected',
+        };
       }
       setStatuses(statusMap);
     } catch (err) {
@@ -293,24 +308,14 @@ export default function ConnectionsPage() {
   }, [fetchStatuses]);
 
   function handleConnect(platform: PlatformConfig) {
-    const token = getToken();
-    const url = `${platform.oauthPath}?token=${encodeURIComponent(token)}`;
-    const popup = window.open(url, `plinth_oauth_${platform.id}`, 'width=600,height=700');
-
-    // Poll for popup close
-    const interval = setInterval(() => {
-      if (popup?.closed) {
-        clearInterval(interval);
-        fetchStatuses();
-      }
-    }, 1000);
+    setConnectPlatform(platform);
   }
 
   async function handleDisconnect(platform: PlatformConfig) {
     setActionLoading(platform.id);
     try {
-      await fetch(`/api/v1/connectors/${platform.id}/disconnect`, {
-        method: 'POST',
+      await fetch(`/api/v1/agency/connections/${platform.id}`, {
+        method: 'DELETE',
         headers: { Authorization: `Bearer ${getToken()}` },
       });
       await fetchStatuses();
@@ -325,7 +330,7 @@ export default function ConnectionsPage() {
   async function handleSync(platform: PlatformConfig) {
     setActionLoading(platform.id);
     try {
-      await fetch(`/api/v1/connectors/${platform.id}/sync`, {
+      await fetch(`/api/v1/agency/connections/${platform.id}/sync`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${getToken()}` },
       });
@@ -342,6 +347,10 @@ export default function ConnectionsPage() {
     } finally {
       setActionLoading(null);
     }
+  }
+
+  function handleManageBrands(platform: PlatformConfig) {
+    setDiscoveryPlatform(platform);
   }
 
   return (
@@ -371,10 +380,41 @@ export default function ConnectionsPage() {
                 onConnect={handleConnect}
                 onDisconnect={handleDisconnect}
                 onSync={handleSync}
+                onManageBrands={handleManageBrands}
+                advertiserCount={statuses[platform.id]?.accounts_count}
                 actionLoading={actionLoading}
               />
             ))}
       </div>
+
+      {/* Credential entry dialog */}
+      {connectPlatform && (
+        <ConnectDialog
+          platform={connectPlatform}
+          open={!!connectPlatform}
+          onOpenChange={(open) => {
+            if (!open) setConnectPlatform(null);
+          }}
+          onConnected={() => {
+            const platform = connectPlatform;
+            setConnectPlatform(null);
+            fetchStatuses().then(() => {
+              // Auto-open brand discovery after connecting
+              if (platform) setDiscoveryPlatform(platform);
+            });
+          }}
+        />
+      )}
+
+      {/* Brand discovery modal */}
+      {discoveryPlatform && (
+        <BrandDiscoveryModal
+          platform={discoveryPlatform}
+          open={!!discoveryPlatform}
+          onOpenChange={(open) => { if (!open) setDiscoveryPlatform(null); }}
+          onSaved={() => { setDiscoveryPlatform(null); fetchStatuses(); }}
+        />
+      )}
     </div>
   );
 }

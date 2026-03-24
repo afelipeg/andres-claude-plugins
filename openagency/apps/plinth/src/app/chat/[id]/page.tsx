@@ -6,35 +6,40 @@ import { ChatMessages } from '@/components/chat/ChatMessages';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { FileUploadZone } from '@/components/chat/FileUploadZone';
 import { Loader2 } from 'lucide-react';
+import { useBrandContext, serializeBrandContext } from '@/contexts/BrandContext';
 
 export default function ConversationPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { messages, sendMessage, isStreaming, error, loadingHistory } = useChat({
     conversationId: id,
   });
+  const { currentBrand } = useBrandContext();
+
+  const brandCtxStr = currentBrand ? serializeBrandContext(currentBrand) : undefined;
 
   const handleSend = useCallback(
     (text: string) => {
-      sendMessage(text, id);
+      sendMessage(text, id, brandCtxStr);
     },
-    [sendMessage, id]
+    [sendMessage, id, brandCtxStr]
   );
 
   const handleSuggestionClick = useCallback(
     (text: string) => {
-      sendMessage(text, id);
+      sendMessage(text, id, brandCtxStr);
     },
-    [sendMessage, id]
+    [sendMessage, id, brandCtxStr]
   );
 
   const handleFileUpload = useCallback(
     (filename: string, contentBase64: string) => {
       sendMessage(
         `Uploaded file: ${filename}\n\n[File data attached: ${filename}, ${Math.round((contentBase64.length * 3) / 4 / 1024)}KB]`,
-        id
+        id,
+        brandCtxStr
       );
     },
-    [sendMessage, id]
+    [sendMessage, id, brandCtxStr]
   );
 
   // Loading state for conversation history

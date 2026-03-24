@@ -34,6 +34,7 @@ const CORE_METRICS = `
   metrics.video_views,
   metrics.video_view_rate,
   metrics.search_impression_share,
+  metrics.active_view_viewability,
   metrics.view_through_conversions
 `;
 
@@ -238,6 +239,7 @@ interface GoogleAdsRow {
     videoViews?: number;
     videoViewRate?: number;
     searchImpressionShare?: number;
+    activeViewViewability?: number;
     viewThroughConversions?: number;
   };
 }
@@ -278,6 +280,11 @@ function normalizeGoogleRow(row: GoogleAdsRow, level: DataLevel): NormalizedCamp
     video_views: row.metrics.videoViews ?? undefined,
     video_view_rate: row.metrics.videoViewRate ?? undefined,
     search_impression_share: row.metrics.searchImpressionShare ?? undefined,
-    viewable_impressions: row.metrics.viewThroughConversions ?? undefined,
+    // activeViewViewability is a percentage (0-1) of impressions that were viewable;
+    // viewThroughConversions is a completely different metric (conversions after an ad view)
+    // and was previously incorrectly mapped to viewable_impressions.
+    viewable_impressions: row.metrics.activeViewViewability != null
+      ? Math.round(impressions * row.metrics.activeViewViewability)
+      : undefined,
   };
 }
