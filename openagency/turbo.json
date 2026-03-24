@@ -3,8 +3,8 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**"],
-      "env": ["VITE_API_URL", "VITE_API_KEY"]
+      "outputs": ["dist/**", ".next/**"],
+      "env": ["VITE_API_URL", "VITE_API_KEY", "NEXT_PUBLIC_API_URL"]
     },
     "dev": {
       "cache": false,
