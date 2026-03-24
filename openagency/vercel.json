@@ -1,9 +1,4 @@
 {
-  "buildCommand": "pnpm build --filter=@openagency/web...",
-  "outputDirectory": "apps/web/dist",
-  "installCommand": "pnpm install",
-  "framework": null,
-  "rewrites": [
-    { "source": "/:path*", "destination": "/index.html" }
-  ]
+  "buildCommand": "pnpm turbo build --filter=@openagency/plinth...",
+  "installCommand": "pnpm install"
 }
