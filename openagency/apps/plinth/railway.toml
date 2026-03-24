@@ -1,0 +1,10 @@
+[build]
+dockerfilePath = "docker/Dockerfile.plinth"
+watchPatterns = ["apps/plinth/**", "packages/**", "docker/Dockerfile.plinth"]
+
+[deploy]
+healthcheckPath = "/login"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+numReplicas = 1
